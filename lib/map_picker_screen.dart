@@ -14,6 +14,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'app_colors.dart';
+import 'app_locale.dart';
 
 const _vientianeCenter = LatLng(17.9757, 102.6331);
 
@@ -59,8 +60,8 @@ class _MapPickerScreenState extends State<MapPickerScreen>
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content:         Text('ກະລຸນາເປີດ GPS ກ່ອນ'),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:         Text(tr('enable_gps_first')),
           backgroundColor: Colors.red,
         ));
         return;
@@ -71,8 +72,8 @@ class _MapPickerScreenState extends State<MapPickerScreen>
       }
       if (!mounted) return;
       if (perm == LocationPermission.deniedForever) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content:         Text('ກະລຸນາເປີດອະນຸຍາດ GPS ໃນ Settings'),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:         Text(tr('gps_blocked')),
           backgroundColor: Colors.red,
         ));
         return;
@@ -100,7 +101,7 @@ class _MapPickerScreenState extends State<MapPickerScreen>
               color: C.navy, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('ເລືອກທີ່ຢູ່ຂອງທ່ານ', style: TextStyle(
+        title: Text(tr('map_picker_title'), style: const TextStyle(
           color:      C.navy,
           fontWeight: FontWeight.w800,
           fontSize:   18,
@@ -171,7 +172,7 @@ class _MapPickerScreenState extends State<MapPickerScreen>
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14)),
             ),
-            child: const Text('📍 ຢືນຢັນທີ່ຢູ່ນີ້', style: TextStyle(
+            child: Text(tr('confirm_this_address'), style: const TextStyle(
               color:      Colors.white,
               fontSize:   15,
               fontWeight: FontWeight.w700,

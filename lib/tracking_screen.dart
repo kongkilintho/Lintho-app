@@ -21,6 +21,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'app_colors.dart';
+import 'app_locale.dart';
 import 'provider_model.dart';
 import 'review_screen.dart';
 import 'booking_repository.dart';
@@ -53,12 +54,12 @@ extension BookingStatusX on BookingStatus {
   };
 
   String get label => switch (this) {
-    BookingStatus.pending   => 'ລໍຖ້າຊ່າງ',
-    BookingStatus.onWay     => 'ຊ່າງກຳລັງໄປ',
-    BookingStatus.arrived   => 'ຊ່າງຮອດແລ້ວ',
-    BookingStatus.working   => 'ກຳລັງເຮັດວຽກ',
-    BookingStatus.done      => 'ວຽກສຳເລັດ',
-    BookingStatus.cancelled => 'ຍົກເລີກ',
+    BookingStatus.pending   => tr('tracking_status_pending'),
+    BookingStatus.onWay     => tr('tracking_status_on_way'),
+    BookingStatus.arrived   => tr('tracking_status_arrived'),
+    BookingStatus.working   => tr('tracking_status_working'),
+    BookingStatus.done      => tr('tracking_status_done'),
+    BookingStatus.cancelled => tr('tracking_status_cancelled'),
   };
 
   String get emoji => switch (this) {
@@ -457,10 +458,10 @@ class _TrackingScreenState extends State<TrackingScreen>
             children: [
               const Text('⚠️', style: TextStyle(fontSize: 18)),
               const SizedBox(width: 6),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'ຊ່າງຮ້ອງຂໍຄ່າໃຊ້ຈ່າຍເພີ່ມ',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: C.text),
+                  tr('additional_charges_requested'),
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: C.text),
                 ),
               ),
             ],
@@ -475,7 +476,7 @@ class _TrackingScreenState extends State<TrackingScreen>
               Expanded(
                 child: OutlinedButton(
                   onPressed: _respondingToCharges ? null : () => _respondToCharges(false),
-                  child: const Text('ປະຕິເສດ'),
+                  child: Text(tr('reject')),
                 ),
               ),
               const SizedBox(width: 10),
@@ -483,7 +484,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                 child: ElevatedButton(
                   onPressed: _respondingToCharges ? null : () => _respondToCharges(true),
                   style: ElevatedButton.styleFrom(backgroundColor: C.primary),
-                  child: const Text('ອະນຸມັດ', style: TextStyle(color: Colors.white)),
+                  child: Text(tr('approve'), style: const TextStyle(color: Colors.white)),
                 ),
               ),
             ],
@@ -531,7 +532,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                 child: Text(
                   widget.provider.displayName.isNotEmpty
                       ? widget.provider.displayName
-                      : 'ຊ່າງ',
+                      : tr('provider'),
                   style: const TextStyle(
                     color: Colors.white, fontSize: 9,
                     fontWeight: FontWeight.w700,
@@ -579,9 +580,9 @@ class _TrackingScreenState extends State<TrackingScreen>
                 color:        C.green,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Text(
-                'ທ່ານ',
-                style: TextStyle(
+              child: Text(
+                tr('you_marker'),
+                style: const TextStyle(
                   color: Colors.white, fontSize: 9,
                   fontWeight: FontWeight.w700,
                 ),
@@ -685,7 +686,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                   )),
                   Text(
                     _status == BookingStatus.working
-                        ? 'ເວລາ: $_elapsedLabel'
+                        ? '${tr('elapsed_time_label')}: $_elapsedLabel'
                         : widget.serviceName,
                     style: const TextStyle(
                         fontSize: 11, color: C.muted),
@@ -868,11 +869,11 @@ class _StatusSteps extends StatelessWidget {
   const _StatusSteps({required this.currentStatus});
 
   static List<shared.StatusStep> get _steps => [
-    shared.StatusStep(icon: Icons.hourglass_top_rounded,   label: 'ລໍຖ້າຊ່າງ'),
-    shared.StatusStep(icon: Icons.directions_car_rounded,  label: 'ຊ່າງກຳລັງໄປ'),
-    shared.StatusStep(icon: Icons.place_rounded,           label: 'ຊ່າງຮອດແລ້ວ'),
-    shared.StatusStep(icon: Icons.build_rounded,           label: 'ກຳລັງເຮັດວຽກ'),
-    shared.StatusStep(icon: Icons.check_circle_rounded,    label: 'ວຽກສຳເລັດ'),
+    shared.StatusStep(icon: Icons.hourglass_top_rounded,   label: tr('tracking_status_pending')),
+    shared.StatusStep(icon: Icons.directions_car_rounded,  label: tr('tracking_status_on_way')),
+    shared.StatusStep(icon: Icons.place_rounded,           label: tr('tracking_status_arrived')),
+    shared.StatusStep(icon: Icons.build_rounded,           label: tr('tracking_status_working')),
+    shared.StatusStep(icon: Icons.check_circle_rounded,    label: tr('tracking_status_done')),
   ];
 
   @override
