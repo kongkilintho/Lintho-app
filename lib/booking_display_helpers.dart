@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'app_locale.dart';
 import 'provider_model.dart';
+import 'theme/app_theme.dart';
 
 // ── ສະຖານະ ──────────────────────────────────────────────────
 
@@ -31,16 +32,14 @@ class BookingStatusStyle {
   const BookingStatusStyle(this.bg, this.fg);
 }
 
-BookingStatusStyle bookingStatusStyle(String status) => switch (status) {
-  'pending'    => const BookingStatusStyle(Color(0xFFFEF3C7), Color(0xFF92400E)),
-  'accepted'   => const BookingStatusStyle(Color(0xFFDBEAFE), Color(0xFF1D4ED8)),
-  'onTheWay' || 'arrived' || 'inProgress' =>
-      const BookingStatusStyle(Color(0xFFDCFCE7), Color(0xFF15803D)),
-  'completed'  => const BookingStatusStyle(Color(0xFFDCFCE7), Color(0xFF15803D)),
-  'cancelled' || 'rejected' =>
-      const BookingStatusStyle(Color(0xFFFEE2E2), Color(0xFFB91C1C)),
-  _            => const BookingStatusStyle(Color(0xFFF1F5F9), Color(0xFF64748B)),
-};
+// ✅ [FIX — Phase 2 status map] ນີ້ເຄີຍປະກາດຄູ່ສີ bg/fg ຂອງຕົນເອງ ແຍກຈາກ
+// home_tab.dart's StatusBadge (ເຊິ່ງໃຊ້ C.sky/green/orange/muted/red ອີກ
+// ຊຸດໜຶ່ງ) — booking ດຽວກັນຈຶ່ງສະແດງຄົນລະສີຂຶ້ນກັບໜ້າຈໍ. ຕອນນີ້ດຶງຈາກ
+// AppStatus.styleOfName() ບ່ອນດຽວ (lib/theme/app_theme.dart).
+BookingStatusStyle bookingStatusStyle(String status) {
+  final s = AppStatus.styleOfName(status);
+  return BookingStatusStyle(s.bg, s.fg);
+}
 
 String bookingStatusLabel(String status) => switch (status) {
   'pending'    => tr('pending'),

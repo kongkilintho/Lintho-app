@@ -1,25 +1,30 @@
-import 'package:flutter/material.dart';
+import 'theme/app_theme.dart';
 
+// ✅ [Phase 2] `C` ຍັງຖືກໃຊ້ຢູ່ 40+ ໄຟລ໌ທົ່ວແອັບ — ຄົງໄວ້ເປັນ compatibility
+// layer ບໍ່ໃຫ້ໜ້າຈໍເກົ່າພັງ, ແຕ່ຕອນນີ້ mirror ຄ່າຈາກ lib/theme/app_theme.dart's
+// AppColors (single source of truth) ແທນທີ່ຈະປະກາດ hex ຂອງຕົນເອງຄືເກົ່າ —
+// ແກ້ຄ່າຢູ່ AppColors ຈຸດດຽວ ຈະສະທ້ອນທົ່ວແອັບໂດຍບໍ່ຕ້ອງແກ້ໄຟລ໌ອື່ນ.
+// ໜ້າຈໍໃໝ່/ຖືກ refactor ຄວນອ້າງອີງ AppColors ໂດຍກົງ, ບໍ່ຕ້ອງຜ່ານ C.
 class C {
-  static const navy   = Color(0xFF0D1B4B);
-  static const blue   = Color(0xFF1E40AF);
-  static const sky    = Color(0xFF3B82F6);
-  static const yellow = Color(0xFFFBBF24);
-  static const green  = Color(0xFF22C55E);
-  static const teal   = Color(0xFF14B8A6);
-  static const mint   = Color(0xFFECFDF5);
-  static const red    = Color(0xFFEF4444);
-  static const dangerRed = Color(0xFFFF6B6B);
-  static const orange = Color(0xFFF97316);
-  static const bg     = Color(0xFFF8FAFF);
-  static const white  = Colors.white;
-  static const text   = Color(0xFF0F172A);
-  static const muted  = Color(0xFF94A3B8);
-  static const border = Color(0xFFE2E8F0);
-  static const cream  = Color(0xFFF8FAFF);
-  static const gold   = Color(0xFFFBBF24);
-  static const brown  = Color(0xFF0D1B4B);
-  static const dark   = Color(0xFF0D1B4B);
+  static const navy   = AppColors.navy;
+  static const blue   = AppColors.blue;
+  static const sky    = AppColors.sky;
+  static const yellow = AppColors.gold;      // ✅ ເຄີຍແຍກຊື່ ແຕ່ hex ດຽວກັນ — ລວມແລ້ວ
+  static const green  = AppColors.green;
+  static const teal   = AppColors.teal;
+  static const mint   = AppColors.mint;
+  static const red    = AppColors.red;
+  static const dangerRed = AppColors.dangerRed;
+  static const orange = AppColors.orange;
+  static const bg     = AppColors.bg;
+  static const white  = AppColors.white;
+  static const text   = AppColors.ink;
+  static const muted  = AppColors.muted;     // ✅ ປັບ contrast ໃຫ້ຜ່ານ WCAG AA — ເບິ່ງ AppColors.muted
+  static const border = AppColors.border;
+  static const cream  = AppColors.bg;        // ✅ ເຄີຍແຍກຊື່ ແຕ່ hex ດຽວກັນ — ລວມແລ້ວ
+  static const gold   = AppColors.gold;
+  static const brown  = AppColors.navy;      // ✅ ເຄີຍແຍກຊື່ ແຕ່ hex ດຽວກັນ — ລວມແລ້ວ
+  static const dark   = AppColors.navy;
 
   // ── Aliases ─────────────────────────────────────────────
   static const primary       = green;  // C.primary

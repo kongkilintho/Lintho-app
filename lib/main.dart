@@ -40,6 +40,7 @@ import 'quick_booking_screen.dart';
 import 'package:intl/intl.dart';
 import 'lao_phone.dart';
 import 'widgets/pulsing_fade.dart';
+import 'theme/app_theme.dart';
 
 const firebaseOptions = FirebaseOptions(
   apiKey:            "AIzaSyD-bIErOqCC6vHqn45oHhtL52Cw54O8SMs",
@@ -79,18 +80,10 @@ class LinThoApp extends StatelessWidget {
           navigatorKey: FCMService.navigatorKey ??= GlobalKey<NavigatorState>(),
           title: 'LinTho',
           debugShowCheckedModeBanner: false,
-          theme: ThemeData(
-            useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: C.green,
-              brightness: Brightness.light,
-            ).copyWith(
-              primary: C.green,
-              secondary: C.teal,
-            ),
-            primaryColor: C.green,
-            scaffoldBackgroundColor: C.bg,
-          ),
+          // ✅ [Phase 2] ThemeData ລວມສູນ — ເບິ່ງ lib/theme/app_theme.dart.
+          // ກ່ອນໜ້ານີ້ບ່ອນນີ້ກຳນົດແຕ່ colorScheme/primaryColor/background,
+          // ບໍ່ມີ AppBar/Card/Button/Input/BottomSheet/Dialog theme ກາງ.
+          theme: AppTheme.light,
           home: StreamBuilder<User?>(
             stream: FirebaseAuth.instance.authStateChanges(),
             builder: (context, snapshot) {

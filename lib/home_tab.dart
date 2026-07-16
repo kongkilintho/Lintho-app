@@ -22,6 +22,7 @@ import 'Booking.dart';
 import 'booking_provider.dart';
 import 'online_provider.dart';
 import 'job_workflow_screen.dart';
+import 'theme/app_theme.dart';
 
 // ════════════════════════════════════════════════════════════
 // HOME TAB
@@ -649,16 +650,9 @@ class StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (status) {
-      JobStatus.pending    => C.sky,
-      JobStatus.accepted   => C.green,
-      JobStatus.onTheWay   => C.orange,
-      JobStatus.arrived    => C.orange,
-      JobStatus.inProgress => C.orange,
-      JobStatus.completed  => C.green,
-      JobStatus.cancelled  => C.muted,
-      JobStatus.rejected   => C.red,
-    };
+    // ✅ [FIX — Phase 2 status map] ເຄີຍກຳນົດສີສະຖານະຂອງຕົນເອງແຍກຈາກ
+    // booking_display_helpers.dart — ຕອນນີ້ດຶງຈາກ AppStatus ບ່ອນດຽວ.
+    final color = AppStatus.colorOf(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
