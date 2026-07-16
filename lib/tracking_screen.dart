@@ -23,9 +23,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_colors.dart';
 import 'provider_model.dart';
 import 'review_screen.dart';
-import 'match_screen.dart';
 import 'booking_repository.dart';
 import 'chat_screen.dart';
+import 'widgets/status_stepper.dart' as shared;
 
 // ════════════════════════════════════════════════════════════
 // STATUS MODEL
@@ -859,22 +859,24 @@ class _TrackingScreenState extends State<TrackingScreen>
 // STATUS STEPS WIDGET
 // ════════════════════════════════════════════════════════════
 
+// ✅ [FIX — shared StatusStepper] ນີ້ເຄີຍເປັນ implementation ອິດສະຫຼະຈາກ
+// job_workflow_Screen.dart's _StatusStepper (ຝັ່ງຊ່າງ) ທັງໆທີ່ສະແດງ
+// ຄວາມຄືບໜ້າວຽກດຽວກັນ — ຕອນນີ້ທັງສອງໜ້າຈໍໃຊ້
+// lib/widgets/status_stepper.dart ຮ່ວມກັນ.
 class _StatusSteps extends StatelessWidget {
   final BookingStatus currentStatus;
   const _StatusSteps({required this.currentStatus});
 
-  static const _steps = [
-    (BookingStatus.pending,  '⏳', 'ລໍຖ້າຊ່າງ'),
-    (BookingStatus.onWay,    '🚗', 'ຊ່າງກຳລັງໄປ'),
-    (BookingStatus.arrived,  '📍', 'ຊ່າງຮອດແລ້ວ'),
-    (BookingStatus.working,  '🔧', 'ກຳລັງເຮັດວຽກ'),
-    (BookingStatus.done,     '✅', 'ວຽກສຳເລັດ'),
+  static List<shared.StatusStep> get _steps => [
+    shared.StatusStep(icon: Icons.hourglass_top_rounded,   label: 'ລໍຖ້າຊ່າງ'),
+    shared.StatusStep(icon: Icons.directions_car_rounded,  label: 'ຊ່າງກຳລັງໄປ'),
+    shared.StatusStep(icon: Icons.place_rounded,           label: 'ຊ່າງຮອດແລ້ວ'),
+    shared.StatusStep(icon: Icons.build_rounded,           label: 'ກຳລັງເຮັດວຽກ'),
+    shared.StatusStep(icon: Icons.check_circle_rounded,    label: 'ວຽກສຳເລັດ'),
   ];
 
   @override
   Widget build(BuildContext context) {
-    final curIdx = currentStatus.stepIndex;
-
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -882,92 +884,11 @@ class _StatusSteps extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: C.border),
       ),
-      child: Column(
-        children: _steps.asMap().entries.map((e) {
-          final i      = e.key;
-          final step   = e.value;
-          final isDone = curIdx > i;
-          final isActive = curIdx == i;
-          final isLast = i == _steps.length - 1;
-
-          return Column(
-            children: [
-              Row(children: [
-                // circle indicator
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 400),
-                  width: 34, height: 34,
-                  decoration: BoxDecoration(
-                    color: isDone
-                        ? C.green
-                        : isActive
-                        ? C.primary
-                        : C.border.withValues(alpha: 0.5),
-                    shape: BoxShape.circle,
-                    boxShadow: isActive ? [BoxShadow(
-                      color:      C.primary.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                    )] : null,
-                  ),
-                  child: Center(child: isDone
-                      ? const Icon(Icons.check_rounded,
-                      color: Colors.white, size: 16)
-                      : Text(step.$2,
-                      style: const TextStyle(fontSize: 14))),
-                ),
-                const SizedBox(width: 12),
-
-                // label
-                Expanded(child: Text(
-                  step.$3,
-                  style: TextStyle(
-                    fontSize:   13,
-                    fontWeight: isActive
-                        ? FontWeight.w800 : FontWeight.w500,
-                    color: isDone
-                        ? C.green
-                        : isActive
-                        ? C.primary
-                        : C.muted,
-                  ),
-                )),
-
-                // active badge
-                if (isActive)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color:        C.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Text('ຕອນນີ້', style: TextStyle(
-                      fontSize: 10, color: C.primary,
-                      fontWeight: FontWeight.w700,
-                    )),
-                  ),
-
-                if (isDone)
-                  const Icon(Icons.check_circle_rounded,
-                      color: C.green, size: 16),
-              ]),
-
-              // connector line
-              if (!isLast)
-                Padding(
-                  padding: const EdgeInsets.only(left: 16),
-                  child: Row(children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 400),
-                      width:  2,
-                      height: 20,
-                      color: isDone ? C.green : C.border,
-                    ),
-                  ]),
-                ),
-            ],
-          );
-        }).toList(),
+      child: shared.StatusStepper(
+        steps: _steps,
+        currentIndex: currentStatus.stepIndex,
+        axis: Axis.vertical,
+        activeColor: C.green,
       ),
     );
   }

@@ -14,6 +14,7 @@ import 'Booking.dart';
 import 'booking_provider.dart';
 import 'booking_repository.dart';
 import 'fcm_service.dart';
+import 'widgets/status_stepper.dart' as shared;
 
 // ── SINGLE BOOKING STREAM ────────────────────────────────────
 
@@ -228,93 +229,54 @@ class _WorkflowSkeletonState extends State<_WorkflowSkeleton>
 // STATUS STEPPER
 // ════════════════════════════════════════════════════════════
 
+// ✅ [FIX — shared StatusStepper] ນີ້ເຄີຍເປັນ implementation ອິດສະຫຼະຈາກ
+// tracking_screen.dart's _StatusSteps (ຝັ່ງລູກຄ້າ) ທັງໆທີ່ສະແດງຄວາມຄືບໜ້າ
+// ວຽກດຽວກັນ — ຕອນນີ້ທັງສອງໜ້າຈໍໃຊ້ lib/widgets/status_stepper.dart ຮ່ວມກັນ.
 class _StatusStepper extends StatelessWidget {
   final JobStatus status;
   const _StatusStepper({required this.status});
 
-  static List<(JobStatus, String, String)> get _steps => [
-    (JobStatus.accepted,   '✓',  tr('accepted')),
-    (JobStatus.onTheWay,   '🚗', tr('step_traveling')),
-    (JobStatus.arrived,    '📍', tr('step_arrived_short')),
-    (JobStatus.inProgress, '🔧', tr('step_working')),
-    (JobStatus.completed,  '✅', tr('completed')),
+  static const _order = [
+    JobStatus.accepted, JobStatus.onTheWay, JobStatus.arrived,
+    JobStatus.inProgress, JobStatus.completed,
+  ];
+
+  static List<shared.StatusStep> get _steps => [
+    shared.StatusStep(icon: Icons.check_rounded,            label: tr('accepted')),
+    shared.StatusStep(icon: Icons.directions_car_rounded,    label: tr('step_traveling')),
+    shared.StatusStep(icon: Icons.place_rounded,             label: tr('step_arrived_short')),
+    shared.StatusStep(icon: Icons.build_rounded,             label: tr('step_working')),
+    shared.StatusStep(icon: Icons.check_circle_rounded,      label: tr('completed')),
   ];
 
   int get _currentIdx {
-    for (int i = 0; i < _steps.length; i++) {
-      if (_steps[i].$1 == status) return i;
-    }
-    return 0;
+    final i = _order.indexOf(status);
+    return i < 0 ? 0 : i;
   }
 
   @override
   Widget build(BuildContext context) {
-    final cur = _currentIdx;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [BoxShadow(
-          // ✅ RULE: withValues(alpha:) ແທນ withOpacity
             color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(children: [
-        Row(children: List.generate(_steps.length, (i) {
-          final done  = i <= cur;
-          final isCur = i == cur;
-          final (_, emoji, label) = _steps[i];
-          return Expanded(child: Column(children: [
-            Row(children: [
-              if (i > 0)
-                Expanded(child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 500),
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: done ? C.navy : C.border,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                )),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                width:  isCur ? 40 : 32,
-                height: isCur ? 40 : 32,
-                decoration: BoxDecoration(
-                  color: done ? C.navy : C.border,
-                  shape: BoxShape.circle,
-                  boxShadow: isCur ? [BoxShadow(
-                    // ✅ RULE: withValues(alpha:) ແທນ withOpacity
-                      color: C.navy.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3))] : [],
-                ),
-                child: Center(child: Text(done ? emoji : '',
-                    style: TextStyle(fontSize: isCur ? 18 : 14))),
-              ),
-              if (i < _steps.length - 1)
-                Expanded(child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 500),
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: i < cur ? C.navy : C.border,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                )),
-            ]),
-            const SizedBox(height: 6),
-            Text(label, style: TextStyle(
-                fontSize: 9,
-                fontWeight: isCur ? FontWeight.w800 : FontWeight.w500,
-                color: done ? C.navy : C.muted)),
-          ]));
-        })),
+        shared.StatusStepper(
+          steps: _steps,
+          currentIndex: _currentIdx,
+          axis: Axis.horizontal,
+          activeColor: C.navy,
+        ),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.symmetric(
               horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
-            // ✅ RULE: withValues(alpha:) ແທນ withOpacity
             color: C.navy.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(20),
           ),

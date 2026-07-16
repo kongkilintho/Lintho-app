@@ -10,6 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_colors.dart';
 import 'coupon_repository.dart';
+import 'widgets/empty_state_view.dart';
+import 'widgets/error_state_view.dart';
+import 'widgets/skeleton_box.dart';
 
 class CouponListScreen extends ConsumerWidget {
   const CouponListScreen({super.key});
@@ -21,20 +24,27 @@ class CouponListScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: C.bg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text('ຄູປອງສ່ວນຫຼຸດ', style: TextStyle(
-            color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),
+        title: const Text('ຄູປອງສ່ວນຫຼຸດ'),
       ),
       body: couponsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('ໂຫລດຄູປອງບໍ່ໄດ້: $e',
-            style: const TextStyle(color: C.red, fontSize: 13))),
+        // ✅ [FIX — shared components] ເຄີຍ CircularProgressIndicator ດຽວ,
+        // ບໍ່ກົງກັບຮູບແບບ skeleton ທີ່ອື່ນໆໃນແອັບໃຊ້; error ເຄີຍເປັນຂໍ້ຄວາມ
+        // ດິບ ('ໂຫລດຄູປອງບໍ່ໄດ້: $e') ບໍ່ມີປຸ່ມລອງໃໝ່; empty ເຄີຍເປັນ
+        // ຂໍ້ຄວາມສີເທົາທຳມະດາ ອ່ອນກວ່າໜ້າອື່ນໆໃນແອັບຫຼາຍ.
+        loading: () => ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: 4,
+          itemBuilder: (_, __) => const SkeletonListTile(leadingSize: 40),
+        ),
+        error: (_, __) => ErrorStateView(
+            onRetry: () => ref.invalidate(myCouponsProvider)),
         data: (coupons) {
           if (coupons.isEmpty) {
-            return const Center(child: Text('ຍັງບໍ່ມີຄູປອງສ່ວນຫຼຸດ',
-                style: TextStyle(color: C.muted, fontSize: 13)));
+            return EmptyStateView(
+              icon: Icons.local_offer_outlined,
+              title: 'ຍັງບໍ່ມີຄູປອງສ່ວນຫຼຸດ',
+              accent: C.orange,
+            );
           }
           return ListView.separated(
             padding: const EdgeInsets.all(16),

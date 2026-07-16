@@ -23,6 +23,9 @@ import 'booking_provider.dart';
 import 'online_provider.dart';
 import 'job_workflow_screen.dart';
 import 'theme/app_theme.dart';
+import 'widgets/empty_state_view.dart';
+import 'widgets/error_state_view.dart';
+import 'widgets/skeleton_box.dart';
 
 // ════════════════════════════════════════════════════════════
 // HOME TAB
@@ -52,8 +55,12 @@ class ProviderHomeTab extends ConsumerWidget {
             child: !isOnline
                 ? const _OfflineView()
                 : bookingsAsync.when(
-              loading: () => const _SkeletonList(),
-              error:   (_, __) => _ErrorView(
+              loading: () => ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: 3,
+                itemBuilder: (_, __) => const SkeletonListTile(),
+              ),
+              error:   (_, __) => ErrorStateView(
                 onRetry: () => ref.invalidate(activeBookingsProvider),
               ),
               data: (bookings) => _JobListView(bookings: bookings, openJobs: openJobs),
@@ -314,7 +321,14 @@ class _JobListView extends ConsumerWidget {
         .where((b) => b.status != JobStatus.pending)
         .toList();
 
-    if (bookings.isEmpty && openJobs.isEmpty) return const _EmptyView();
+    if (bookings.isEmpty && openJobs.isEmpty) {
+      return EmptyStateView(
+        icon: Icons.inbox_outlined,
+        title: tr('no_jobs'),
+        subtitle: tr('wait_customer'),
+        accent: C.sky,
+      );
+    }
 
     return RefreshIndicator(
       color:     C.blue,
@@ -474,171 +488,9 @@ class _OfflineViewState extends ConsumerState<_OfflineView> {
   }
 }
 
-// ════════════════════════════════════════════════════════════
-// EMPTY VIEW
-// ════════════════════════════════════════════════════════════
-
-class _EmptyView extends StatelessWidget {
-  const _EmptyView();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 80, height: 80,
-          decoration: BoxDecoration(
-            color:        C.sky.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: const Center(
-              child: Text('📭', style: TextStyle(fontSize: 36))),
-        ),
-        const SizedBox(height: 14),
-        Text(tr('no_jobs'), style: const TextStyle(
-          fontSize: 16, color: C.muted, fontWeight: FontWeight.w600,
-        )),
-        const SizedBox(height: 4),
-        Text(tr('wait_customer'),
-            style: const TextStyle(fontSize: 13, color: C.muted)),
-      ],
-    ));
-  }
-}
-
-// ════════════════════════════════════════════════════════════
-// SKELETON LOADING
-// ════════════════════════════════════════════════════════════
-
-class _SkeletonList extends StatelessWidget {
-  const _SkeletonList();
-  @override
-  Widget build(BuildContext context) => ListView.builder(
-    padding:     const EdgeInsets.all(16),
-    itemCount:   3,
-    itemBuilder: (_, __) => const _SkeletonCard(),
-  );
-}
-
-class _SkeletonCard extends StatefulWidget {
-  const _SkeletonCard();
-  @override
-  State<_SkeletonCard> createState() => _SkeletonCardState();
-}
-
-class _SkeletonCardState extends State<_SkeletonCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double>   _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.3, end: 0.7).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) => Container(
-        margin:   const EdgeInsets.only(bottom: 10),
-        padding:  const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8, offset: const Offset(0, 3),
-          )],
-        ),
-        child: Row(children: [
-          _Shimmer(width: 50, height: 50, radius: 14, opacity: _anim.value),
-          const SizedBox(width: 12),
-          Expanded(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _Shimmer(width: 140, height: 13, radius: 4,
-                  opacity: _anim.value),
-              const SizedBox(height: 7),
-              _Shimmer(width: 100, height: 10, radius: 4,
-                  opacity: _anim.value),
-              const SizedBox(height: 5),
-              _Shimmer(width: 160, height: 10, radius: 4,
-                  opacity: _anim.value),
-            ],
-          )),
-          const SizedBox(width: 12),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            _Shimmer(width: 60, height: 20, radius: 8,
-                opacity: _anim.value),
-            const SizedBox(height: 8),
-            _Shimmer(width: 70, height: 13, radius: 4,
-                opacity: _anim.value),
-          ]),
-        ]),
-      ),
-    );
-  }
-}
-
-class _Shimmer extends StatelessWidget {
-  final double width, height, radius, opacity;
-  const _Shimmer({
-    required this.width,   required this.height,
-    required this.radius,  required this.opacity,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: width, height: height,
-    decoration: BoxDecoration(
-      color:        C.border.withValues(alpha: opacity),
-      borderRadius: BorderRadius.circular(radius),
-    ),
-  );
-}
-
-// ════════════════════════════════════════════════════════════
-// ERROR VIEW
-// ════════════════════════════════════════════════════════════
-
-class _ErrorView extends StatelessWidget {
-  final VoidCallback onRetry;
-  const _ErrorView({required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(Icons.wifi_off_outlined, size: 56, color: C.muted),
-        const SizedBox(height: 12),
-        Text(tr('load_failed'), style: const TextStyle(
-          fontSize: 15, color: C.muted, fontWeight: FontWeight.w600,
-        )),
-        const SizedBox(height: 16),
-        OutlinedButton.icon(
-          onPressed: onRetry,
-          icon:  const Icon(Icons.refresh),
-          label: Text(tr('retry')),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: C.navy,
-            side: const BorderSide(color: C.navy),
-          ),
-        ),
-      ],
-    ));
-  }
-}
+// ✅ [FIX — shared components] _EmptyView/_SkeletonList/_SkeletonCard/
+// _Shimmer/_ErrorView ຖືກລຶບອອກ — ໃຊ້ EmptyStateView/SkeletonListTile/
+// ErrorStateView ຈາກ lib/widgets/ ແທນ (ດຽວກັນກັບ jobs_tab.dart).
 
 // ════════════════════════════════════════════════════════════
 // STATUS BADGE
