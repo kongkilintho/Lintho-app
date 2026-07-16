@@ -172,19 +172,32 @@ async function grantSignupVoucher(referralCode, customerId, bookingId) {
   });
 }
 
+// ✅ [FIX C5] ກ່ອນໜ້ານີ້ການເພີ່ມ voucher ແລະ ການຕັ້ງ referralRewardIssued ເປັນ
+// ການຂຽນແຍກກັນ (ບໍ່ແມ່ນ transaction ດຽວ) — ຖ້າ onBookingStatusChange ຖືກ
+// trigger ຊ້ຳ (at-least-once retry) ກ່ອນທີ່ການຂຽນຄັ້ງທຳອິດຈະ commit, ທັງສອງ
+// invocation ຈະອ່ານ referralRewardIssued:false ຄືກັນ ແລະ ອອກ voucher ຊ້ຳກັນ
+// ສອງໃບ. ຕອນນີ້ໃຊ້ transaction ດຽວ ກວດ flag "ໃນ" transaction ກ່ອນອອກ voucher —
+// pattern ດຽວກັນກັບ grantRewardPoints ຂ້າງລຸ່ມ.
 async function grantReferralReward(referralCode, customerId, bookingId, bookingRef) {
   const codeDoc = await db.collection('referralCodes').doc(referralCode).get();
   if (!codeDoc.exists) return bookingRef.update({ referralRewardIssued: true });
   const ownerUid = codeDoc.data().ownerUid;
   if (ownerUid === customerId) return bookingRef.update({ referralRewardIssued: true });
-  await db.collection('wallets').doc(ownerUid).collection('vouchers').add({
-    amount: REFERRAL_REWARD_BONUS,
-    reason: 'referral_reward',
-    bookingId,
-    referredCustomerId: customerId,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+
+  const voucherRef = db.collection('wallets').doc(ownerUid).collection('vouchers').doc();
+  return db.runTransaction(async (tx) => {
+    const bookingSnap = await tx.get(bookingRef);
+    if (bookingSnap.data()?.referralRewardIssued) return; // ✅ idempotent guard
+
+    tx.set(voucherRef, {
+      amount: REFERRAL_REWARD_BONUS,
+      reason: 'referral_reward',
+      bookingId,
+      referredCustomerId: customerId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    tx.update(bookingRef, { referralRewardIssued: true });
   });
-  return bookingRef.update({ referralRewardIssued: true });
 }
 
 // ─── Rewards (loyalty points) ───────────────────────────────────────────────
@@ -256,8 +269,18 @@ exports.onRewardRedemptionRequested = functions.firestore
       const couponRef = db.collection('coupons').doc(code);
       const txnRef = db.collection('rewardTransactions').doc();
 
+      // ✅ [FIX — ຊ່ອງໂຫວ່ດຽວກັນກັບ C4/C5] ກ່ອນໜ້ານີ້ reqRef.update({status:
+      // 'completed'}) ຢູ່ນອກ transaction — ຖ້າ function crash/retry ລະຫວ່າງ
+      // transaction commit ແລ້ວ ແຕ່ກ່ອນ update ນີ້ຈະແລ່ນ, ຄັ້ງທີ່ສອງຈະສ້າງ coupon
+      // ໃໝ່ (code random ອີກອັນ) ແລະ ຫັກແຕ້ມຊ້ຳ. ຍ້າຍທຸກຢ່າງເຂົ້າ transaction
+      // ດຽວກັນ ພ້ອມ idempotent guard ຢູ່ reqRef ເອງ.
       await db.runTransaction(async (tx) => {
-        const userSnap = await tx.get(userRef);
+        const [userSnap, reqSnap] = await Promise.all([
+          tx.get(userRef),
+          tx.get(reqRef),
+        ]);
+        if (reqSnap.data()?.status === 'completed') return; // ✅ idempotent guard
+
         const balance = userSnap.data()?.rewardPoints || 0;
         if (balance < points) throw new Error('ແຕ້ມຄົງເຫຼືອບໍ່ພຽງພໍ');
 
@@ -274,9 +297,10 @@ exports.onRewardRedemptionRequested = functions.firestore
           userId, type: 'redeem', points: -points,
           reason: `Redeemed for coupon ${code}`, createdAt: now,
         });
+        tx.update(reqRef, { status: 'completed', couponCode: code });
       });
 
-      return reqRef.update({ status: 'completed', couponCode: code });
+      return null;
     } catch (err) {
       return reqRef.update({ status: 'failed', error: err.message });
     }
@@ -315,9 +339,21 @@ exports.onWithdrawalRequested = functions.firestore
 
     const walletRef = db.collection('wallets').doc(providerId);
 
+    // ✅ [FIX C4] Cloud Functions ເປັນ "at-least-once" delivery — event ດຽວກັນ
+    // ອາດຖືກ trigger ຊ້ຳ (retry ຫຼັງ timeout/infra hiccup). ກ່ອນໜ້ານີ້ transaction
+    // ອ່ານ balance ແລ້ວຫັກ -amount ໂດຍບໍ່ກວດວ່າ reqRef ນີ້ຖືກຫັກໄປແລ້ວ ຫຼືບໍ່ —
+    // ຖ້າ trigger ຊ້ຳ, ຄັ້ງທີສອງຈະອ່ານ balance ໃໝ່ (ຫັກໄປແລ້ວຄັ້ງທຳອິດ) ແລ້ວຫັກຊ້ຳ
+    // ອີກຄັ້ງ = ຫັກ 2 ເທົ່າຈາກ request ດຽວ. ຕອນນີ້ກວດ balanceReserved ຢູ່ "ໃນ"
+    // transaction ດຽວກັນກັບການອ່ານ/ຂຽນ (idempotent guard, pattern ດຽວກັນກັບ
+    // grantRewardPoints/grantReferralReward ຂ້າງລຸ່ມ).
     try {
       await db.runTransaction(async (tx) => {
-        const walletSnap = await tx.get(walletRef);
+        const [walletSnap, reqSnap] = await Promise.all([
+          tx.get(walletRef),
+          tx.get(reqRef),
+        ]);
+        if (reqSnap.data()?.balanceReserved) return; // ✅ idempotent guard
+
         const balance = walletSnap.data()?.balance || 0;
         if (balance < amount) throw new Error('ຍອດເງິນບໍ່ພຽງພໍ');
 

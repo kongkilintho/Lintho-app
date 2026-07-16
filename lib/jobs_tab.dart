@@ -17,6 +17,7 @@ import 'app_locale.dart';
 import 'Booking.dart';
 import 'booking_provider.dart';
 import 'home_tab.dart' show StatusBadge; // ✅ ຈາກ home_tab ຕາມເດີມ
+import 'job_workflow_Screen.dart';
 
 class ProviderJobsTab extends ConsumerWidget {
   const ProviderJobsTab({super.key});
@@ -156,7 +157,11 @@ class _JobHistoryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
-          onTap: () {},
+          // ✅ [FIX] ບັດນີ້ເຄີຍກົດແລ້ວບໍ່ມີຫຍັງເກີດຂຶ້ນ (dead tap target) —
+          // JobWorkflowScreen ຮອງຮັບ status completed/cancelled/rejected
+          // ແບບ read-only ຢູ່ແລ້ວ, ຈຶ່ງໃຊ້ເປັນໜ້າລາຍລະອຽດປະຫວັດວຽກນຳກັນ.
+          onTap: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => JobWorkflowScreen(initialBooking: booking))),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(children: [

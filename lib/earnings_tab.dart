@@ -41,9 +41,10 @@ class ProviderEarningsTab extends ConsumerWidget {
         child: walletAsync.when(
           // ✅ CircularProgressIndicator → Skeleton
           loading: () => const _EarningsSkeleton(),
-          error: (_, __) => Center(
-              child: Text(tr('load_failed'),
-                  style: const TextStyle(color: C.muted))),
+          // ✅ [FIX] ຍອດເງິນໂຫລດບໍ່ຂຶ້ນ ຕ້ອງແຈ້ງໃຫ້ຊ່າງຮູ້ຊັດເຈນ + ໃຫ້ລອງໃໝ່ໄດ້ —
+          // ຫ້າມສະແດງເປັນ "$0"/ວ່າງເປົ່າ ເພາະນັ້ນຄື data ຈິງ ບໍ່ແມ່ນ error state
+          error: (_, __) => _WalletErrorView(
+              onRetry: () => ref.invalidate(walletProvider)),
           data: (wallet) => ListView(
             padding: const EdgeInsets.all(20),
             children: [
@@ -61,12 +62,12 @@ class ProviderEarningsTab extends ConsumerWidget {
               txAsync.when(
                 // ✅ CircularProgressIndicator → Skeleton
                 loading: () => const _TxListSkeleton(),
-                // ✅ ປ່ຽນຈາກ "Failed to load" ເພື່ອບໍ່ໃຫ້ຊ່າງຕື່ນຕົກໃຈ
-                error: (_, __) => Center(child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Text(tr('no_transactions'),
-                      style: const TextStyle(color: C.muted)),
-                )),
+                // ✅ [FIX] ກ່ອນໜ້ານີ້ error ຖືກປອມເປັນ "ยัງບໍ່ມີລາຍການ" ເພື່ອບໍ່ໃຫ້
+                // ຊ່າງຕົກໃຈ — ແຕ່ນັ້ນເຮັດໃຫ້ error ຈິງເບິ່ງຄືກັບບໍ່ມີລາຍຮັບເລີຍ, ເປັນ
+                // ບັນຫາຄວາມໜ້າເຊື່ອຖືໃນໜ້າການເງິນ. ຕອນນີ້ແຍກ error ອອກຈາກ empty
+                // ຊັດເຈນ, ໃຫ້ text ສະຫງົບ (ບໍ່ໃຊ້ຄຳວ່າ "ລົ້ມເຫລວ") ພ້ອມປຸ່ມລອງໃໝ່.
+                error: (_, __) => _TxErrorView(
+                    onRetry: () => ref.invalidate(transactionsProvider)),
                 data: (txs) => txs.isEmpty
                     ? Center(child: Padding(
                   padding: const EdgeInsets.all(32),
@@ -347,6 +348,64 @@ class _EarningsSkeletonState extends State<_EarningsSkeleton>
         ),
       ],
     );
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// ERROR STATES (ແທນການປອມເປັນ empty state)
+// ════════════════════════════════════════════════════════════
+
+class _WalletErrorView extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _WalletErrorView({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.wifi_off_outlined, size: 56, color: C.muted),
+          const SizedBox(height: 12),
+          Text(tr('load_failed'), style: const TextStyle(
+              fontSize: 15, color: C.muted, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: Text(tr('retry')),
+            style: OutlinedButton.styleFrom(
+                foregroundColor: C.navy, side: const BorderSide(color: C.navy)),
+          ),
+        ],
+      ),
+    ));
+  }
+}
+
+class _TxErrorView extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _TxErrorView({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(children: [
+        const Icon(Icons.wifi_off_outlined, size: 40, color: C.muted),
+        const SizedBox(height: 10),
+        Text(tr('load_failed'),
+            style: const TextStyle(color: C.muted, fontSize: 13)),
+        const SizedBox(height: 10),
+        TextButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh, size: 16, color: C.navy),
+          label: Text(tr('retry'),
+              style: const TextStyle(color: C.navy, fontWeight: FontWeight.w700)),
+        ),
+      ]),
+    ));
   }
 }
 

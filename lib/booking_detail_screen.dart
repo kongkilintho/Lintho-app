@@ -84,6 +84,29 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: C.navy));
           }
+          // ✅ [FIX] ກ່ອນໜ້ານີ້ error ບໍ່ຖືກເຊັກ — Firestore permission/network
+          // ຜິດພາດຈະຕົກລົງ "ບໍ່ພົບການຈອງ" ຄືກັນກັບ booking ຖືກລຶບ, ເຮັດໃຫ້ຜູ້ໃຊ້
+          // ເຂົ້າໃຈຜິດ. ແຍກ error ອອກມາຕ່າງຫາກ ພ້ອມປຸ່ມລອງໃໝ່.
+          if (snapshot.hasError) {
+            return Center(child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.wifi_off_outlined, size: 48, color: C.muted),
+                const SizedBox(height: 12),
+                Text(tr('load_failed'),
+                    style: const TextStyle(color: C.muted, fontSize: 15)),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: () => setState(() {}),
+                  icon: const Icon(Icons.refresh),
+                  label: Text(tr('retry')),
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: C.navy,
+                      side: const BorderSide(color: C.navy)),
+                ),
+              ],
+            ));
+          }
           if (!snapshot.hasData || !snapshot.data!.exists) {
             return Center(child: Text(tr('no_booking'),
                 style: const TextStyle(color: C.muted, fontSize: 15)));

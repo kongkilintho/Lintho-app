@@ -1328,6 +1328,28 @@ class _BookingScreenState extends State<BookingScreen> {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const _BookingListSkeleton();
               }
+              // ✅ [FIX] ກ່ອນໜ້ານີ້ error ບໍ່ຖືກເຊັກ — Firestore ຜິດພາດຈະຕົກລົງ
+              // ເປັນ list ຫວ່າງງຽບໆ, ເຮັດໃຫ້ຄືກັບບໍ່ມີການຈອງທັງໆທີ່ແທ້ຈິງໂຫລດບໍ່ໄດ້.
+              if (snapshot.hasError) {
+                return Center(child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.wifi_off_outlined, size: 48, color: C.muted),
+                    const SizedBox(height: 12),
+                    Text(tr('load_failed'), style: const TextStyle(
+                        fontSize: 15, color: C.muted, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: () => setState(() {}),
+                      icon: const Icon(Icons.refresh),
+                      label: Text(tr('retry')),
+                      style: OutlinedButton.styleFrom(
+                          foregroundColor: C.navy,
+                          side: const BorderSide(color: C.navy)),
+                    ),
+                  ],
+                ));
+              }
               final allDocs = snapshot.data?.docs ?? [];
               final docs = allDocs.where((d) {
                 final b = d.data() as Map<String, dynamic>;
