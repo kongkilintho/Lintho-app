@@ -140,11 +140,14 @@ class _SplashSkeletonState extends State<_SplashSkeleton>
     return Container(
       width: double.infinity,
       height: double.infinity,
+      // ✅ [Phase 3 — brand consistency] ເຄີຍໃຊ້ gradient blue
+      // (#1A7BFF→#0B4FCC) ທີ່ບໍ່ກົງກັບສີໃດໆອື່ນໃນແອັບ — ຕອນນີ້ໃຊ້ navy
+      // ດຽວກັນກັບ splash/launcher config (pubspec.yaml) ແລະ AppColors.navy.
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF1A7BFF), Color(0xFF0B4FCC)],
+          colors: [Color(0xFF0A2E6E), AppColors.navy],
         ),
       ),
       child: FadeTransition(

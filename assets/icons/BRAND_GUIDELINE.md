@@ -24,16 +24,26 @@ Path (100x100 grid): `M50,16 L50,66 L82,66 L82,84 L28,84 L28,34 Z`
 
 ## Color
 
+<!-- ✅ [Phase 3 — updated to match the shipped app] This file previously
+documented a blue-only system (#0F6FFF/#0B4FCC/#1A7BFF) that predates the
+app's actual palette — green has been the primary action color throughout
+the live product for some time, with navy/gold as supporting accents.
+Values below are the canonical tokens; source of truth is
+lib/theme/app_theme.dart's AppColors class. -->
+
 | Role | Hex | Use |
 |---|---|---|
-| Brand blue | `#0F6FFF` | Mark on light backgrounds, primary buttons, links |
-| Brand blue (dark) | `#0B4FCC` | Gradient end, wordmark second word, pressed states |
-| Brand blue (bright) | `#1A7BFF` | Gradient start on app icon / splash |
-| White | `#FFFFFF` | Mark on blue/dark backgrounds |
-| Near-black | `#11141A` | Dark-mode tile background |
+| Navy | `#001B4B` | Mark on light backgrounds, app bar/nav accents, splash & launcher background |
+| Green (primary) | `#22C55E` | Primary buttons, primary action color app-wide |
+| Gold | `#FBBF24` | Secondary accent — ratings, highlights, rewards |
+| Ink | `#0F172A` | Primary text |
+| Teal | `#14B8A6` | Secondary brand accent (ColorScheme.secondary) |
+| White | `#FFFFFF` | Mark on navy/dark backgrounds |
+| Background | `#F8FAFF` | App scaffold background |
 
 The mark is always one flat color — never gradient-filled itself. Gradients,
-where used, live in the background only (app icon, splash).
+where used, live in the background only (app icon, splash) and should use
+navy tones, not the retired blue gradient.
 
 ## Clear space and minimum size
 
@@ -45,10 +55,10 @@ where used, live in the background only (app icon, splash).
 
 ## Backgrounds
 
-- **White / light:** blue mark (`#0F6FFF`), no container needed.
-- **Brand blue:** white mark.
+- **White / light:** navy mark (`#001B4B`), no container needed.
+- **Brand navy:** white mark.
 - **Dark (`#11141A` or darker):** white mark.
-- Never place the blue mark on a blue background, or white mark on white/light
+- Never place the navy mark on a navy background, or white mark on white/light
   background — contrast must be immediate.
 
 ## Do
@@ -57,19 +67,21 @@ where used, live in the background only (app icon, splash).
 - Scale proportionally only.
 - Use the mono version when you need the mark to inherit a UI theme color.
 - Keep the bevel cut sharp — it is a straight diagonal line, not curved.
+- Use green (`#22C55E`) as the one primary action color across buttons/CTAs;
+  reserve gold for ratings/highlights and navy for chrome/nav — don't
+  introduce a fourth "primary" candidate (see the design review's button
+  hierarchy findings for why this matters).
 
 ## Don't
 
 - Don't add a house outline, separate roof shape, or AC vent lines back in —
   the brief is one dominant idea (L), not a scene.
-- Don't recolor the mark with a second/accent color (no more green, teal,
-  etc.) — the system is blue + white/black only.
 - Don't rotate, skew, or add drop shadows/outlines/strokes to the mark.
-- Don't set the wordmark in anything but the brand blue pairing defined above.
+- Don't set the wordmark in anything but the navy/green pairing defined above.
 
 ## Wordmark
 
-`LinTho` — "Lin" in `#0F6FFF`, "Tho" in `#0B4FCC` on light backgrounds; both
-words solid white when reversed on blue/dark. Set in a bold sans-serif
+`LinTho` — "Lin" in `#001B4B`, "Tho" in `#22C55E` on light backgrounds; both
+words solid white when reversed on navy/dark. Set in a bold sans-serif
 (Helvetica/Arial 800, or the app's bold UI font), sentence case as shown — not
 all caps.

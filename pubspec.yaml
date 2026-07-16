@@ -67,22 +67,27 @@ flutter_launcher_icons:
   ios: true
   image_path: "assets/icons/lintho_logo_3d.png"
   min_sdk_android: 21
-  adaptive_icon_background: "#F7F4F0"
+  # ✅ [Phase 3 — brand consistency] ເຄີຍ cream (#F7F4F0) ໃນຂະນະທີ່ web
+  # theme_color/background_color ເປັນ navy (#0B1A4D), ແລະ in-app animated
+  # splash (main.dart _SplashSkeleton) ເປັນ blue ອີກຄົນລະຄ່າ (#1A7BFF→
+  # #0B4FCC) — 3 ສີແບຣນທີ່ບໍ່ກ່ຽວຂ້ອງກັນໃນຄວາມປະທັບໃຈຄັ້ງທຳອິດ. ຕອນນີ້ລວມ
+  # ເປັນ navy ດຽວກັນກັບ AppColors.navy (lib/theme/app_theme.dart).
+  adaptive_icon_background: "#001B4B"
   adaptive_icon_foreground: "assets/icons/lintho_icon_foreground.png"
   remove_alpha_ios: true
   web:
     generate: true
     image_path: "assets/icons/lintho_logo_3d.png"
-    background_color: "#0B1A4D"
-    theme_color: "#0B1A4D"
+    background_color: "#001B4B"
+    theme_color: "#001B4B"
 
 flutter_native_splash:
-  color: "#F7F4F0"
+  color: "#001B4B"
   image: assets/icons/lintho_splash_logo.png
   fullscreen: false
   android_gravity: center
   ios_content_mode: center
   android_12:
-    color: "#F7F4F0"
+    color: "#001B4B"
     image: assets/icons/lintho_splash_logo.png
-    icon_background_color: "#F7F4F0"
+    icon_background_color: "#001B4B"
