@@ -1,0 +1,505 @@
+// ============================================================
+// Booking.dart — LinTho Provider App — All Models
+// ============================================================
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+// ── ENUMS ────────────────────────────────────────────────────
+
+enum JobStatus {
+  pending, accepted, onTheWay, arrived, inProgress,
+  completed, cancelled, rejected,
+}
+
+extension JobStatusX on JobStatus {
+  String get label => switch (this) {
+    JobStatus.pending    => 'ໃໝ່',
+    JobStatus.accepted   => 'ຮັບແລ້ວ',
+    JobStatus.onTheWay   => 'ກຳລັງໄປ',
+    JobStatus.arrived    => 'ຮອດແລ້ວ',
+    JobStatus.inProgress => 'ກຳລັງເຮັດ',
+    JobStatus.completed  => 'ສຳເລັດ',
+    JobStatus.cancelled  => 'ຍົກເລີກ',
+    JobStatus.rejected   => 'ປະຕິເສດ',
+  };
+  bool get isActive => [
+    JobStatus.accepted, JobStatus.onTheWay,
+    JobStatus.arrived,  JobStatus.inProgress,
+  ].contains(this);
+  bool get isFinished => [
+    JobStatus.completed, JobStatus.cancelled, JobStatus.rejected,
+  ].contains(this);
+}
+
+enum TxType { earning, withdrawal, bonus, refund }
+
+extension TxTypeX on TxType {
+  String get label => switch (this) {
+    TxType.earning    => 'ລາຍຮັບ',
+    TxType.withdrawal => 'ຖອນເງິນ',
+    TxType.bonus      => 'ໂບນັດ',
+    TxType.refund     => 'ຄືນເງິນ',
+  };
+  bool get isCredit => this == TxType.earning || this == TxType.bonus;
+}
+
+enum KycStatus { none, pending, verified, rejected }
+
+// ── BOOKING ──────────────────────────────────────────────────
+
+class Booking {
+  final String    id;
+  final String    customerId;
+  final String    customerName;
+  final String    customerPhone;
+  final String?   customerPhotoUrl;
+  final String    providerId;
+  final String    serviceType;
+  final String    serviceEmoji;
+  final String    address;
+  final GeoPoint  location;
+  final DateTime  scheduledAt;
+  final JobStatus status;
+  final double    price;
+  final double?   additionalCharges;
+  final String?   additionalChargesNote;
+  final bool      additionalChargesApproved;
+  final String?   beforePhotoUrl;
+  final String?   afterPhotoUrl;
+  final String?   cancelReason;
+  final DateTime  createdAt;
+  final DateTime? acceptedAt;
+  final DateTime? completedAt;
+  final DateTime  expiresAt;
+  final String    paymentMethod;
+  final String    paymentStatus;
+  final String?   clientRequestId;
+  final String?   cancelledBy;
+  final double?   cancelFeeAmount;
+
+  const Booking({
+    required this.id,
+    required this.customerId,
+    required this.customerName,
+    required this.customerPhone,
+    this.customerPhotoUrl,
+    required this.providerId,
+    required this.serviceType,
+    required this.serviceEmoji,
+    required this.address,
+    required this.location,
+    required this.scheduledAt,
+    required this.status,
+    required this.price,
+    this.additionalCharges,
+    this.additionalChargesNote,
+    this.additionalChargesApproved = false,
+    this.beforePhotoUrl,
+    this.afterPhotoUrl,
+    this.cancelReason,
+    required this.createdAt,
+    this.acceptedAt,
+    this.completedAt,
+    required this.expiresAt,
+    this.paymentMethod = 'cash',
+    this.paymentStatus = 'pending',
+    this.clientRequestId,
+    this.cancelledBy,
+    this.cancelFeeAmount,
+  });
+
+  factory Booking.fromFirestore(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return Booking(
+      id:                        doc.id,
+      customerId:                d['customerId']                as String? ?? '',
+      customerName:              d['customerName']              as String? ?? '',
+      customerPhone:             d['customerPhone']             as String? ?? '',
+      customerPhotoUrl:          d['customerPhotoUrl']          as String?,
+      // ✅ Path A booking (booking_form_screen.dart) ບໍ່ຂຽນ providerId/
+      // serviceType/serviceEmoji ຕອນສ້າງ booking (ມັນຖືກ backfill ພາຍຫຼັງ
+      // ຕອນ matched) — cast ແບບ non-nullable ຈະ crash ໃສ່ booking ທີ່ຍັງບໍ່
+      // ມີ provider ຈັບຄູ່. ໃຫ້ default ປອດໄພແທນ.
+      providerId:                d['providerId']                as String? ?? '',
+      serviceType:               d['serviceType']               as String? ?? (d['category'] as String? ?? ''),
+      serviceEmoji:              d['serviceEmoji']               as String? ?? '🔧',
+      address:                   d['address']                   as String? ?? '',
+      location:                  d['location']                  as GeoPoint? ?? const GeoPoint(0, 0),
+      scheduledAt:              (d['scheduledAt']  as Timestamp).toDate(),
+      status:   JobStatus.values.byName(d['status'] as String),
+      // ✅ ໃຊ້ as num? ບໍ່ແມ່ນ as num — booking ເກົ່າຈາກ booking_form_screen.dart
+      // (ກ່ອນແກ້ໄຂ) ບໍ່ມີ field 'price' ມາກ່ອນ, cast ແບບບໍ່ null-safe ຈະ crash
+      // ຕອນ rehydrate booking ເກົ່ານັ້ນ.
+      price:                    (d['price'] as num?)?.toDouble() ?? 0,
+      additionalCharges:        (d['additionalCharges'] as num?)?.toDouble(),
+      additionalChargesNote:     d['additionalChargesNote']     as String?,
+      additionalChargesApproved: d['additionalChargesApproved'] as bool? ?? false,
+      beforePhotoUrl:            d['beforePhotoUrl']            as String?,
+      afterPhotoUrl:             d['afterPhotoUrl']             as String?,
+      cancelReason:              d['cancelReason']              as String?,
+      createdAt:                (d['createdAt']  as Timestamp).toDate(),
+      acceptedAt:               (d['acceptedAt'] as Timestamp?)?.toDate(),
+      completedAt:              (d['completedAt'] as Timestamp?)?.toDate(),
+      expiresAt:                (d['expiresAt']  as Timestamp).toDate(),
+      paymentMethod:             d['paymentMethod']             as String? ?? 'cash',
+      paymentStatus:             d['paymentStatus']             as String? ?? 'pending',
+      clientRequestId:           d['clientRequestId']           as String?,
+      cancelledBy:               d['cancelledBy']                as String?,
+      cancelFeeAmount:          (d['cancelFeeAmount'] as num?)?.toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'customerId': customerId, 'customerName': customerName,
+    'customerPhone': customerPhone, 'customerPhotoUrl': customerPhotoUrl,
+    'providerId': providerId, 'serviceType': serviceType,
+    'serviceEmoji': serviceEmoji, 'address': address,
+    'location': location, 'scheduledAt': Timestamp.fromDate(scheduledAt),
+    'status': status.name, 'price': price,
+    'additionalCharges': additionalCharges,
+    'additionalChargesNote': additionalChargesNote,
+    'additionalChargesApproved': additionalChargesApproved,
+    'beforePhotoUrl': beforePhotoUrl, 'afterPhotoUrl': afterPhotoUrl,
+    'cancelReason': cancelReason, 'createdAt': Timestamp.fromDate(createdAt),
+    'acceptedAt':  acceptedAt  != null ? Timestamp.fromDate(acceptedAt!)  : null,
+    'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
+    'expiresAt': Timestamp.fromDate(expiresAt),
+    'paymentMethod': paymentMethod,
+    'paymentStatus': paymentStatus,
+    'clientRequestId': clientRequestId,
+    'cancelledBy': cancelledBy,
+    'cancelFeeAmount': cancelFeeAmount,
+  };
+
+  Booking copyWith({
+    JobStatus? status, double? additionalCharges,
+    String? additionalChargesNote, bool? additionalChargesApproved,
+    String? beforePhotoUrl, String? afterPhotoUrl,
+    String? cancelReason, DateTime? acceptedAt, DateTime? completedAt,
+    String? paymentStatus, String? cancelledBy, double? cancelFeeAmount,
+  }) => Booking(
+    id: id, customerId: customerId, customerName: customerName,
+    customerPhone: customerPhone, customerPhotoUrl: customerPhotoUrl,
+    providerId: providerId, serviceType: serviceType,
+    serviceEmoji: serviceEmoji, address: address, location: location,
+    scheduledAt: scheduledAt,
+    status:                    status               ?? this.status,
+    price: price,
+    additionalCharges:         additionalCharges    ?? this.additionalCharges,
+    additionalChargesNote:     additionalChargesNote ?? this.additionalChargesNote,
+    additionalChargesApproved: additionalChargesApproved ?? this.additionalChargesApproved,
+    beforePhotoUrl:            beforePhotoUrl       ?? this.beforePhotoUrl,
+    afterPhotoUrl:             afterPhotoUrl        ?? this.afterPhotoUrl,
+    cancelReason:              cancelReason         ?? this.cancelReason,
+    createdAt: createdAt,
+    acceptedAt:  acceptedAt  ?? this.acceptedAt,
+    completedAt: completedAt ?? this.completedAt,
+    expiresAt: expiresAt,
+    paymentMethod: paymentMethod,
+    paymentStatus: paymentStatus ?? this.paymentStatus,
+    clientRequestId: clientRequestId,
+    cancelledBy: cancelledBy ?? this.cancelledBy,
+    cancelFeeAmount: cancelFeeAmount ?? this.cancelFeeAmount,
+  );
+
+  bool   get isExpired       => status == JobStatus.pending && expiresAt.isBefore(DateTime.now());
+  double get totalPrice      => price + (additionalCharges ?? 0);
+  String get formattedPrice  => _fmt(price);
+
+  static String _fmt(double v) =>
+      '₭${v.toStringAsFixed(0).replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
+
+  String get formattedSchedule {
+    final dt = scheduledAt;
+    return '${dt.hour.toString().padLeft(2,'0')}:'
+        '${dt.minute.toString().padLeft(2,'0')} · '
+        '${dt.day.toString().padLeft(2,'0')}/'
+        '${dt.month.toString().padLeft(2,'0')}/${dt.year}';
+  }
+}
+
+// ── PROVIDER TRANSACTION ─────────────────────────────────────
+
+class ProviderTransaction {
+  final String   id;
+  final String   providerId;
+  final TxType   type;
+  final double   amount;
+  final String?  bookingId;
+  final String   description;
+  final DateTime createdAt;
+
+  const ProviderTransaction({
+    required this.id, required this.providerId, required this.type,
+    required this.amount, this.bookingId,
+    required this.description, required this.createdAt,
+  });
+
+  factory ProviderTransaction.fromFirestore(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return ProviderTransaction(
+      id:          doc.id,
+      providerId:  d['providerId']  as String,
+      type:        TxType.values.byName(d['type'] as String),
+      amount:     (d['amount']      as num).toDouble(),
+      bookingId:   d['bookingId']   as String?,
+      description: d['description'] as String,
+      createdAt:  (d['createdAt']   as Timestamp).toDate(),
+    );
+  }
+
+  String get formattedAmount {
+    final sign = type.isCredit ? '+' : '-';
+    return '$sign${Booking._fmt(amount)}';
+  }
+
+  String get formattedDate {
+    final dt = createdAt;
+    return '${dt.day.toString().padLeft(2,'0')}/'
+        '${dt.month.toString().padLeft(2,'0')}/${dt.year}';
+  }
+}
+
+// ── WALLET ───────────────────────────────────────────────────
+
+class Wallet {
+  final String  providerId;
+  final double  balance;
+  final double  totalEarnings;
+  final double  totalWithdrawn;
+  final String? bankName;
+  final String? bankAccount;
+  final String? bankHolder;
+
+  const Wallet({
+    required this.providerId, required this.balance,
+    required this.totalEarnings, required this.totalWithdrawn,
+    this.bankName, this.bankAccount, this.bankHolder,
+  });
+
+  factory Wallet.empty(String uid) => Wallet(
+      providerId: uid, balance: 0, totalEarnings: 0, totalWithdrawn: 0);
+
+  factory Wallet.fromFirestore(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return Wallet(
+      providerId:     doc.id,
+      balance:       (d['balance']        as num? ?? 0).toDouble(),
+      totalEarnings: (d['totalEarnings']  as num? ?? 0).toDouble(),
+      totalWithdrawn:(d['totalWithdrawn'] as num? ?? 0).toDouble(),
+      bankName:       d['bankName']    as String?,
+      bankAccount:    d['bankAccount'] as String?,
+      bankHolder:     d['bankHolder']  as String?,
+    );
+  }
+
+  bool   get hasBankLinked    => bankName != null && bankAccount != null && bankHolder != null;
+  String get formattedBalance => Booking._fmt(balance);
+  String get formattedTotal   => Booking._fmt(totalEarnings);
+}
+
+// ── PROVIDER PROFILE ─────────────────────────────────────────
+
+class ProviderProfile {
+  final String       uid;
+  final String       displayName;
+  final String       email;
+  final String?      phone;
+  final String?      age;
+  final String?      gender;
+  final String?      address;
+  final String?      bio;
+  final String?      photoUrl;
+  final List<String> serviceTypes;
+  final bool         isOnline;
+  final double       rating;
+  final int          totalJobs;
+  final double       completionRate;
+  final KycStatus    kycStatus;
+  final List<String> fcmTokens;
+  final DateTime?    createdAt;
+
+  const ProviderProfile({
+    required this.uid,
+    required this.displayName,
+    required this.email,
+    this.phone, this.age, this.gender, this.address, this.bio, this.photoUrl,
+    this.serviceTypes   = const [],
+    this.isOnline       = false,
+    this.rating         = 0,
+    this.totalJobs      = 0,
+    this.completionRate = 0,
+    this.kycStatus      = KycStatus.none,
+    this.fcmTokens      = const [],
+    this.createdAt,
+  });
+
+  factory ProviderProfile.fromFirestore(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return ProviderProfile(
+      uid:            doc.id,
+      displayName:    d['displayName']    as String? ?? '',
+      email:          d['email']          as String? ?? '',
+      phone:          d['phone']          as String?,
+      age:            d['age']            as String?,
+      gender:         d['gender']         as String?,
+      address:        d['address']        as String?,
+      bio:            d['bio']            as String?,
+      photoUrl:       d['photoUrl']       as String?,
+      serviceTypes:   List<String>.from(d['serviceTypes'] ?? []),
+      isOnline:       d['isOnline']       as bool?   ?? false,
+      rating:        (d['rating']         as num?)?.toDouble() ?? 0,
+      totalJobs:      d['totalJobs']      as int?    ?? 0,
+      completionRate:(d['completionRate'] as num?)?.toDouble() ?? 0,
+      kycStatus: KycStatus.values.byName(d['kycStatus'] as String? ?? 'none'),
+      fcmTokens:      List<String>.from(d['fcmTokens'] ?? []),
+      createdAt:     (d['createdAt'] as Timestamp?)?.toDate(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'displayName': displayName, 'email': email, 'phone': phone,
+    'age': age, 'gender': gender, 'address': address, 'bio': bio,
+    'photoUrl': photoUrl, 'serviceTypes': serviceTypes,
+    'isOnline': isOnline, 'kycStatus': kycStatus.name,
+    'fcmTokens': fcmTokens,
+  };
+
+  ProviderProfile copyWith({
+    String? displayName, String? phone, String? age, String? gender,
+    String? address, String? bio, String? photoUrl,
+    List<String>? serviceTypes, bool? isOnline, KycStatus? kycStatus,
+  }) => ProviderProfile(
+    uid: uid, email: email,
+    displayName:  displayName  ?? this.displayName,
+    phone:        phone        ?? this.phone,
+    age:          age          ?? this.age,
+    gender:       gender       ?? this.gender,
+    address:      address      ?? this.address,
+    bio:          bio          ?? this.bio,
+    photoUrl:     photoUrl     ?? this.photoUrl,
+    serviceTypes: serviceTypes ?? this.serviceTypes,
+    isOnline:     isOnline     ?? this.isOnline,
+    rating: rating, totalJobs: totalJobs, completionRate: completionRate,
+    kycStatus:    kycStatus    ?? this.kycStatus,
+    fcmTokens: fcmTokens, createdAt: createdAt,
+  );
+
+  String get avatarLetter        => displayName.isNotEmpty ? displayName[0].toUpperCase() : '🔧';
+  String get ratingLabel         => rating.toStringAsFixed(1);
+  String get completionRateLabel => '${completionRate.toStringAsFixed(0)}%';
+}
+
+// ── REVIEW ───────────────────────────────────────────────────
+
+class Review {
+  final String   id;
+  final String   bookingId;
+  final String   customerId;
+  final String   customerName;
+  final String?  customerPhotoUrl;
+  final String   providerId;
+  final double   rating;
+  final String   comment;
+  final String?  providerReply;
+  final DateTime createdAt;
+
+  const Review({
+    required this.id, required this.bookingId,
+    required this.customerId, required this.customerName,
+    this.customerPhotoUrl, required this.providerId,
+    required this.rating, required this.comment,
+    this.providerReply, required this.createdAt,
+  });
+
+  factory Review.fromFirestore(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return Review(
+      id:               doc.id,
+      bookingId:        d['bookingId']       as String? ?? '',
+      customerId:       d['customerId']       as String? ?? '',
+      customerName:     d['customerName']     as String? ?? '',
+      customerPhotoUrl: d['customerPhotoUrl'] as String?,
+      providerId:       d['providerId']       as String? ?? '',
+      rating:          (d['rating']           as num?)?.toDouble() ?? 0,
+      comment:          d['comment']          as String? ?? '',
+      providerReply:    d['providerReply']    as String?,
+      createdAt:       (d['createdAt']        as Timestamp?)?.toDate() ?? DateTime.now(),
+    );
+  }
+
+  String get formattedDate {
+    final dt = createdAt;
+    return '${dt.day.toString().padLeft(2,'0')}/'
+        '${dt.month.toString().padLeft(2,'0')}/${dt.year}';
+  }
+}
+
+// ── CHAT MESSAGE ─────────────────────────────────────────────
+
+class ChatMessage {
+  final String   id;
+  final String   senderId;
+  final String?  text;
+  final String?  imageUrl;
+  final bool     isRead;
+  final DateTime createdAt;
+
+  const ChatMessage({
+    required this.id, required this.senderId,
+    this.text, this.imageUrl, this.isRead = false,
+    required this.createdAt,
+  });
+
+  factory ChatMessage.fromMap(String id, Map<dynamic, dynamic> d) =>
+      ChatMessage(
+        id: id, senderId: d['senderId'] as String,
+        text: d['text'] as String?, imageUrl: d['imageUrl'] as String?,
+        isRead: d['isRead'] as bool? ?? false,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(d['createdAt'] as int),
+      );
+
+  Map<String, dynamic> toMap() => {
+    'senderId': senderId, 'text': text, 'imageUrl': imageUrl,
+    'isRead': isRead, 'createdAt': createdAt.millisecondsSinceEpoch,
+  };
+}
+
+// ── WORK SCHEDULE ────────────────────────────────────────────
+
+class WorkSchedule {
+  final Map<String, bool> availableDays;
+  final List<String>      blockedDates;
+  final String            workStartTime;
+  final String            workEndTime;
+
+  const WorkSchedule({
+    required this.availableDays,
+    this.blockedDates  = const [],
+    this.workStartTime = '08:00',
+    this.workEndTime   = '20:00',
+  });
+
+  factory WorkSchedule.defaultSchedule() => WorkSchedule(
+    availableDays: {
+      'ຈັນ': true, 'ອັງຄານ': true, 'ພຸດ': true,
+      'ພະຫັດ': true, 'ສຸກ': true, 'ເສົາ': true, 'ອາທິດ': false,
+    },
+  );
+
+  factory WorkSchedule.fromFirestore(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return WorkSchedule(
+      availableDays: Map<String, bool>.from(d['availableDays'] ?? {}),
+      blockedDates:  List<String>.from(d['blockedDates']       ?? []),
+      workStartTime: d['workStartTime'] as String? ?? '08:00',
+      workEndTime:   d['workEndTime']   as String? ?? '20:00',
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'availableDays': availableDays, 'blockedDates': blockedDates,
+    'workStartTime': workStartTime, 'workEndTime': workEndTime,
+  };
+}

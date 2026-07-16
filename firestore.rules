@@ -1,0 +1,318 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    // ແຍກການດຶງຂໍ້ມູນອອກມາເພື່ອບໍ່ໃຫ້ເກີດການ Loop
+    // ✅ Fallback ປອດໄພ: ຖ້າ users/{uid} doc ບໍ່ມີ ຫຼື ບໍ່ມີ field role
+    // (ເຊັ່ນ ຜູ້ໃຊ້ສະໝັກຜ່ານ Google ທີ່ doc ຍັງສ້າງບໍ່ສົມບູນ) ໃຫ້ສົ່ງຄືນ 'customer'
+    // ແທນທີ່ຈະ error ແລ້ວເຮັດໃຫ້ rule ທັງ block deny ດ້ວຍ permission-denied
+    function getRole() {
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(path) && ('role' in get(path).data)
+        ? get(path).data.role
+        : 'customer';
+    }
+
+    function isAdmin() {
+      return isAuth() && getRole() == 'admin';
+    }
+
+    function isCustomer() {
+      return isAuth() && getRole() == 'customer';
+    }
+
+    function isProvider() {
+      return isAuth() && getRole() == 'provider';
+    }
+
+    // ກວດຄ່າ lat/lng ໃຫ້ຖືກປະເພດ ແລະ ຢູ່ໃນຂອບເຂດທີ່ເປັນໄປໄດ້
+    // (ໃຊ້ໃນ booking create) — ອະນຸຍາດໃຫ້ບໍ່ມີ lat/lng ໄດ້ (ກໍລະນີລູກຄ້າພິມທີ່ຢູ່ເອງ
+    // ບໍ່ໄດ້ກົດ GPS) ແຕ່ຖ້າມີຄ່າມາ ຕ້ອງເປັນ number ແລະ ຢູ່ໃນຂອບເຂດທີ່ຖືກຕ້ອງ
+    function isValidLatLng() {
+      return !('lat' in request.resource.data) ||
+        request.resource.data.lat == null ||
+        (request.resource.data.lat is number &&
+         request.resource.data.lng is number &&
+         request.resource.data.lat >= -90 && request.resource.data.lat <= 90 &&
+         request.resource.data.lng >= -180 && request.resource.data.lng <= 180);
+    }
+
+    // ກວດ lat/lng ສະເພາະເວລາມີການແກ້ໄຂ field ນັ້ນ (ໃຊ້ກັບ providers
+    // ບ່ອນທີ່ lat/lng ບໍ່ໄດ້ຢູ່ໃນທຸກ write — ເຊັ່ນ profile-only update)
+    function isValidLatLngIfChanged() {
+      return !('lat' in request.resource.data.diff(resource.data).affectedKeys()) ||
+        (request.resource.data.lat is number && request.resource.data.lng is number &&
+         request.resource.data.lat >= -90 && request.resource.data.lat <= 90 &&
+         request.resource.data.lng >= -180 && request.resource.data.lng <= 180);
+    }
+
+    // ADMIN — ອ່ານ/ຂຽນໄດ້ທັງໝົດ
+    match /{document=**} {
+      allow read, write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /users/{uid} {
+      // ແກ້ໄຂ: ໃຫ້ອ່ານໄດ້ເລີຍຖ້າ Auth ແລ້ວ ເພື່ອປ້ອງກັນ Infinite Loop ຈາກ getRole()
+      allow read: if isAuth();
+      // 🔒 [AUDIT C1] ກ່ອນໜ້ານີ້ create ບໍ່ໄດ້ຈຳກັດ field 'role' ເລີຍ — user ໃໝ່
+      // ສາມາດ set({role: 'admin'}) ຕອນສ້າງ doc ຄັ້ງທຳອິດໄດ້ ແລ້ວຜ່ານ admin
+      // bypass rule (line 58-60) ຄວບຄຸມຖານຂໍ້ມູນທັງໝົດ. ຕອນນີ້ບັງຄັບວ່າຖ້າມີ
+      // field role ມາໃນ create, ຕ້ອງເປັນ 'customer' ຫຼື 'provider' ເທົ່ານັ້ນ —
+      // 'admin' ຕ້ອງຖືກຕັ້ງຜ່ານ Cloud Function/Admin SDK ເທົ່ານັ້ນ.
+      allow create: if isAuth() && isOwner(uid) &&
+        (!('role' in request.resource.data) ||
+         request.resource.data.role in ['customer', 'provider']);
+      // ✅ rewardPoints ຕ້ອງຖືກປ່ຽນຜ່ານ Cloud Function (Admin SDK) ເທົ່ານັ້ນ
+      // (onBookingStatusChange ຕອນ earn, onRewardRedemptionRequested ຕອນ redeem)
+      // ບໍ່ດັ່ງນັ້ນລູກຄ້າຈະສາມາດແກ້ຍອດແຕ້ມຕົນເອງໂດຍກົງໄດ້
+      // ✅ role ຫ້າມລູກຄ້າແກ້ໄຂເອງເດັດຂາດ — ບໍ່ດັ່ງນັ້ນຈະ self-promote ເປັນ
+      // 'admin' ໄດ້ ແລະຜ່ານ admin bypass rule (line 58-60) ໄປແກ້ໄຂໄດ້ທຸກຢ່າງ
+      // ໃນລະບົບ. ການປ່ຽນ role ຕ້ອງຜ່ານ Cloud Function/Admin SDK ເທົ່ານັ້ນ.
+      allow update: if isAuth() && isOwner(uid) &&
+        !('rewardPoints' in request.resource.data.diff(resource.data).affectedKeys()) &&
+        !('role' in request.resource.data.diff(resource.data).affectedKeys());
+      allow delete: if false;
+
+      match /addresses/{addrId} {
+        allow read, create, delete: if isAuth() && isOwner(uid);
+        allow update: if false;
+      }
+    }
+
+    // App-wide config (settings/general = maintenance mode, support email, ...;
+    // settings/rewards = earn/redeem rates). Customer/Provider apps ຕ້ອງອ່ານໄດ້
+    // ເພື່ອກວດ maintenanceMode ແບບ live — ຂຽນໄດ້ສະເພາະ admin (explicit ຢູ່ນີ້
+    // ນອກເໜືອຈາກ blanket bypass rule ຂ້າງເທິງ, ເພື່ອໃຫ້ intent ຊັດເຈນ).
+    match /settings/{docId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      // resource == null ກໍລະນີ doc ຍັງບໍ່ມີ (ໃຊ້ໂດຍ get() ກວດ idempotent
+      // ກ່ອນ create ດ້ວຍ clientRequestId) — ບໍ່ມີ data ໃຫ້ leak ຢູ່ແລ້ວ ຈຶ່ງອະນຸຍາດໄດ້
+      allow read: if isAuth() && (
+        resource == null ||
+        resource.data.customerId == request.auth.uid ||
+        resource.data.providerId == request.auth.uid ||
+        (isProvider() && resource.data.status == 'pending')
+      );
+
+      // ປັບໃຫ້ Customer ທຸກຄົນທີ່ Login ສາມາດສ້າງ Booking ໄດ້ງ່າຍຂຶ້ນ
+      // ກວດເພີ່ມ: lat/lng ຕ້ອງເປັນ number ແລະ ຢູ່ໃນຂອບເຂດທີ່ຖືກຕ້ອງ
+      // 🔒 [AUDIT H2] ປ່ຽນ || ເປັນ && — ເມື່ອກ່ອນ isCustomer()==true ຢ່າງດຽວກໍ
+      // ພຽງພໍໃຫ້ຜ່ານ, ໝາຍຄວາມວ່າ customer ຄົນໜຶ່ງສາມາດ set customerId ເປັນ uid
+      // ຂອງຄົນອື່ນໄດ້ (ປອມ booking ໃສ່ບັນຊີຄົນອື່ນ). ຕອນນີ້ບັງຄັບວ່າ customerId
+      // ຕ້ອງເປັນ auth.uid ຕົນເອງ "ແລະ" ຕ້ອງເປັນ role customer ນຳ.
+      allow create: if isAuth() &&
+        request.resource.data.customerId == request.auth.uid && isCustomer() &&
+        isValidLatLng();
+
+      // ປັບປຸງໃຫ້ Customer ສາມາດອັບເດດຂໍ້ມູນການຊຳລະເງິນ ແລະ ສະຖານະໄດ້
+      // lat/lng ບໍ່ຢູ່ໃນ list ນີ້ — ບໍ່ໃຫ້ແກ້ໄຂຕຳແໜ່ງພາຍຫຼັງສ້າງ booking ແລ້ວ
+      // 🔒 [AUDIT C2] ກ່ອນໜ້ານີ້ຝັ່ງ provider ກວດແຕ່ isProvider() ໂດຍບໍ່ກວດວ່າ
+      // ເປັນ provider ຂອງ booking ນີ້ແທ້ — provider ຄົນອື່ນສາມາດແຍ່ງງານ (ຂຽນທັບ
+      // providerId), ປອມ status='completed', ແລະ self-approve
+      // additionalChargesApproved ຂອງຕົນເອງໄດ້. ຕອນນີ້ບັງຄັບວ່າ:
+      //  1) ຕ້ອງເປັນເຈົ້າຂອງ booking ນີ້ຢູ່ແລ້ວ (resource.data.providerId == uid)
+      //     ຫຼື 2) ບໍ່ມີເຈົ້າຂອງ ແລະ status='pending' (ກຳລັງຮັບງານໃໝ່) ເທົ່ານັ້ນ
+      // ແລະ additionalChargesApproved ຖືກຍົກອອກຈາກ list ນີ້ — ມີແຕ່ customer
+      // ເທົ່ານັ້ນທີ່ອະນຸມັດຄ່າໃຊ້ຈ່າຍເພີ່ມໄດ້ (ຢູ່ໃນ list ຂອງ customer ຂ້າງເທິງ).
+      allow update: if isAuth() && (
+        (resource.data.customerId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'reviewed', 'additionalChargesApproved', 'additionalCharges',
+              'additionalChargesNote', 'paymentMethod', 'paymentStatus', 'slipUrl', 'sentTo',
+              'updatedAt', 'cancelReason', 'cancelledBy', 'cancelFeeAmount', 'matchConfirmed'])) ||
+        (isProvider() &&
+          (resource.data.providerId == request.auth.uid ||
+            (resource.data.status == 'pending' &&
+             request.resource.data.providerId == request.auth.uid)) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'providerId', 'providerName', 'acceptedAt',
+              'completedAt', 'cancelReason', 'beforePhotoUrl', 'afterPhotoUrl',
+              'additionalCharges', 'additionalChargesNote',
+              'paymentStatus', 'updatedAt']))
+      );
+      allow delete: if false;
+    }
+
+    match /providers/{providerId} {
+      allow read: if isAuth();
+
+      // ສ້າງ doc ໃໝ່: ບໍ່ບັງຄັບ lat/lng (ບາງ flow ສ້າງ profile ກ່ອນເລີ່ມ Online)
+      // ແຕ່ຖ້າມີ lat/lng ມາ ຕ້ອງຖືກຕ້ອງ
+      allow create: if isAuth() && isOwner(providerId) && isValidLatLngIfChanged();
+
+      // ອັບເດດ: ເຈົ້າຂອງແກ້ໄຂ profile/location ຂອງຕົນເອງໄດ້
+      // ກວດ lat/lng ໃຫ້ຖືກຕ້ອງສະເພາະເວລາມີການແກ້ໄຂ field ນັ້ນ
+      // + ອະນຸຍາດ customer ອັບເດດ rating/totalJobs/completionRate
+      //   ຫຼັງສົ່ງ review (review_screen.dart) — customer ບໍ່ແມ່ນ owner
+      // ✅ kycStatus/isVerified/rejectReason/suspendReason ຫ້າມ owner ແກ້ໄຂ
+      // ເອງເດັດຂາດ — field ເຫຼົ່ານີ້ຕ້ອງຖືກປ່ຽນຜ່ານ admin (LinTho Admin Panel)
+      // ຜ່ານ admin bypass rule (line 58-60) ເທົ່ານັ້ນ ບໍ່ດັ່ງນັ້ນ provider ຈະ
+      // ສາມາດ self-approve ຕົນເອງເປັນ verified ໄດ້
+      allow update: if isAuth() && (
+        (isOwner(providerId) && isValidLatLngIfChanged() &&
+          !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['kycStatus', 'isVerified', 'rejectReason', 'suspendReason'])) ||
+        (isCustomer() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['rating', 'totalJobs', 'completionRate']))
+      );
+
+      allow delete: if false;
+
+      match /reviews/{reviewId} {
+        allow read: if isAuth();
+        allow create: if isAuth();
+        allow update, delete: if false;
+      }
+    }
+
+    match /wallets/{uid} {
+      allow read: if isAuth() && isOwner(uid);
+
+      // 🔒 [AUDIT C3] ກ່ອນໜ້ານີ້ "allow read, write: if isOwner(uid)" ໝາຍຄວາມວ່າ
+      // ເຈົ້າຂອງ wallet ສາມາດແກ້ balance/totalEarnings ຕົນເອງໂດຍກົງໄດ້ຜ່ານ
+      // client SDK ໂດຍບໍ່ຜ່ານ onBookingStatusChange ເລີຍ. ຕອນນີ້ແຍກ create/update:
+      // - create: ອະນຸຍາດຄັ້ງທຳອິດ (ຕອນສະໝັກ provider) ແຕ່ຕ້ອງເລີ່ມຕົ້ນຍອດ 0
+      //   ເທົ່ານັ້ນ (ຫ້າມສ້າງພ້ອມຍອດເງິນທີ່ບໍ່ແມ່ນ 0)
+      // - update: ຂຽນໄດ້ສະເພາະຂໍ້ມູນທະນາຄານ (bankName/bankAccount/bankHolder)
+      //   ເທົ່ານັ້ນ — balance/totalEarnings ຕ້ອງຜ່ານ Cloud Function/Admin SDK
+      allow create: if isAuth() && isOwner(uid) &&
+        (!('balance' in request.resource.data) || request.resource.data.balance == 0) &&
+        (!('totalEarnings' in request.resource.data) || request.resource.data.totalEarnings == 0);
+      allow update: if isAuth() && isOwner(uid) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['bankName', 'bankAccount', 'bankHolder', 'updatedAt']);
+      allow delete: if false;
+
+      // Voucher ອອກໂດຍ Cloud Function (Admin SDK) ເທົ່ານັ້ນ — client ອ່ານໄດ້
+      // ແຕ່ຫ້າມຂຽນ ເພື່ອປ້ອງກັນການປອມສ່ວນຫຼຸດ
+      match /vouchers/{voucherId} {
+        allow read: if isAuth() && isOwner(uid);
+        allow write: if false;
+      }
+    }
+
+    match /referralCodes/{code} {
+      allow read: if true;
+      allow create: if isAuth() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /transactions/{txId} {
+      allow read: if isAuth() && (resource.data.providerId == request.auth.uid || resource.data.customerId == request.auth.uid);
+      allow create: if isAuth();
+      allow update, delete: if false;
+    }
+
+    match /schedules/{uid} {
+      allow read, write: if isAuth() && isOwner(uid);
+    }
+
+    match /withdrawalRequests/{reqId} {
+      // 🔒 [AUDIT C4] ກ່ອນໜ້ານີ້ກວດແຕ່ isProvider() — provider ຄົນໜຶ່ງສາມາດ
+      // ຍື່ນຄຳຂໍຖອນເງິນ "ໃນນາມ" providerId ຂອງຄົນອື່ນໄດ້ (ຖ້າຮູ້ uid). ຕອນນີ້
+      // ບັງຄັບວ່າ providerId ໃນຄຳຂໍຕ້ອງເປັນຕົນເອງ ແລະ amount ຕ້ອງເປັນຕົວເລກ > 0.
+      allow create: if isProvider() &&
+        request.resource.data.providerId == request.auth.uid &&
+        request.resource.data.amount is number && request.resource.data.amount > 0;
+      allow read: if isAuth() && resource.data.providerId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Admin-managed discount codes (created from the LinTho web admin's
+    // Promotions page). Clients only need to validate a code at checkout —
+    // create/update (e.g. usedCount) goes through the admin bypass rule above.
+    match /coupons/{couponId} {
+      allow read: if true;
+      // ✅ ລູກຄ້າ login ແລ້ວ increment usedCount ໄດ້ສະເພາະ field ນີ້ ຕອນຈອງ
+      // ສຳເລັດ (ໃນ WriteBatch ດຽວກັນກັບ booking creation) — ບໍ່ໃຫ້ແກ້ field ອື່ນ
+      // (code/value/status/validFrom/...) ເພື່ອບໍ່ໃຫ້ລູກຄ້າປ່ຽນແປງ coupon ເອງ.
+      allow update: if isAuth() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount']) &&
+        request.resource.data.usedCount == resource.data.usedCount + 1;
+      allow create, delete: if false;
+    }
+
+    // ລູກຄ້າສ້າງ request ແລກແຕ້ມ — onRewardRedemptionRequested (Cloud Function,
+    // Admin SDK) ຈະກວດ rewardSettings + ຍອດແຕ້ມ ແລ້ວອອກ coupon/ຫັກແຕ້ມໃຫ້ແບບ
+    // atomic. Client ຫ້າມແກ້ status/result ເອງ ເພື່ອບໍ່ໃຫ້ປອມຜົນແລກແຕ້ມ.
+    match /rewardRedemptions/{reqId} {
+      allow read: if isAuth() && resource.data.userId == request.auth.uid;
+      allow create: if isAuth() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.points is int && request.resource.data.points > 0 &&
+        request.resource.data.status == 'pending';
+      allow update, delete: if false;
+    }
+
+    // Ledger ແຕ້ມ (earn/redeem/manual) — ຂຽນໄດ້ສະເພາະ Cloud Function/Admin
+    // ເທົ່ານັ້ນ, ລູກຄ້າອ່ານໄດ້ສະເພາະຂອງຕົນເອງ
+    match /rewardTransactions/{txnId} {
+      allow read: if isAuth() && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /notifications/{notifId} {
+      allow read: if isAuth() && resource.data.toUid == request.auth.uid;
+      allow create: if isAuth();
+      allow update: if isAuth() && resource.data.toUid == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
+      allow delete: if false;
+    }
+
+    match /kyc/{uid} {
+      allow read, write: if isAuth() && isOwner(uid);
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if isProvider() &&
+        resource.data.providerId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['providerReply']);
+      allow delete: if false;
+    }
+
+    // 🔒 [AUDIT M1] ບໍ່ມີ match block ນີ້ມາກ່ອນ — chat_screen.dart ອ່ານ/ຂຽນ
+    // collection('chats') (members-array query ຢູ່ chat_screen.dart:78-80,
+    // ChatService.createOrGetChat ຢູ່ chat_screen.dart:840-878) ໂດຍບໍ່ມີ rule
+    // ສະເພາະ, ຈຶ່ງຕົກໄປໃຊ້ admin bypass rule ຢ່າງດຽວ (deny ສຳລັບ user ທຳມະດາ).
+    // doc ແມ່ນ metadata ຫ້ອງແຊັດ (bookingId, customerId, providerId, members:
+    // [customerId, providerId], lastMessage, lastMessageAt, createdAt) —
+    // ຂໍ້ຄວາມແຊັດຈິງເກັບໃນ Realtime Database ແຍກຕ່າງຫາກ (ບໍ່ຢູ່ໃນ scope ຂອງ
+    // ໄຟລ໌ນີ້). ອະນຸຍາດອ່ານ/ຂຽນສະເພາະ 2 ຄົນທີ່ຢູ່ໃນ members ເທົ່ານັ້ນ, ແລະ
+    // update ຫ້າມແກ້ໄຂ members (ຫ້າມ member ປັດປ່ຽນ/ໄລ່ອີກຝ່າຍອອກ).
+    match /chats/{chatId} {
+      allow read: if isAuth() && request.auth.uid in resource.data.members;
+
+      allow create: if isAuth() &&
+        request.resource.data.members is list &&
+        request.resource.data.members.size() == 2 &&
+        request.auth.uid in request.resource.data.members;
+
+      allow update: if isAuth() && request.auth.uid in resource.data.members &&
+        request.resource.data.members == resource.data.members &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['lastMessage', 'lastMessageAt']);
+
+      allow delete: if false;
+    }
+  }
+}

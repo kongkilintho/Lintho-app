@@ -1,0 +1,114 @@
+// ============================================================
+// coupon_list_screen.dart — LinTho Customer App
+// ສະແດງລາຍການຄູປອງສ່ວນຫຼຸດຂອງ user ນີ້ (query `coupons` where
+// ownerId == uid) — ຄູປອງຖືກສ້າງໂດຍ Cloud Function
+// `onRewardRedemptionRequested` (functions/index.js) ຕອນແລກແຕ້ມ.
+// ============================================================
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'app_colors.dart';
+import 'coupon_repository.dart';
+
+class CouponListScreen extends ConsumerWidget {
+  const CouponListScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final couponsAsync = ref.watch(myCouponsProvider);
+
+    return Scaffold(
+      backgroundColor: C.bg,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text('ຄູປອງສ່ວນຫຼຸດ', style: TextStyle(
+            color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),
+      ),
+      body: couponsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('ໂຫລດຄູປອງບໍ່ໄດ້: $e',
+            style: const TextStyle(color: C.red, fontSize: 13))),
+        data: (coupons) {
+          if (coupons.isEmpty) {
+            return const Center(child: Text('ຍັງບໍ່ມີຄູປອງສ່ວນຫຼຸດ',
+                style: TextStyle(color: C.muted, fontSize: 13)));
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: coupons.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (_, i) => _CouponCard(coupon: coupons[i]),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CouponCard extends StatelessWidget {
+  final MyCoupon coupon;
+  const _CouponCard({required this.coupon});
+
+  bool get _expired =>
+      coupon.validUntil != null && DateTime.now().isAfter(coupon.validUntil!);
+
+  String get _valueLabel => coupon.type == 'percentage'
+      ? 'ຫຼຸດ ${coupon.value}%'
+      : 'ຫຼຸດ ${coupon.value.toStringAsFixed(0)} ກີບ';
+
+  @override
+  Widget build(BuildContext context) {
+    final active = coupon.status == 'active' && !_expired;
+    return Opacity(
+      opacity: active ? 1 : 0.5,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: C.border, width: 1)),
+        child: Row(children: [
+          Container(
+            width: 40, height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+                color: C.orange.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12)),
+            child: const Icon(Icons.local_offer_rounded, color: C.orange, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_valueLabel, style: const TextStyle(
+                fontSize: 15, fontWeight: FontWeight.w800, color: C.text)),
+            const SizedBox(height: 2),
+            Text(
+              _expired ? 'ໝົດອາຍຸແລ້ວ' : (coupon.status != 'active' ? 'ໃຊ້ໄປແລ້ວ' : 'ໃຊ້ໄດ້ຈົນຮອດ ${coupon.validUntil != null ? '${coupon.validUntil!.day}/${coupon.validUntil!.month}/${coupon.validUntil!.year}' : '-'}'),
+              style: const TextStyle(fontSize: 12, color: C.muted),
+            ),
+          ])),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: active ? () {
+              Clipboard.setData(ClipboardData(text: coupon.code));
+              ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('ສຳເນົາລະຫັດແລ້ວ')));
+            } : null,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                  color: C.navy.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8)),
+              child: Text(coupon.code, style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w800,
+                  color: C.navy, letterSpacing: 1)),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}

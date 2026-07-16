@@ -1,0 +1,21 @@
+<svg width="400" height="800" viewBox="0 0 400 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="splashBg" x1="0" y1="0" x2="400" y2="800" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1A7BFF" />
+      <stop offset="1" stop-color="#0B4FCC" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="800" fill="url(#splashBg)" />
+
+  <!-- Centered mark -->
+  <g transform="translate(96 281) scale(1.6)">
+    <path d="M28,16 L50,16 L50,66 L82,66 L82,84 L28,84 Z" fill="#FFFFFF" />
+    <path d="M82,65 L102,75 L82,85 Z" fill="#FBBF24" />
+  </g>
+
+  <!-- Wordmark -->
+  <text x="200" y="460" text-anchor="middle" font-family="Helvetica, Arial, sans-serif"
+        font-size="40" font-weight="800" fill="#FFFFFF">LinTho</text>
+  <text x="200" y="490" text-anchor="middle" font-family="Helvetica, Arial, sans-serif"
+        font-size="15" font-weight="700" fill="#D6E4FF">ທຸກເລື່ອງຊ່າງ ຈົບງ່າຍໃນແອັບດຽວ</text>
+</svg>

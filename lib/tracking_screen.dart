@@ -1,0 +1,1197 @@
+// ============================================================
+// tracking_screen.dart — LinTho
+// Features:
+//   ✅ Real-time status tracking (Firestore stream)
+//   ✅ Status steps: pending→on_way→arrived→working→done
+//   ✅ flutter_map — ຊ່າງ location + ລູກຄ້າ location
+//   ✅ Provider real-time location (lat/lng stream)
+//   ✅ Call provider button
+//   ✅ Skeleton loading
+//   ✅ withValues(alpha:) ທຸກຈຸດ
+//   ✅ InkWell + Material ທຸກ tap
+//   ✅ dispose() ທຸກ controller
+//   ✅ mounted check ຫຼັງ async
+// ============================================================
+
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'app_colors.dart';
+import 'provider_model.dart';
+import 'review_screen.dart';
+import 'match_screen.dart';
+import 'booking_repository.dart';
+import 'chat_screen.dart';
+
+// ════════════════════════════════════════════════════════════
+// STATUS MODEL
+// ════════════════════════════════════════════════════════════
+
+enum BookingStatus {
+  pending,    // ລໍຖ້າຊ່າງ
+  onWay,      // ຊ່າງກຳລັງໄປ
+  arrived,    // ຊ່າງຮອດແລ້ວ
+  working,    // ກຳລັງເຮັດວຽກ
+  done,       // ສຳເລັດ
+  cancelled,  // ຍົກເລີກ
+}
+
+extension BookingStatusX on BookingStatus {
+  static BookingStatus fromString(String s) => switch (s) {
+    'accepted'   => BookingStatus.pending,
+    'onTheWay'   => BookingStatus.onWay,
+    'arrived'    => BookingStatus.arrived,
+    'inProgress' => BookingStatus.working,
+    'completed'  => BookingStatus.done,
+    'cancelled'  => BookingStatus.cancelled,
+    'rejected'   => BookingStatus.cancelled,
+    _            => BookingStatus.pending,
+  };
+
+  String get label => switch (this) {
+    BookingStatus.pending   => 'ລໍຖ້າຊ່າງ',
+    BookingStatus.onWay     => 'ຊ່າງກຳລັງໄປ',
+    BookingStatus.arrived   => 'ຊ່າງຮອດແລ້ວ',
+    BookingStatus.working   => 'ກຳລັງເຮັດວຽກ',
+    BookingStatus.done      => 'ວຽກສຳເລັດ',
+    BookingStatus.cancelled => 'ຍົກເລີກ',
+  };
+
+  String get emoji => switch (this) {
+    BookingStatus.pending   => '⏳',
+    BookingStatus.onWay     => '🚗',
+    BookingStatus.arrived   => '📍',
+    BookingStatus.working   => '🔧',
+    BookingStatus.done      => '✅',
+    BookingStatus.cancelled => '❌',
+  };
+
+  int get stepIndex => switch (this) {
+    BookingStatus.pending   => 0,
+    BookingStatus.onWay     => 1,
+    BookingStatus.arrived   => 2,
+    BookingStatus.working   => 3,
+    BookingStatus.done      => 4,
+    BookingStatus.cancelled => -1,
+  };
+}
+
+// ════════════════════════════════════════════════════════════
+// TRACKING SCREEN
+// ════════════════════════════════════════════════════════════
+
+class TrackingScreen extends StatefulWidget {
+  final String        bookingId;
+  final ProviderModel provider;
+  final String        serviceName;
+  final String        serviceEmoji;
+  final String        address;
+  final double?       customerLat;
+  final double?       customerLng;
+
+  const TrackingScreen({
+    super.key,
+    required this.bookingId,
+    required this.provider,
+    required this.serviceName,
+    required this.serviceEmoji,
+    required this.address,
+    this.customerLat,
+    this.customerLng,
+  });
+
+  @override
+  State<TrackingScreen> createState() => _TrackingScreenState();
+}
+
+class _TrackingScreenState extends State<TrackingScreen>
+    with TickerProviderStateMixin {
+
+  // ── state ─────────────────────────────────────────────────
+  BookingStatus _status      = BookingStatus.pending;
+  bool          _isLoading   = true;
+  double?       _provLat;
+  double?       _provLng;
+  double?       _custLat;
+  double?       _custLng;
+  int           _elapsedSecs = 0;
+  bool          _mapReady    = false;
+  double?       _additionalCharges;
+  String?       _additionalChargesNote;
+  bool          _additionalChargesApproved = false;
+  bool          _respondingToCharges       = false;
+
+  // ── controllers ───────────────────────────────────────────
+  late final MapController          _mapCtrl;
+  late final AnimationController    _pulseCtrl;
+  late final AnimationController    _statusCtrl;
+  late final Animation<double>      _pulseAnim;
+  late final Animation<double>      _statusAnim;
+  StreamSubscription<DocumentSnapshot>? _bookingSub;
+  StreamSubscription<DocumentSnapshot>? _providerSub;
+  Timer? _elapsedTimer;
+
+  final _db = FirebaseFirestore.instance;
+
+  // ════════════════════════════════════════════════════════
+  // LIFECYCLE
+  // ════════════════════════════════════════════════════════
+
+  @override
+  void initState() {
+    super.initState();
+    _mapCtrl   = MapController();
+    _custLat   = widget.customerLat;
+    _custLng   = widget.customerLng;
+    _provLat   = widget.provider.lat;
+    _provLng   = widget.provider.lng;
+    _setupAnimations();
+    _init();
+  }
+
+  @override
+  void dispose() {
+    _bookingSub?.cancel();
+    _providerSub?.cancel();
+    _elapsedTimer?.cancel();
+    _pulseCtrl.dispose();
+    _statusCtrl.dispose();
+    // ✅ MapController ບໍ່ມີ .dispose() — ບໍ່ call
+    super.dispose();
+  }
+
+  // ── animations ────────────────────────────────────────────
+
+  void _setupAnimations() {
+    _pulseCtrl = AnimationController(
+      vsync:    this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+
+    _statusCtrl = AnimationController(
+      vsync:    this,
+      duration: const Duration(milliseconds: 500),
+    );
+
+    _pulseAnim = Tween<double>(begin: 0.8, end: 1.2).animate(
+        CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+
+    _statusAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(parent: _statusCtrl, curve: Curves.easeOut));
+  }
+
+  // ════════════════════════════════════════════════════════
+  // INIT
+  // ════════════════════════════════════════════════════════
+
+  Future<void> _init() async {
+    await _loadInitialData();
+    if (!mounted) return;
+    _watchBooking();
+    _watchProviderLocation();
+    _startElapsedTimer();
+  }
+
+  Future<void> _loadInitialData() async {
+    try {
+      final doc = await _db
+          .collection('bookings')
+          .doc(widget.bookingId)
+          .get();
+      if (!mounted) return;
+      if (doc.exists) {
+        final d      = doc.data()!;
+        final status = d['status'] as String? ?? 'pending';
+        _custLat ??= (d['lat'] as num?)?.toDouble();
+        _custLng ??= (d['lng'] as num?)?.toDouble();
+        setState(() {
+          _status    = BookingStatusX.fromString(status);
+          _isLoading = false;
+        });
+      } else {
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      debugPrint('loadInitialData: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ════════════════════════════════════════════════════════
+  // STREAMS
+  // ════════════════════════════════════════════════════════
+
+  void _watchBooking() {
+    _bookingSub = _db
+        .collection('bookings')
+        .doc(widget.bookingId)
+        .snapshots()
+        .listen((doc) {
+      if (!doc.exists || !mounted) return;
+      final d         = doc.data()!;
+      final newStatus = BookingStatusX.fromString(
+          d['status'] as String? ?? 'pending');
+
+      setState(() {
+        _additionalCharges         = (d['additionalCharges'] as num?)?.toDouble();
+        _additionalChargesNote     = d['additionalChargesNote'] as String?;
+        _additionalChargesApproved = d['additionalChargesApproved'] as bool? ?? false;
+      });
+
+      if (newStatus != _status) {
+        setState(() => _status = newStatus);
+        _statusCtrl.forward(from: 0);
+
+        // ວຽກສຳເລັດ → ໄປ review
+        if (newStatus == BookingStatus.done && mounted) {
+          _elapsedTimer?.cancel();
+          Future.delayed(const Duration(seconds: 2), () {
+            if (!mounted) return;
+            _goReview();
+          });
+        }
+      }
+    }, onError: (e) => debugPrint('watchBooking: $e'));
+  }
+
+  void _watchProviderLocation() {
+    if (widget.provider.uid.isEmpty) return;
+    _providerSub = _db
+        .collection('providers')
+        .doc(widget.provider.uid)
+        .snapshots()
+        .listen((doc) {
+      if (!doc.exists || !mounted) return;
+      final d   = doc.data()!;
+      final lat = (d['lat'] as num?)?.toDouble();
+      final lng = (d['lng'] as num?)?.toDouble();
+      if (lat != null && lng != null) {
+        setState(() {
+          _provLat = lat;
+          _provLng = lng;
+        });
+        // ✅ pan map ໄປຫາ provider (ຖ້າ map ພ້ອມ)
+        if (_mapReady) {
+          _mapCtrl.move(LatLng(lat, lng), _mapCtrl.camera.zoom);
+        }
+      }
+    }, onError: (e) => debugPrint('watchProviderLoc: $e'));
+  }
+
+  void _startElapsedTimer() {
+    _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _elapsedSecs++);
+    });
+  }
+
+  // ════════════════════════════════════════════════════════
+  // ACTIONS
+  // ════════════════════════════════════════════════════════
+
+  Future<void> _callProvider() async {
+    final phone = widget.provider.phone;
+    if (phone.isEmpty) return;
+    final digits = phone.replaceAll(RegExp(r'[^\d+]'), '');
+    if (digits.isEmpty) return;
+    final uri = Uri.parse('tel:$digits');
+    // NOTE: AndroidManifest.xml ຕ້ອງມີ:
+    // <queries><intent><action android:name="android.intent.action.DIAL"/>
+    // <data android:scheme="tel"/></intent></queries>
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
+  Future<void> _openChat() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final chatId = await ChatService.createOrGetChat(
+      bookingId:    widget.bookingId,
+      customerId:   user.uid,
+      customerName: user.displayName ?? '',
+      providerId:   widget.provider.uid,
+      providerName: widget.provider.displayName,
+      serviceName:  widget.serviceName,
+    );
+    if (!mounted) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(
+      chatId:         chatId,
+      otherName:      widget.provider.displayName,
+      bookingService: widget.serviceName,
+      receiverId:     widget.provider.uid,
+      receiverName:   widget.provider.displayName,
+    )));
+  }
+
+  Future<void> _respondToCharges(bool approve) async {
+    if (_respondingToCharges) return;
+    setState(() => _respondingToCharges = true);
+    try {
+      await CustomerBookingRepository()
+          .respondToAdditionalCharges(widget.bookingId, approve);
+    } catch (e) {
+      debugPrint('respondToCharges: $e');
+    } finally {
+      if (mounted) setState(() => _respondingToCharges = false);
+    }
+  }
+
+  void _goReview() {
+    if (!mounted) return;
+    Navigator.pushReplacement(context, MaterialPageRoute(
+      builder: (_) => ReviewScreen(
+        bookingId:    widget.bookingId,
+        provider:     widget.provider,
+        serviceName:  widget.serviceName,
+        serviceEmoji: widget.serviceEmoji,
+      ),
+    ));
+  }
+
+  // ── center map ────────────────────────────────────────────
+
+  void _centerMap() {
+    if (!_mapReady) return;
+    final lat = _provLat ?? _custLat ?? 17.9757;
+    final lng = _provLng ?? _custLng ?? 102.6331;
+    _mapCtrl.move(LatLng(lat, lng), 14);
+  }
+
+  // ── elapsed label ─────────────────────────────────────────
+
+  String get _elapsedLabel {
+    final m = _elapsedSecs ~/ 60;
+    final s = _elapsedSecs % 60;
+    return m > 0
+        ? '${m}ນ ${s.toString().padLeft(2, '0')}ວ'
+        : '${_elapsedSecs}ວິ';
+  }
+
+  // ════════════════════════════════════════════════════════
+  // BUILD
+  // ════════════════════════════════════════════════════════
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) return const _TrackingSkeleton();
+
+    return Scaffold(
+      backgroundColor: C.bg,
+      body: Stack(children: [
+
+        // ── MAP (full screen background) ──────────────────
+        _buildMap(),
+
+        // ── TOP BAR ───────────────────────────────────────
+        SafeArea(child: _buildTopBar()),
+
+        // ── ADDITIONAL CHARGES BANNER ─────────────────────
+        if (_additionalCharges != null && !_additionalChargesApproved)
+          Positioned(
+            left: 16, right: 16,
+            bottom: _bottomSheetHeight + 80,
+            child: _buildAdditionalChargesBanner(),
+          ),
+
+        // ── BOTTOM SHEET ──────────────────────────────────
+        Positioned(
+          left: 0, right: 0, bottom: 0,
+          child: _buildBottomSheet(),
+        ),
+
+        // ── FAB: center map ───────────────────────────────
+        Positioned(
+          right: 16,
+          bottom: _bottomSheetHeight + 16,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap:        _centerMap,
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  color:        Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [BoxShadow(
+                    color:      Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 8,
+                    offset:     const Offset(0, 3),
+                  )],
+                ),
+                child: const Icon(Icons.my_location,
+                    color: C.primary, size: 22),
+              ),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  double get _bottomSheetHeight => _status == BookingStatus.done ? 280 : 340;
+
+  Widget _buildAdditionalChargesBanner() {
+    final amount = _additionalCharges ?? 0;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color:        Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border:       Border.all(color: const Color(0xFFF97316), width: 1.5),
+        boxShadow: [BoxShadow(
+          color:      Colors.black.withValues(alpha: 0.1),
+          blurRadius: 12,
+          offset:     const Offset(0, 4),
+        )],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('⚠️', style: TextStyle(fontSize: 18)),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'ຊ່າງຮ້ອງຂໍຄ່າໃຊ້ຈ່າຍເພີ່ມ',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: C.text),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text('₭${amount.toStringAsFixed(0)}'
+              '${_additionalChargesNote != null && _additionalChargesNote!.isNotEmpty ? ' · ${_additionalChargesNote!}' : ''}',
+              style: const TextStyle(fontSize: 12, color: C.muted)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _respondingToCharges ? null : () => _respondToCharges(false),
+                  child: const Text('ປະຕິເສດ'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _respondingToCharges ? null : () => _respondToCharges(true),
+                  style: ElevatedButton.styleFrom(backgroundColor: C.primary),
+                  child: const Text('ອະນຸມັດ', style: TextStyle(color: Colors.white)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════
+  // MAP
+  // ════════════════════════════════════════════════════════
+
+  Widget _buildMap() {
+    final center = LatLng(
+      _provLat ?? _custLat ?? 17.9757,
+      _provLng ?? _custLng ?? 102.6331,
+    );
+
+    final markers = <Marker>[];
+
+    // ── Provider marker ──────────────────────────────────
+    if (_provLat != null && _provLng != null) {
+      markers.add(Marker(
+        key:    const ValueKey('provider'),
+        point:  LatLng(_provLat!, _provLng!),
+        width:  60,
+        height: 80,
+        child: ScaleTransition(
+          scale: _pulseAnim,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color:        C.primary,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [BoxShadow(
+                    color:      C.primary.withValues(alpha: 0.4),
+                    blurRadius: 6,
+                  )],
+                ),
+                child: Text(
+                  widget.provider.displayName.isNotEmpty
+                      ? widget.provider.displayName
+                      : 'ຊ່າງ',
+                  style: const TextStyle(
+                    color: Colors.white, fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color:  C.primary,
+                  shape:  BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [BoxShadow(
+                    color:      C.primary.withValues(alpha: 0.5),
+                    blurRadius: 10,
+                  )],
+                ),
+                child: Center(child: Text(
+                  _status.emoji,
+                  style: const TextStyle(fontSize: 18),
+                )),
+              ),
+            ],
+          ),
+        ),
+      ));
+    }
+
+    // ── Customer marker ───────────────────────────────────
+    if (_custLat != null && _custLng != null) {
+      markers.add(Marker(
+        key:    const ValueKey('customer'),
+        point:  LatLng(_custLat!, _custLng!),
+        width:  60,
+        height: 80,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color:        C.green,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'ທ່ານ',
+                style: TextStyle(
+                  color: Colors.white, fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color:  C.green,
+                shape:  BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [BoxShadow(
+                  color:      C.green.withValues(alpha: 0.5),
+                  blurRadius: 10,
+                )],
+              ),
+              child: const Center(
+                child: Icon(Icons.home_rounded,
+                    color: Colors.white, size: 20),
+              ),
+            ),
+          ],
+        ),
+      ));
+    }
+
+    return FlutterMap(
+      mapController: _mapCtrl,
+      options: MapOptions(
+        initialCenter: center,
+        initialZoom:   14,
+        onMapReady:    () => setState(() => _mapReady = true),
+      ),
+      children: [
+        TileLayer(
+          urlTemplate:         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.lintho.app',
+        ),
+        MarkerLayer(markers: markers),
+      ],
+    );
+  }
+
+  // ════════════════════════════════════════════════════════
+  // TOP BAR
+  // ════════════════════════════════════════════════════════
+
+  Widget _buildTopBar() => Padding(
+    padding: const EdgeInsets.all(16),
+    child: Row(children: [
+      // back button
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap:        () => Navigator.pop(context),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color:        Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [BoxShadow(
+                color:      Colors.black.withValues(alpha: 0.1),
+                blurRadius: 8,
+              )],
+            ),
+            child: const Icon(Icons.arrow_back_ios,
+                color: C.primary, size: 18),
+          ),
+        ),
+      ),
+      const SizedBox(width: 12),
+
+      // status badge
+      Expanded(
+        child: FadeTransition(
+          opacity: _statusAnim,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color:        Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [BoxShadow(
+                color:      Colors.black.withValues(alpha: 0.1),
+                blurRadius: 8,
+                offset:     const Offset(0, 3),
+              )],
+            ),
+            child: Row(children: [
+              Text(_status.emoji,
+                  style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_status.label, style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w800,
+                    color: C.textPrimary,
+                  )),
+                  Text(
+                    _status == BookingStatus.working
+                        ? 'ເວລາ: $_elapsedLabel'
+                        : widget.serviceName,
+                    style: const TextStyle(
+                        fontSize: 11, color: C.muted),
+                  ),
+                ],
+              )),
+              // live dot
+              Container(
+                width: 8, height: 8,
+                decoration: BoxDecoration(
+                  color:  _status == BookingStatus.done
+                      ? C.green : C.primary,
+                  shape:  BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                _status == BookingStatus.done ? 'Done' : 'Live',
+                style: TextStyle(
+                  fontSize: 10, fontWeight: FontWeight.w700,
+                  color: _status == BookingStatus.done
+                      ? C.green : C.primary,
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+
+      const SizedBox(width: 12),
+
+      // chat button — ສະເພາະຕອນ booking ຍັງ active (ບໍ່ done/cancelled)
+      if (_status != BookingStatus.done &&
+          _status != BookingStatus.cancelled) ...[
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap:        _openChat,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color:        C.primary,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [BoxShadow(
+                  color:      C.primary.withValues(alpha: 0.4),
+                  blurRadius: 8,
+                )],
+              ),
+              child: const Icon(Icons.chat_bubble_outline_rounded,
+                  color: Colors.white, size: 20),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+      ],
+
+      // call button
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap:        _callProvider,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color:        C.green,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [BoxShadow(
+                color:      C.green.withValues(alpha: 0.4),
+                blurRadius: 8,
+              )],
+            ),
+            child: const Icon(Icons.phone_rounded,
+                color: Colors.white, size: 20),
+          ),
+        ),
+      ),
+    ]),
+  );
+
+  // ════════════════════════════════════════════════════════
+  // BOTTOM SHEET
+  // ════════════════════════════════════════════════════════
+
+  Widget _buildBottomSheet() => Container(
+    decoration: BoxDecoration(
+      color:        Colors.white,
+      borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(24)),
+      boxShadow: [BoxShadow(
+        color:      Colors.black.withValues(alpha: 0.1),
+        blurRadius: 20,
+        offset:     const Offset(0, -4),
+      )],
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // drag handle
+        const SizedBox(height: 10),
+        Center(child: Container(
+          width: 40, height: 4,
+          decoration: BoxDecoration(
+            color:        C.border,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        )),
+        const SizedBox(height: 16),
+
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+
+              // ── Provider Info ─────────────────────────
+              _ProviderInfoRow(
+                provider:     widget.provider,
+                serviceEmoji: widget.serviceEmoji,
+                serviceName:  widget.serviceName,
+                onCall:       _callProvider,
+              ),
+              const SizedBox(height: 16),
+
+              // ── Status Steps ──────────────────────────
+              _StatusSteps(currentStatus: _status),
+              const SizedBox(height: 16),
+
+              // ── Address ───────────────────────────────
+              if (widget.address.isNotEmpty) ...[
+                _AddressRow(address: widget.address),
+                const SizedBox(height: 16),
+              ],
+
+              // ── Done button ───────────────────────────
+              if (_status == BookingStatus.done) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _goReview,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: C.primary,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 14),
+                    ),
+                    child: const Text(
+                      '⭐ ໃຫ້ຄະແນນຊ່າງ',
+                      style: TextStyle(
+                        color: Colors.white, fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ] else ...[
+                const SizedBox(height: 4),
+              ],
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// STATUS STEPS WIDGET
+// ════════════════════════════════════════════════════════════
+
+class _StatusSteps extends StatelessWidget {
+  final BookingStatus currentStatus;
+  const _StatusSteps({required this.currentStatus});
+
+  static const _steps = [
+    (BookingStatus.pending,  '⏳', 'ລໍຖ້າຊ່າງ'),
+    (BookingStatus.onWay,    '🚗', 'ຊ່າງກຳລັງໄປ'),
+    (BookingStatus.arrived,  '📍', 'ຊ່າງຮອດແລ້ວ'),
+    (BookingStatus.working,  '🔧', 'ກຳລັງເຮັດວຽກ'),
+    (BookingStatus.done,     '✅', 'ວຽກສຳເລັດ'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final curIdx = currentStatus.stepIndex;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color:        C.bg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: C.border),
+      ),
+      child: Column(
+        children: _steps.asMap().entries.map((e) {
+          final i      = e.key;
+          final step   = e.value;
+          final isDone = curIdx > i;
+          final isActive = curIdx == i;
+          final isLast = i == _steps.length - 1;
+
+          return Column(
+            children: [
+              Row(children: [
+                // circle indicator
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 400),
+                  width: 34, height: 34,
+                  decoration: BoxDecoration(
+                    color: isDone
+                        ? C.green
+                        : isActive
+                        ? C.primary
+                        : C.border.withValues(alpha: 0.5),
+                    shape: BoxShape.circle,
+                    boxShadow: isActive ? [BoxShadow(
+                      color:      C.primary.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                    )] : null,
+                  ),
+                  child: Center(child: isDone
+                      ? const Icon(Icons.check_rounded,
+                      color: Colors.white, size: 16)
+                      : Text(step.$2,
+                      style: const TextStyle(fontSize: 14))),
+                ),
+                const SizedBox(width: 12),
+
+                // label
+                Expanded(child: Text(
+                  step.$3,
+                  style: TextStyle(
+                    fontSize:   13,
+                    fontWeight: isActive
+                        ? FontWeight.w800 : FontWeight.w500,
+                    color: isDone
+                        ? C.green
+                        : isActive
+                        ? C.primary
+                        : C.muted,
+                  ),
+                )),
+
+                // active badge
+                if (isActive)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color:        C.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text('ຕອນນີ້', style: TextStyle(
+                      fontSize: 10, color: C.primary,
+                      fontWeight: FontWeight.w700,
+                    )),
+                  ),
+
+                if (isDone)
+                  const Icon(Icons.check_circle_rounded,
+                      color: C.green, size: 16),
+              ]),
+
+              // connector line
+              if (!isLast)
+                Padding(
+                  padding: const EdgeInsets.only(left: 16),
+                  child: Row(children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 400),
+                      width:  2,
+                      height: 20,
+                      color: isDone ? C.green : C.border,
+                    ),
+                  ]),
+                ),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// PROVIDER INFO ROW
+// ════════════════════════════════════════════════════════════
+
+class _ProviderInfoRow extends StatelessWidget {
+  final ProviderModel provider;
+  final String        serviceEmoji;
+  final String        serviceName;
+  final VoidCallback  onCall;
+
+  const _ProviderInfoRow({
+    required this.provider,
+    required this.serviceEmoji,
+    required this.serviceName,
+    required this.onCall,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(children: [
+    // avatar
+    Container(
+      width: 52, height: 52,
+      decoration: BoxDecoration(
+        color:        C.gold.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: C.gold.withValues(alpha: 0.3)),
+      ),
+      child: Center(child: Text(
+        provider.avatarLetter,
+        style: const TextStyle(
+          fontSize: 24, fontWeight: FontWeight.w900,
+          color: C.gold,
+        ),
+      )),
+    ),
+    const SizedBox(width: 12),
+
+    Expanded(child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(provider.displayName, style: const TextStyle(
+          fontSize: 15, fontWeight: FontWeight.w800,
+          color: C.textPrimary,
+        )),
+        const SizedBox(height: 3),
+        Row(children: [
+          const Icon(Icons.star_rounded, color: C.gold, size: 14),
+          const SizedBox(width: 3),
+          Text(provider.ratingLabel, style: const TextStyle(
+            fontSize: 12, fontWeight: FontWeight.w700,
+            color: C.gold,
+          )),
+          Text('  ·  $serviceEmoji $serviceName',
+              style: const TextStyle(
+                  fontSize: 11, color: C.muted)),
+        ]),
+      ],
+    )),
+
+    // call button
+    Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap:        onCall,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 44, height: 44,
+          decoration: BoxDecoration(
+            color:        C.green.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: C.green.withValues(alpha: 0.3)),
+          ),
+          child: const Icon(Icons.phone_rounded,
+              color: C.green, size: 20),
+        ),
+      ),
+    ),
+  ]);
+}
+
+// ════════════════════════════════════════════════════════════
+// ADDRESS ROW
+// ════════════════════════════════════════════════════════════
+
+class _AddressRow extends StatelessWidget {
+  final String address;
+  const _AddressRow({required this.address});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color:        C.primary.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
+          color: C.primary.withValues(alpha: 0.15)),
+    ),
+    child: Row(children: [
+      const Icon(Icons.location_on_outlined,
+          color: C.primary, size: 18),
+      const SizedBox(width: 8),
+      Expanded(child: Text(
+        address,
+        style: const TextStyle(
+            fontSize: 12, color: C.textSecondary),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      )),
+    ]),
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// SKELETON
+// ════════════════════════════════════════════════════════════
+
+class _TrackingSkeleton extends StatefulWidget {
+  const _TrackingSkeleton();
+
+  @override
+  State<_TrackingSkeleton> createState() => _TrackingSkeletonState();
+}
+
+class _TrackingSkeletonState extends State<_TrackingSkeleton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double>   _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync:    this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _fade = Tween<double>(begin: 0.3, end: 0.7).animate(
+        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Widget _box(double w, double h, {double r = 8}) => Container(
+    width: w, height: h,
+    decoration: BoxDecoration(
+      color:        C.muted.withValues(alpha: 0.15),
+      borderRadius: BorderRadius.circular(r),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: C.bg,
+    body: FadeTransition(
+      opacity: _fade,
+      child: Stack(children: [
+        // map placeholder
+        Container(color: C.muted.withValues(alpha: 0.08)),
+
+        // top bar skeleton
+        SafeArea(child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(children: [
+            _box(40, 40, r: 12),
+            const SizedBox(width: 12),
+            Expanded(child: _box(double.infinity, 56, r: 14)),
+            const SizedBox(width: 12),
+            _box(40, 40, r: 12),
+          ]),
+        )),
+
+        // bottom sheet skeleton
+        Positioned(
+          left: 0, right: 0, bottom: 0,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color:        Colors.white,
+              borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color:        C.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                )),
+                const SizedBox(height: 16),
+                Row(children: [
+                  _box(52, 52, r: 16),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _box(140, 15),
+                      const SizedBox(height: 6),
+                      _box(100, 12),
+                    ],
+                  )),
+                  _box(44, 44, r: 12),
+                ]),
+                const SizedBox(height: 16),
+                _box(double.infinity, 180, r: 16),
+                const SizedBox(height: 16),
+                _box(double.infinity, 44, r: 14),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      ]),
+    ),
+  );
+}

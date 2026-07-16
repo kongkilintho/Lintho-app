@@ -1,0 +1,269 @@
+// ============================================================
+// booking_provider.dart — LinTho Provider App
+// Riverpod State Management
+//
+// Fixes:
+//   ✅ BookingNotifier: AsyncValue<void> → BookingState
+//      ເພື່ອ track loadingIds per booking (ບໍ່ disable ທຸກ card)
+// ============================================================
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'Booking.dart';
+import 'booking_repository.dart';
+
+// ── REPOSITORIES ─────────────────────────────────────────────
+
+final bookingRepoProvider  = Provider((_) => BookingRepository());
+final earningsRepoProvider = Provider((_) => EarningsRepository());
+final profileRepoProvider  = Provider((_) => ProfileRepository());
+final customerBookingRepoProvider =
+    Provider((_) => CustomerBookingRepository());
+
+// ── BOOKING STREAMS ──────────────────────────────────────────
+
+final activeBookingsProvider = StreamProvider<List<Booking>>((ref) {
+  return ref.watch(bookingRepoProvider).watchActiveBookings();
+});
+
+final jobHistoryProvider = StreamProvider<List<Booking>>((ref) {
+  return ref.watch(bookingRepoProvider).watchJobHistory();
+});
+
+final pendingJobsProvider = Provider<List<Booking>>((ref) {
+  return ref.watch(activeBookingsProvider).whenOrNull(
+    data: (list) => list
+        .where((b) => b.status == JobStatus.pending && !b.isExpired)
+        .toList(),
+  ) ??
+      [];
+});
+
+final openJobsProvider = StreamProvider<List<Booking>>((ref) {
+  return ref.watch(bookingRepoProvider).watchOpenJobs();
+});
+
+// ✅ [FIX-3] ວຽກ pending ທີ່ providerId ຍັງວ່າງເປົ່າ (ບໍ່ຖືກມອບໝາຍໃຫ້ໃຜ) —
+// ກອງໃຫ້ເຫຼືອສະເພາະປະເພດວຽກທີ່ provider ນີ້ຮັບໄດ້ (serviceTypes ຫວ່າງ
+// = ຮັບໄດ້ທຸກປະເພດ, ບໍ່ຮູ້ຈັກ profile ຍັງ)
+final unassignedOpenJobsProvider = Provider<List<Booking>>((ref) {
+  final jobs = ref.watch(openJobsProvider).valueOrNull ?? [];
+  final myTypes = ref.watch(profileStreamProvider).valueOrNull?.serviceTypes ?? [];
+  return jobs
+      .where((b) =>
+          b.providerId.isEmpty &&
+          !b.isExpired &&
+          (myTypes.isEmpty || myTypes.contains(b.serviceType)))
+      .toList();
+});
+
+final ongoingJobProvider = Provider<Booking?>((ref) {
+  return ref.watch(activeBookingsProvider).whenOrNull(
+    data: (list) => list
+        .where((b) =>
+    b.status == JobStatus.onTheWay ||
+        b.status == JobStatus.arrived ||
+        b.status == JobStatus.inProgress)
+        .firstOrNull,
+  );
+});
+
+// ── EARNINGS ─────────────────────────────────────────────────
+
+final walletProvider = StreamProvider<Wallet>((ref) {
+  return ref.watch(earningsRepoProvider).watchWallet();
+});
+
+final transactionsProvider = StreamProvider<List<ProviderTransaction>>((ref) {
+  return ref.watch(earningsRepoProvider).watchTransactions();
+});
+
+// ── PROFILE ──────────────────────────────────────────────────
+
+final profileStreamProvider = StreamProvider<ProviderProfile>((ref) {
+  return ref.watch(profileRepoProvider).watchProfile();
+});
+
+final scheduleProvider = StreamProvider<WorkSchedule>((ref) {
+  return ref.watch(profileRepoProvider).watchSchedule();
+});
+
+final reviewsProvider = StreamProvider<List<Review>>((ref) {
+  return ref.watch(profileRepoProvider).watchReviews();
+});
+
+// ── BOOKING STATE ─────────────────────────────────────────────
+// ✅ ເພີ່ມ BookingState ເພື່ອ track loadingIds per booking
+
+class BookingState {
+  final Set<String> loadingIds; // bookingIds ທີ່ກຳລັງ loading
+  final String?     error;
+
+  const BookingState({
+    this.loadingIds = const {},
+    this.error,
+  });
+
+  bool get isLoading => loadingIds.isNotEmpty;
+
+  BookingState copyWith({
+    Set<String>? loadingIds,
+    String?      error,
+  }) =>
+      BookingState(
+        loadingIds: loadingIds ?? this.loadingIds,
+        error:      error,
+      );
+}
+
+// ── BOOKING NOTIFIER ─────────────────────────────────────────
+
+class BookingNotifier extends Notifier<BookingState> {
+  late BookingRepository _repo;
+
+  @override
+  BookingState build() {
+    _repo = ref.read(bookingRepoProvider);
+    return const BookingState();
+  }
+
+  // ✅ helper: add/remove loadingId
+  void _setLoading(String id, bool loading) {
+    final ids = Set<String>.from(state.loadingIds);
+    loading ? ids.add(id) : ids.remove(id);
+    state = state.copyWith(loadingIds: ids, error: null);
+  }
+
+  Future<bool> accept(String bookingId) async {
+    _setLoading(bookingId, true);
+    try {
+      await _repo.acceptBooking(bookingId);
+      _setLoading(bookingId, false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        loadingIds: Set.from(state.loadingIds)..remove(bookingId),
+        error:      e.toString(),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> reject(String bookingId, String reason) async {
+    _setLoading(bookingId, true);
+    try {
+      await _repo.rejectBooking(bookingId, reason);
+      _setLoading(bookingId, false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        loadingIds: Set.from(state.loadingIds)..remove(bookingId),
+        error:      e.toString(),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> updateStatus(String bookingId, JobStatus status) async {
+    _setLoading(bookingId, true);
+    try {
+      await _repo.updateStatus(bookingId, status);
+      _setLoading(bookingId, false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        loadingIds: Set.from(state.loadingIds)..remove(bookingId),
+        error:      e.toString(),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> requestAdditionalCharges(
+      String bookingId,
+      double amount,
+      String note,
+      ) async {
+    _setLoading(bookingId, true);
+    try {
+      await _repo.requestAdditionalCharges(bookingId, amount, note);
+      _setLoading(bookingId, false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        loadingIds: Set.from(state.loadingIds)..remove(bookingId),
+        error:      e.toString(),
+      );
+      return false;
+    }
+  }
+}
+
+final bookingNotifierProvider =
+NotifierProvider<BookingNotifier, BookingState>(BookingNotifier.new);
+
+// ── PROFILE NOTIFIER ─────────────────────────────────────────
+
+class ProfileNotifier extends AsyncNotifier<void> {
+  late ProfileRepository _repo;
+
+  @override
+  Future<void> build() async {
+    _repo = ref.read(profileRepoProvider);
+  }
+
+  Future<bool> updateProfile(Map<String, dynamic> data) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => _repo.updateProfile(data));
+    return !state.hasError;
+  }
+
+  Future<bool> saveSchedule(WorkSchedule schedule) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => _repo.saveSchedule(schedule));
+    return !state.hasError;
+  }
+
+  Future<bool> replyToReview(String reviewId, String reply) async {
+    state = const AsyncLoading();
+    state =
+    await AsyncValue.guard(() => _repo.replyToReview(reviewId, reply));
+    return !state.hasError;
+  }
+}
+
+final profileNotifierProvider =
+AsyncNotifierProvider<ProfileNotifier, void>(ProfileNotifier.new);
+
+// ── CREATE BOOKING NOTIFIER (ຝັ່ງລູກຄ້າ) ──────────────────────
+
+class CreateBookingNotifier extends AsyncNotifier<String?> {
+  @override
+  Future<String?> build() async => null;
+
+  Future<String?> submit(Map<String, dynamic> data, {String? couponCode}) async {
+    state = const AsyncLoading();
+    final repo   = ref.read(customerBookingRepoProvider);
+    final result = await AsyncValue.guard(
+        () => repo.createBooking(data, couponCode: couponCode));
+    state = result;
+    return result.valueOrNull;
+  }
+}
+
+final createBookingNotifierProvider =
+AsyncNotifierProvider<CreateBookingNotifier, String?>(
+    CreateBookingNotifier.new);
+
+// ── FILTER ───────────────────────────────────────────────────
+
+final jobFilterProvider = StateProvider<String>((_) => 'ທັງໝົດ');
+
+final filteredHistoryProvider =
+Provider<AsyncValue<List<Booking>>>((ref) {
+  final filter  = ref.watch(jobFilterProvider);
+  final history = ref.watch(jobHistoryProvider);
+  return history.whenData((list) {
+    if (filter == 'ທັງໝົດ') return list;
+    return list.where((b) => b.status.label == filter).toList();
+  });
+});

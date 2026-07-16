@@ -1,0 +1,48 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- High-contrast diagonal: vibrant electric blue -> deep dark navy -->
+    <linearGradient id="bg" x1="40" y1="20" x2="984" y2="1004" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2BB0FF" />
+      <stop offset="0.45" stop-color="#0E6CF2" />
+      <stop offset="1" stop-color="#03174A" />
+    </linearGradient>
+    <!-- Glossy highlight, upper-left -->
+    <radialGradient id="gloss" cx="330" cy="260" r="460" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.38" />
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
+    </radialGradient>
+    <!-- Inner-shadow vignette, lower-right -->
+    <radialGradient id="vignette" cx="860" cy="880" r="560" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#01102E" stop-opacity="0.45" />
+      <stop offset="1" stop-color="#01102E" stop-opacity="0" />
+    </radialGradient>
+    <clipPath id="iconClip">
+      <rect width="1024" height="1024" rx="224" />
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#iconClip)">
+    <rect width="1024" height="1024" fill="url(#bg)" />
+    <rect width="1024" height="1024" fill="url(#vignette)" />
+    <rect width="1024" height="1024" fill="url(#gloss)" />
+    <!-- Embossed inner bezel for a touch of glossy depth -->
+    <rect x="10" y="10" width="1004" height="1004" rx="214"
+          fill="none" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="3" />
+  </g>
+
+  <!-- Soft layered drop shadow beneath the L + lightning tail (no blur filter, for reliable rasterization) -->
+  <g transform="translate(73 187) scale(6.76)" opacity="0.28">
+    <path d="M28,16 L50,16 L50,66 L82,66 L82,84 L28,84 Z" fill="#01102E" />
+    <path d="M82,65 L102,75 L82,85 Z" fill="#01102E" />
+  </g>
+  <g transform="translate(73 179) scale(6.76)" opacity="0.20">
+    <path d="M28,16 L50,16 L50,66 L82,66 L82,84 L28,84 Z" fill="#01102E" />
+    <path d="M82,65 L102,75 L82,85 Z" fill="#01102E" />
+  </g>
+
+  <!-- Bold L, foot ending in a lightning-tail point — speed + professional service -->
+  <g transform="translate(73 171) scale(6.76)">
+    <path d="M28,16 L50,16 L50,66 L82,66 L82,84 L28,84 Z" fill="#FFFFFF" />
+    <path d="M82,65 L102,75 L82,85 Z" fill="#FBBF24" />
+  </g>
+</svg>
