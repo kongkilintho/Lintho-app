@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
 import 'quick_booking_provider.dart' show formatKip;
@@ -123,7 +124,9 @@ class _CodeCard extends StatelessWidget {
           Expanded(child: Text(code, style: const TextStyle(
               color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900,
               letterSpacing: 1.5))),
+          // ✅ [FIX — accessibility] IconButton ນີ້ບໍ່ມີ tooltip/Semantics ມາກ່ອນ
           IconButton(
+            tooltip: 'ສຳເນົາໂຄ້ດ',
             icon: const Icon(Icons.copy, color: Colors.white70, size: 20),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: code));
@@ -132,7 +135,27 @@ class _CodeCard extends StatelessWidget {
             },
           ),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
+        // ✅ [FIX — qr_flutter was in pubspec.yaml, unused] ໃຫ້ໝູ່ scan ໂຄ້ດ
+        // ໄດ້ໄວກວ່າພິມເອງ — ເຂົ້າລະຫັດ referral link ດຽວກັນກັບປຸ່ມແຊ.
+        Center(child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: QrImageView(
+            data: 'https://lintho.app/r/$code',
+            version: QrVersions.auto,
+            size: 132,
+            gapless: true,
+            eyeStyle: const QrEyeStyle(
+                eyeShape: QrEyeShape.square, color: C.navy),
+            dataModuleStyle: const QrDataModuleStyle(
+                dataModuleShape: QrDataModuleShape.square, color: C.navy),
+          ),
+        )),
+        const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(

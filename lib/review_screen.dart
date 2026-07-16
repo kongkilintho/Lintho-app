@@ -17,6 +17,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'app_colors.dart';
 import 'provider_model.dart';
 import 'fcm_service.dart';
@@ -48,7 +49,6 @@ class _ReviewScreenState extends State<ReviewScreen>
     with SingleTickerProviderStateMixin {
 
   int  _selectedStar = 0;
-  int  _hoverStar    = 0;
   bool _isLoading    = false;
 
   // ✅ RULE: dispose() ທຸກ controller
@@ -314,14 +314,26 @@ class _ReviewScreenState extends State<ReviewScreen>
                   color: C.textPrimary,
                 )),
                 const SizedBox(height: 12),
-                Center(child: _StarRow(
-                  selected: _selectedStar,
-                  hover:    _hoverStar,
-                  onHover:  (i) => setState(() => _hoverStar = i),
-                  onTap:    (i) => setState(() {
-                    _selectedStar = i;
-                    _hoverStar    = 0;
-                  }),
+                // ✅ [FIX — flutter_rating_bar was in pubspec.yaml, unused]
+                // ອາທິດເກົ່າຫັນຄະແນນເອງດ້ວຍ InkWell 5 ໜ່ວຍ ບໍ່ມີ Semantics ໃດເລີຍ —
+                // screen reader ຈະໄດ້ຍິນ 5 icon ບໍ່ມີປ້າຍຊື່. ຕອນນີ້ໃຊ້ RatingBar
+                // (ຈາກ package) ຫຸ້ມດ້ວຍ Semantics ບອກຄະແນນປັດຈຸບັນ.
+                Center(child: Semantics(
+                  label: 'ໃຫ້ຄະແນນຊ່າງ',
+                  value: '$_selectedStar ຈາກ 5 ດາວ',
+                  child: RatingBar.builder(
+                    initialRating: 0,
+                    minRating: 0,
+                    itemCount: 5,
+                    itemSize: 40,
+                    glow: false,
+                    unratedColor: C.border,
+                    itemPadding: const EdgeInsets.symmetric(horizontal: 6),
+                    itemBuilder: (context, _) =>
+                        const Icon(Icons.star_rounded, color: C.gold),
+                    onRatingUpdate: (rating) =>
+                        setState(() => _selectedStar = rating.toInt()),
+                  ),
                 )),
                 const SizedBox(height: 8),
                 if (_selectedStar > 0)
@@ -588,59 +600,5 @@ class _GreenHeader extends StatelessWidget {
   )).toList();
 }
 
-// ════════════════════════════════════════════════════════════
-//  STAR ROW
-// ════════════════════════════════════════════════════════════
-
-class _StarRow extends StatelessWidget {
-  final int               selected;
-  final int               hover;
-  final ValueChanged<int> onHover;
-  final ValueChanged<int> onTap;
-
-  const _StarRow({
-    required this.selected,
-    required this.hover,
-    required this.onHover,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final active = hover > 0 ? hover : selected;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(5, (i) {
-        final idx = i + 1;
-        final isActive = idx <= active;
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap:          () => onTap(idx),
-            borderRadius:   BorderRadius.circular(8),
-            splashColor:    Colors.transparent,
-            highlightColor: Colors.transparent,
-            child: MouseRegion(
-              onEnter: (_) => onHover(idx),
-              onExit:  (_) => onHover(0),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 6, vertical: 4),
-                child: AnimatedScale(
-                  duration: const Duration(milliseconds: 150),
-                  scale: isActive ? 1.15 : 1.0,
-                  child: Icon(
-                    isActive ? Icons.star_rounded : Icons.star_border_rounded,
-                    color: isActive ? C.gold : C.border,
-                    size:  40,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      }),
-    );
-  }
-}
+// ✅ [FIX — shared package] _StarRow removed — replaced by RatingBar
+// (flutter_rating_bar) at the call site above.
