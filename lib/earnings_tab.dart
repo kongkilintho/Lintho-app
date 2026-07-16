@@ -703,11 +703,13 @@ class _TxRow extends StatelessWidget {
   final ProviderTransaction tx;
   const _TxRow({required this.tx});
 
-  static const _emojis = {
-    TxType.earning:    '💰',
-    TxType.withdrawal: '🏦',
-    TxType.bonus:      '🎁',
-    TxType.refund:     '↩️',
+  // ✅ [FIX — Phase 3 icon system] emoji ຖືກປ່ຽນເປັນ icon-in-tinted-circle,
+  // ຮູບແບບດຽວກັນກັບ _BankCard ຂ້າງເທິງນີ້ ໃນໜ້າດຽວກັນ
+  static const _icons = {
+    TxType.earning:    Icons.attach_money_rounded,
+    TxType.withdrawal: Icons.account_balance_outlined,
+    TxType.bonus:      Icons.card_giftcard_rounded,
+    TxType.refund:     Icons.replay_rounded,
   };
 
   @override
@@ -725,7 +727,14 @@ class _TxRow extends StatelessWidget {
         )],
       ),
       child: Row(children: [
-        Text(_emojis[tx.type]!, style: const TextStyle(fontSize: 22)),
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(_icons[tx.type]!, color: color, size: 18),
+        ),
         const SizedBox(width: 12),
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

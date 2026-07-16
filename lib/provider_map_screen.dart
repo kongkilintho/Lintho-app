@@ -273,8 +273,8 @@ class _ProviderMapScreenState extends State<ProviderMapScreen>
                       )],
                     ),
                     child: const Center(
-                      child: Text('🔧',
-                          style: TextStyle(fontSize: 18)),
+                      child: Icon(Icons.build_rounded,
+                          color: Colors.white, size: 20),
                     ),
                   ),
                 ),

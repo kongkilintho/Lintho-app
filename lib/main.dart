@@ -997,14 +997,17 @@ class _PromoCarouselState extends State<_PromoCarousel> {
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  // ✅ [FIX — Phase 3 icon system] 'icon'/'emoji' ເຄີຍເປັນ String emoji
+  // (❄️🧹) — ອ່ານໄດ້ຄືຕົ້ນແບບ ບໍ່ແມ່ນສິນຄ້າສຳເລັດ, ບໍ່ມີ Semantics, ແລະ render
+  // ບໍ່ຄົງທີ່ຂ້າມ platform/font. ຕອນນີ້ໃຊ້ IconData (Material icon set).
   static List<Map<String, Object>> get _cats => [
     {
-      'icon': '❄️', 'label': tr('svc_ac_clean'), 'sub': tr('cat_ac_sub'),
+      'icon': Icons.ac_unit_rounded, 'label': tr('svc_ac_clean'), 'sub': tr('cat_ac_sub'),
       'color': const Color(0xFFEFF6FF), 'accent': const Color(0xFF1D4ED8),
       'category': ServiceCategory.acCleaning,
     },
     {
-      'icon': '🧹', 'label': tr('svc_house_clean'), 'sub': tr('cat_house_sub'),
+      'icon': Icons.cleaning_services_rounded, 'label': tr('svc_house_clean'), 'sub': tr('cat_house_sub'),
       'color': const Color(0xFFF0FDF4), 'accent': const Color(0xFF15803D),
       'category': ServiceCategory.homeCleaning,
     },
@@ -1012,14 +1015,14 @@ class HomeScreen extends StatelessWidget {
 
   static List<Map<String, Object>> get _popular => [
     {
-      'emoji': '❄️', 'name': tr('svc_ac_general_full'),
+      'icon': Icons.ac_unit_rounded, 'name': tr('svc_ac_general_full'),
       'price': '${tr('starting_from')} 300,000', 'rating': 4.9,
       'time': '45–60 ${tr('minutes_unit')}',
       'color': const Color(0xFFEFF6FF), 'accent': const Color(0xFF1D4ED8),
       'category': ServiceCategory.acCleaning,
     },
     {
-      'emoji': '🧹', 'name': tr('svc_house_general_full'),
+      'icon': Icons.cleaning_services_rounded, 'name': tr('svc_house_general_full'),
       'price': '${tr('starting_from')} 180,000', 'rating': 4.8,
       'time': '1–3 ${tr('hours_unit')}',
       'color': const Color(0xFFF0FDF4), 'accent': const Color(0xFF15803D),
@@ -1159,8 +1162,8 @@ class HomeScreen extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(cat['icon'] as String,
-                                      style: const TextStyle(fontSize: 53)),
+                                  Icon(cat['icon'] as IconData, size: 44,
+                                      color: cat['accent'] as Color),
                                   const SizedBox(height: 12),
                                   Text(cat['label'] as String, textAlign: TextAlign.center,
                                       style: const TextStyle(
@@ -1246,8 +1249,8 @@ class _PopularCard extends StatelessWidget {
                 color: s['color'] as Color,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Center(child: Text(s['emoji'] as String,
-                  style: const TextStyle(fontSize: 28))),
+              child: Center(child: Icon(s['icon'] as IconData, size: 26,
+                  color: s['accent'] as Color)),
             ),
             const SizedBox(width: 14),
             Expanded(child: Column(

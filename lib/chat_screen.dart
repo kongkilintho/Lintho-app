@@ -69,7 +69,7 @@ class ChatListScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation:   0,
         centerTitle: true,
-        title: const Text('ຂໍ້ຄວາມ 💬', style: TextStyle(
+        title: const Text('ຂໍ້ຄວາມ', style: TextStyle(
           color: C.primary, fontWeight: FontWeight.w800, fontSize: 18,
         )),
       ),
