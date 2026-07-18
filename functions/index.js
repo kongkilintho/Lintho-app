@@ -370,3 +370,129 @@ exports.onWithdrawalRequested = functions.firestore
       return reqRef.update({ status: 'failed', error: err.message });
     }
   });
+
+// ─── Admin User Management ─────────────────────────────────────────────────
+// Callable functions backing the LinTho Admin "Admin Users" page. The admin
+// panel (lintho-admin) is a plain client-side app — it cannot safely create,
+// disable, or delete another user's Firebase Auth account with the client
+// SDK (that would require being signed in as them). Only the Admin SDK can
+// do that, so this runs server-side, and re-checks the caller's own role
+// against Firestore itself rather than trusting anything the client sends —
+// a callable function is a fresh entry point with no session tied to
+// lintho-admin's client-side RequireRole check, which is UX, not security.
+
+const ADMIN_ROLE_VALUES = [
+  'super_admin', 'operations_admin', 'finance_admin', 'support_admin', 'marketing_admin',
+];
+
+// ✅ ສະເພາະ super_admin ເທົ່ານັ້ນທີ່ຈັດການບັນຊີ admin ຄົນອື່ນໄດ້ (ກົງກັບ
+// ROLE_PERMISSIONS.super_admin ຝັ່ງ lintho-admin ທີ່ເປັນ tier ດຽວທີ່ມີ
+// admin_users:write). ອ່ານ adminRole ຈາກ Firestore ໂດຍກົງ ບໍ່ເຊື່ອຄ່າຈາກ
+// client — ບັນຊີເກົ່າທີ່ຍັງບໍ່ມີ field adminRole (ມີແຕ່ role:'admin' ແບບ flat,
+// ຄືຄ່າດຽວທີ່ isAdmin()/admin bypass rule ໃນ firestore.rules ຮູ້ຈັກ) ຖືວ່າ
+// ເປັນ super_admin ເໝືອນ resolveAdminRole() ຝັ່ງ lintho-admin
+// (src/lib/api/realAuth.ts) ເພື່ອບໍ່ໃຫ້ admin ທີ່ມີຢູ່ແລ້ວຖືກລ໋ອກອອກ.
+async function _assertSuperAdmin(context) {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'ຕ້ອງເຂົ້າສູ່ລະບົບກ່ອນ.');
+  }
+  const callerSnap = await db.collection('users').doc(context.auth.uid).get();
+  const callerData = callerSnap.data() || {};
+  if (callerData.role !== 'admin') {
+    throw new functions.https.HttpsError('permission-denied', 'ບັນຊີນີ້ບໍ່ແມ່ນ admin.');
+  }
+  const adminRole = callerData.adminRole || 'super_admin';
+  if (adminRole !== 'super_admin') {
+    throw new functions.https.HttpsError('permission-denied', 'ສະເພາະ Super Admin ເທົ່ານັ້ນທີ່ຈັດການບັນຊີ admin ຄົນອື່ນໄດ້.');
+  }
+  return context.auth.uid;
+}
+
+exports.createAdminUser = functions.https.onCall(async (data, context) => {
+  const callerUid = await _assertSuperAdmin(context);
+
+  const { email, password, name, adminRole } = data || {};
+  if (typeof email !== 'string' || !email.includes('@')) {
+    throw new functions.https.HttpsError('invalid-argument', 'Email ບໍ່ຖືກຕ້ອງ.');
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    throw new functions.https.HttpsError('invalid-argument', 'ລະຫັດຜ່ານຕ້ອງມີຢ່າງໜ້ອຍ 8 ໂຕອັກສອນ.');
+  }
+  if (typeof name !== 'string' || !name.trim()) {
+    throw new functions.https.HttpsError('invalid-argument', 'ກະລຸນາໃສ່ຊື່.');
+  }
+  if (!ADMIN_ROLE_VALUES.includes(adminRole)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Role ບໍ່ຖືກຕ້ອງ.');
+  }
+
+  let userRecord;
+  try {
+    userRecord = await admin.auth().createUser({ email, password, displayName: name });
+  } catch (err) {
+    const code = err.code === 'auth/email-already-exists' ? 'already-exists'
+      : (err.code === 'auth/invalid-email' || err.code === 'auth/invalid-password') ? 'invalid-argument'
+      : 'internal';
+    throw new functions.https.HttpsError(code, err.message);
+  }
+
+  try {
+    // role ຕ້ອງເປັນ 'admin' ແບບ flat ເພື່ອກົງກັບ isAdmin()/admin bypass rule
+    // (firestore.rules ~line 24-25, 58-60) — adminRole ຄືຄ່າ tier ລະອຽດທີ່
+    // ຝັ່ງ client (lintho-admin) ອ່ານໄປໃຊ້ ບໍ່ໄດ້ມີຄວາມໝາຍຫຍັງຕໍ່ rules ເລີຍ.
+    await db.collection('users').doc(userRecord.uid).set({
+      name,
+      email,
+      role: 'admin',
+      adminRole,
+      isActive: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdBy: callerUid,
+    });
+  } catch (err) {
+    // ✅ ບໍ່ໃຫ້ຄ້າງບັນຊີ Auth ທີ່ບໍ່ມີ Firestore doc ຄູ່ກັນ (ຈະ login ໄດ້ແຕ່
+    // realAuth.ts ຫາ role ບໍ່ພົບ ແລະ ປະຕິເສດ — ບັນຊີເປົ່າທີ່ບໍ່ມີປະໂຫຍດ) —
+    // ລຶບ Auth user ຄືນຖ້າ Firestore write ລົ້ມເຫຼວ.
+    await admin.auth().deleteUser(userRecord.uid).catch(() => {});
+    throw new functions.https.HttpsError('internal', 'ສ້າງບັນຊີ Auth ສຳເລັດແຕ່ບັນທຶກ Firestore ລົ້ມເຫຼວ: ' + err.message);
+  }
+
+  return { uid: userRecord.uid };
+});
+
+exports.setAdminUserActive = functions.https.onCall(async (data, context) => {
+  const callerUid = await _assertSuperAdmin(context);
+  const { uid, isActive } = data || {};
+  if (typeof uid !== 'string' || !uid) {
+    throw new functions.https.HttpsError('invalid-argument', 'ບໍ່ພົບ uid.');
+  }
+  if (typeof isActive !== 'boolean') {
+    throw new functions.https.HttpsError('invalid-argument', 'isActive ຕ້ອງເປັນ true/false.');
+  }
+  if (uid === callerUid && !isActive) {
+    throw new functions.https.HttpsError('failed-precondition', 'ບໍ່ສາມາດປິດການໃຊ້ງານບັນຊີຕົນເອງໄດ້.');
+  }
+
+  await admin.auth().updateUser(uid, { disabled: !isActive });
+  await db.collection('users').doc(uid).update({
+    isActive,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return { uid, isActive };
+});
+
+exports.deleteAdminUser = functions.https.onCall(async (data, context) => {
+  const callerUid = await _assertSuperAdmin(context);
+  const { uid } = data || {};
+  if (typeof uid !== 'string' || !uid) {
+    throw new functions.https.HttpsError('invalid-argument', 'ບໍ່ພົບ uid.');
+  }
+  if (uid === callerUid) {
+    throw new functions.https.HttpsError('failed-precondition', 'ບໍ່ສາມາດລຶບບັນຊີຕົນເອງໄດ້.');
+  }
+
+  await admin.auth().deleteUser(uid);
+  await db.collection('users').doc(uid).delete();
+
+  return { uid };
+});
