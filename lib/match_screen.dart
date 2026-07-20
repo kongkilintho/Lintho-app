@@ -17,6 +17,7 @@
 // ============================================================
 
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -601,60 +602,86 @@ class _MatchScreenState extends State<MatchScreen>
   // SEARCHING VIEW
   // ════════════════════════════════════════════════════════
 
-  Widget _buildSearching() => Padding(
+  // ✅ [Redesign] "ac_clean"/"house_clean" (raw Firestore category slug)
+  // ໄດ້ຫຼຸດເຂົ້າມາເປັນ _serviceName ຢູ່ບາງ booking ທີ່ບໍ່ມີ field
+  // 'serviceName' ຂຽນໄວ້ (ມີແຕ່ 'serviceType' ເປັນ slug) — ແປງເປັນຊື່ອ່ານງ່າຍ
+  // ກ່ອນສະແດງ, ບໍ່ແຕະຕ້ອງ pipeline ການສ້າງ booking ເອງ.
+  static const _rawSlugToKey = {
+    'ac_clean':    'svc_ac_clean',
+    'house_clean': 'svc_house_clean',
+  };
+  static const _englishHint = {
+    'svc_ac_clean':    'AC Cleaning',
+    'svc_house_clean': 'House Cleaning',
+  };
+
+  String get _displayServiceName {
+    final raw = _serviceName.trim();
+    if (raw.isEmpty) return tr('service_generic');
+    final key = _rawSlugToKey[raw];
+    if (key == null) return raw; // ຊື່ແທ້ທີ່ອ່ານໄດ້ຢູ່ແລ້ວ — ສະແດງຄືເດີມ
+    final label = tr(key);
+    final hint = _englishHint[key];
+    return (AppLocale.instance.lang == AppLang.lo && hint != null)
+        ? '$label ($hint)'
+        : label;
+  }
+
+  Widget _buildSearching() => Container(
     key: const ValueKey('searching'),
-    padding: const EdgeInsets.all(24),
-    child: Column(children: [
-      const SizedBox(height: 20),
-      _TopBar(onCancel: _cancelBooking, searchSecs: _searchSecs),
-      const SizedBox(height: 60),
-      _SpinningPulseCircle(emoji: _serviceEmoji, pulseAnim: _pulseAnim),
-      const SizedBox(height: 48),
-      Text(tr('searching_title'), style: const TextStyle(
-        color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900,
-      )),
-      const SizedBox(height: 12),
-      // ✅ ສະແດງຊື່ບໍລິການແທ້ຈິງທີ່ລູກຄ້າເລືອກ (fallback ລະຫວ່າງລໍຖ້າໂຫຼດ)
-      Text(_serviceName.isNotEmpty ? _serviceName : tr('service_generic'), style: TextStyle(
-        color: Colors.white.withValues(alpha: 0.7),
-        fontSize: 16, fontWeight: FontWeight.w600,
-      )),
-      const SizedBox(height: 48),
-      const _SearchingDots(),
-      const SizedBox(height: 16),
-      // ✅ Countdown ໃຫ້ລູກຄ້າຮູ້ວ່າລະບົບກຳລັງພະຍາຍາມຄົ້ນຫາຢູ່ — ບໍ່ຮູ້ສຶກວ່າແອັບຄ້າງ
-      Text('${tr('searching_continue_prefix')} $_searchSecsLeft ${tr('sec')}', style: TextStyle(
-        color: Colors.white.withValues(alpha: 0.5),
-        fontSize: 13, fontWeight: FontWeight.w600,
-      )),
-      const SizedBox(height: 32),
-      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        _InfoChip(Icons.people_outline,  tr('info_chip_online_techs')),
-        const SizedBox(width: 12),
-        _InfoChip(Icons.star_outline,    tr('info_chip_avg_rating')),
-        const SizedBox(width: 12),
-        _InfoChip(Icons.bolt_outlined,   tr('info_chip_fast_eta')),
-      ]),
-      const Spacer(),
-      const SizedBox(height: 12),
-      SizedBox(
-        width: double.infinity,
-        child: OutlinedButton(
-          onPressed: _cancelBooking,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: C.dangerRed,
-            side: const BorderSide(color: C.dangerRed, width: 1.4),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-          ),
-          child: Text(tr('cancel_search'), style: const TextStyle(
-            fontSize: 14, fontWeight: FontWeight.w700,
-          )),
-        ),
+    width: double.infinity,
+    height: double.infinity,
+    // ✅ [Redesign] flat C.navy → gradient + radial glow ຢູ່ຫຼັງ radar,
+    // ໃຫ້ຄວາມເລິກ/ບັນຍາກາດແທນພື້ນສີດຽວທຽບ
+    decoration: BoxDecoration(
+      gradient: RadialGradient(
+        center: const Alignment(0, -0.35),
+        radius: 1.15,
+        colors: [
+          Color.lerp(C.navy, C.sky, 0.22)!,
+          C.navy,
+        ],
       ),
-      const SizedBox(height: 16),
-    ]),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(children: [
+        const SizedBox(height: 20),
+        _TopBar(onCancel: _cancelBooking, searchSecs: _searchSecs),
+        const SizedBox(height: 48),
+        _RadarPulse(emoji: _serviceEmoji),
+        const SizedBox(height: 40),
+        Text(tr('searching_title'), style: const TextStyle(
+          color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900,
+        )),
+        const SizedBox(height: 12),
+        // ✅ ສະແດງຊື່ບໍລິການແທ້ຈິງທີ່ລູກຄ້າເລືອກ (fallback ລະຫວ່າງລໍຖ້າໂຫຼດ)
+        Text(_displayServiceName, textAlign: TextAlign.center, style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.7),
+          fontSize: 16, fontWeight: FontWeight.w600,
+        )),
+        const SizedBox(height: 40),
+        const _SearchingDots(),
+        const SizedBox(height: 16),
+        // ✅ Countdown ໃຫ້ລູກຄ້າຮູ້ວ່າລະບົບກຳລັງພະຍາຍາມຄົ້ນຫາຢູ່ — ບໍ່ຮູ້ສຶກວ່າແອັບຄ້າງ
+        Text('${tr('searching_continue_prefix')} $_searchSecsLeft ${tr('sec')}', style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.5),
+          fontSize: 13, fontWeight: FontWeight.w600,
+        )),
+        const SizedBox(height: 28),
+        Row(children: [
+          Expanded(child: _GlassStat(Icons.people_outline,  tr('info_chip_online_techs'))),
+          const SizedBox(width: 10),
+          Expanded(child: _GlassStat(Icons.star_outline,    tr('info_chip_avg_rating'))),
+          const SizedBox(width: 10),
+          Expanded(child: _GlassStat(Icons.bolt_outlined,   tr('info_chip_fast_eta'))),
+        ]),
+        const Spacer(),
+        const SizedBox(height: 12),
+        _SoftCancelButton(onPressed: _cancelBooking, label: tr('cancel_search')),
+        const SizedBox(height: 16),
+      ]),
+    ),
   );
 
   // ════════════════════════════════════════════════════════
@@ -1215,56 +1242,106 @@ class _PulseCircle extends StatelessWidget {
   );
 }
 
-// ── spinning pulse circle (searching state) ────────────────
-// ✅ Circular progress ring ໝູນອ້ອມ icon ກະແຈ — ທັນສະໄໝກວ່າ pulse rings ດ່ຽວ
-class _SpinningPulseCircle extends StatefulWidget {
-  final String     emoji;
-  final Animation<double> pulseAnim;
-  const _SpinningPulseCircle({required this.emoji, required this.pulseAnim});
+// ── radar pulse (searching state) ───────────────────────────
+// ✅ [Redesign] ແທນທີ່ _SpinningPulseCircle (progress ring ໝູນ + pulse ຄົງທີ່)
+// ດ້ວຍ radar sonar ແທ້ໆ — 3 ວົງແຫວນຂະຫຍາຍອອກຈາງລົງເປັນຈັງຫວະຊ້ອນກັນ (staggered)
+// ໃຫ້ຄວາມຮູ້ສຶກວ່າລະບົບກຳລັງສະແກນຫາຢູ່ຈິງ, ບໍ່ແມ່ນແຕ່ໝູນວົງ static.
+class _RadarPulse extends StatefulWidget {
+  final String emoji;
+  const _RadarPulse({required this.emoji});
 
   @override
-  State<_SpinningPulseCircle> createState() => _SpinningPulseCircleState();
+  State<_RadarPulse> createState() => _RadarPulseState();
 }
 
-class _SpinningPulseCircleState extends State<_SpinningPulseCircle>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _spinCtrl;
+class _RadarPulseState extends State<_RadarPulse>
+    with TickerProviderStateMixin {
+  static const _ringDuration = Duration(milliseconds: 2400);
+  static const _stagger      = Duration(milliseconds: 800);
+  late final List<AnimationController> _rings;
+  late final AnimationController _spinCtrl;
 
   @override
   void initState() {
     super.initState();
-    _spinCtrl = AnimationController(
-      vsync:    this,
-      duration: const Duration(milliseconds: 2200),
-    )..repeat();
+    _spinCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 3000))
+      ..repeat();
+    _rings = List.generate(3, (i) {
+      final c = AnimationController(vsync: this, duration: _ringDuration);
+      Future.delayed(_stagger * i, () { if (mounted) c.repeat(); });
+      return c;
+    });
   }
 
   @override
-  void dispose() { _spinCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    for (final c in _rings) c.dispose();
+    _spinCtrl.dispose();
+    super.dispose();
+  }
 
   @override
-  Widget build(BuildContext context) => Stack(
-    alignment: Alignment.center,
-    children: [
-      RotationTransition(
-        turns: _spinCtrl,
-        child: SizedBox(
-          width: 170, height: 170,
-          child: CircularProgressIndicator(
-            strokeWidth:     3,
-            backgroundColor: Colors.transparent,
-            valueColor:      const AlwaysStoppedAnimation(C.yellow),
-            value:           0.25,
-            strokeCap:       StrokeCap.round,
+  Widget build(BuildContext context) {
+    const coreSize = 108.0;
+    const maxGrowth = 118.0;
+    return SizedBox(
+      width: coreSize + maxGrowth,
+      height: coreSize + maxGrowth,
+      child: Stack(alignment: Alignment.center, children: [
+        // ✅ ວົງແຫວນ radar 3 ວົງ — ຂະຫຍາຍ+ຈາງລົງ, ຊ້ອນຈັງຫວະກັນ 800ms
+        for (final ring in _rings)
+          AnimatedBuilder(
+            animation: ring,
+            builder: (_, __) {
+              final t = Curves.easeOut.transform(ring.value);
+              return Opacity(
+                opacity: (1 - t) * 0.5,
+                child: Container(
+                  width:  coreSize + maxGrowth * t,
+                  height: coreSize + maxGrowth * t,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: C.gold, width: 1.6),
+                  ),
+                ),
+              );
+            },
+          ),
+        // ✅ ວົງແຫວນບາງໝູນຮອບນອກ — ຄື "ລະບົບກຳລັງເຮັດວຽກ" ຢ່າງຕໍ່ເນື່ອງ
+        RotationTransition(
+          turns: _spinCtrl,
+          child: SizedBox(
+            width: coreSize + 34, height: coreSize + 34,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.2,
+              backgroundColor: Colors.transparent,
+              valueColor: AlwaysStoppedAnimation(C.gold.withValues(alpha: 0.85)),
+              value: 0.22,
+              strokeCap: StrokeCap.round,
+            ),
           ),
         ),
-      ),
-      ScaleTransition(
-        scale: widget.pulseAnim,
-        child: _PulseCircle(emoji: widget.emoji),
-      ),
-    ],
-  );
+        // ✅ ແສງນວນວ໌ນຫຼັງ core — ໃຫ້ຄວາມເລິກແທນວົງແຫນນແປນສີດຽວ
+        Container(
+          width: coreSize, height: coreSize,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(colors: [
+              C.gold.withValues(alpha: 0.9), C.gold,
+            ]),
+            boxShadow: [BoxShadow(
+              color: C.gold.withValues(alpha: 0.45),
+              blurRadius: 28, spreadRadius: 2,
+            )],
+          ),
+          child: Center(child: Text(
+            widget.emoji.isNotEmpty ? widget.emoji : '🔧',
+            style: const TextStyle(fontSize: 42),
+          )),
+        ),
+      ]),
+    );
+  }
 }
 
 // ── Top 3 row ─────────────────────────────────────────────
@@ -1597,27 +1674,78 @@ class _StatusStep extends StatelessWidget {
   ]);
 }
 
-// ── info chip ─────────────────────────────────────────────
-
-class _InfoChip extends StatelessWidget {
+// ── glass stat card (searching state) ──────────────────────
+// ✅ [Redesign] ແທນທີ່ _InfoChip (ໂປ່ງໃສທຳມະດາ, ຂະໜາດບໍ່ເທົ່າກັນ, ອັດກັນຢູ່
+// ກາງ) ດ້ວຍ glassmorphism card ຄວາມກວ້າງເທົ່າກັນ 3 ໃບ — BackdropFilter blur
+// ແທ້ໆ (ບໍ່ແມ່ນແຕ່ສີໂປ່ງໃສ), ຂອບບາງແສງ, ຈັດກາງທັງ icon+label.
+class _GlassStat extends StatelessWidget {
   final IconData icon;
   final String   label;
-  const _InfoChip(this.icon, this.label);
+  const _GlassStat(this.icon, this.label);
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: BoxDecoration(
-      color:        Colors.white.withValues(alpha: 0.08),
-      borderRadius: BorderRadius.circular(20),
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(16),
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withValues(alpha: 0.16),
+              Colors.white.withValues(alpha: 0.06),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, color: C.gold, size: 18),
+          const SizedBox(height: 6),
+          Text(label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700)),
+        ]),
+      ),
     ),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, color: Colors.white, size: 13),
-      const SizedBox(width: 4),
-      Text(label, style: const TextStyle(
-        color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600,
-      )),
-    ]),
+  );
+}
+
+// ── soft cancel button (searching state) ───────────────────
+// ✅ [Redesign] ແທນທີ່ OutlinedButton ຂອບແດງແຂງ 1.4px ດ້ວຍ pill ໂປ່ງແສງສີແດງ
+// ອ່ອນໆ — ຍັງອ່ານອອກວ່າເປັນ destructive action ແຕ່ບໍ່ແຂງກະດ້າງເທົ່າຂອບແຂງ
+class _SoftCancelButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  final String       label;
+  const _SoftCancelButton({required this.onPressed, required this.label});
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: double.infinity,
+    child: Material(
+      color: C.dangerRed.withValues(alpha: 0.14),
+      borderRadius: BorderRadius.circular(28),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(28),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(Icons.close_rounded, color: C.dangerRed.withValues(alpha: 0.9), size: 16),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(
+              color: C.dangerRed.withValues(alpha: 0.95),
+              fontSize: 14, fontWeight: FontWeight.w700,
+            )),
+          ]),
+        ),
+      ),
+    ),
   );
 }
 
