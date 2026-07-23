@@ -15,9 +15,11 @@
 //   ✅ mounted check ຫຼັງ async
 // ============================================================
 
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -27,6 +29,7 @@ import 'app_locale.dart';
 import 'brand_mark_tile.dart';
 import 'cloudinary_service.dart';
 import 'lao_phone.dart';
+import 'main.dart' show LoginPage;
 
 class CustomerRegisterFlow extends StatefulWidget {
   const CustomerRegisterFlow({super.key});
@@ -47,10 +50,30 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
   bool    _obscure = true;
   bool    _obscureConfirm = true;
   String? _error;
+  // ✅ [FIX HI-AUTH-1] ໃຫ້ຮູ້ວ່າ error ປັດຈຸບັນແມ່ນ "ບັນຊີນີ້ມີແລ້ວ" — ສະແດງປຸ່ມ
+  // ພາໄປ Login ແທນທີ່ຈະຄ້າງໃຫ້ຜູ້ໃຊ້ລອງອີກຄັ້ງດ້ວຍຂໍ້ມູນດຽວກັນ (ຈະຜິດຊ້ຳໆ)
+  bool    _showLoginLink = false;
 
   String? _verificationId;
   File?   _selfieFile;
   double? _lat, _lng;
+  bool    _locationDeniedForever = false;
+
+  // ✅ [FIX ME-AUTH-2] cooldown ຕອນ "ສົ່ງ OTP ຄືນ" — ກັນກົດຊ້ຳໆບໍ່ຈຳກັດ
+  Timer?  _resendTimer;
+  int     _resendCooldown = 0;
+
+  void _startResendCooldown() {
+    _resendTimer?.cancel();
+    setState(() => _resendCooldown = 45);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) { t.cancel(); return; }
+      setState(() {
+        _resendCooldown -= 1;
+        if (_resendCooldown <= 0) t.cancel();
+      });
+    });
+  }
 
   // ✅ DEBUG-ONLY: true ຫຼັງກົດ 'Bypass OTP' — ຂ້າມ Firebase Auth call ທຸກອັນ
   // ໃນ step ຕໍ່ໄປ (ບໍ່ link credential, ບໍ່ສ້າງ user ແທ້) ເພື່ອທົດສອບ UI flow
@@ -64,6 +87,7 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
     _nameCtrl.dispose();
     _passCtrl.dispose();
     _confirmCtrl.dispose();
+    _resendTimer?.cancel();
     super.dispose();
   }
 
@@ -130,6 +154,7 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
             _verificationId = verificationId;
             _step = 1;
           });
+          _startResendCooldown(); // ✅ [FIX ME-AUTH-2]
         },
         codeAutoRetrievalTimeout: (String verificationId) {
           _verificationId = verificationId;
@@ -139,7 +164,7 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
       // ✅ ພິມ error ແທ້ຈິງອອກ console — ບໍ່ໃຫ້ error ຫາຍໄປເສີຍໆ
       debugPrint('[CustomerRegisterFlow] verifyPhoneNumber EXCEPTION: $e');
       if (!mounted) return;
-      setState(() { _loading = false; _error = '${tr("error")}: $e'; });
+      setState(() { _loading = false; _error = tr('error'); });
     }
   }
 
@@ -193,7 +218,7 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
     } catch (e) {
       debugPrint('[CustomerRegisterFlow] verifyOtp EXCEPTION: $e');
       if (!mounted) return;
-      setState(() { _loading = false; _error = '${tr("error")}: $e'; });
+      setState(() { _loading = false; _error = tr('error'); });
     }
   }
 
@@ -204,9 +229,9 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
     final pass    = _passCtrl.text;
     final confirm = _confirmCtrl.text;
 
-    if (name.isEmpty)    { setState(() => _error = tr('fill_all')); return; }
-    if (pass.length < 6) { setState(() => _error = tr('pass_min')); return; }
-    if (pass != confirm) { setState(() => _error = tr('password_mismatch')); return; }
+    if (name.isEmpty)                     { setState(() => _error = tr('fill_all')); return; }
+    if (pass.trim().isEmpty || pass.length < 6) { setState(() => _error = tr('pass_min')); return; }
+    if (pass != confirm)                  { setState(() => _error = tr('password_mismatch')); return; }
 
     setState(() { _loading = true; _error = null; });
 
@@ -234,26 +259,52 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
       setState(() { _loading = false; _step = 3; });
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
+      // 🔒 [AUDIT QA-2 / HI-AUTH-1] ກ່ອນໜ້ານີ້ 'provider-already-linked'/
+      // 'email-already-in-use' (ເບີໂທນີ້ມີບັນຊີ role ດຽວກັນຢູ່ແລ້ວ — ຜ່ານ
+      // _blockIfRoleConflict() ໄດ້ເພາະ role ກົງກັນ) ສະແດງເປັນ raw error code
+      // ໃຫ້ຜູ້ໃຊ້ຄ້າງຢູ່ໜ້ານີ້ໂດຍບໍ່ຮູ້ວ່າຕ້ອງເຮັດແນວໃດ. ຕອນນີ້ແຈ້ງຊັດເຈນ ແລະ
+      // ໃຫ້ປຸ່ມພາໄປ Login ໂດຍກົງ.
+      final isDuplicate = e.code == 'provider-already-linked' ||
+          e.code == 'email-already-in-use' ||
+          e.code == 'credential-already-in-use';
       setState(() {
         _loading = false;
-        _error   = '${tr("error")} (${e.code})';
+        _error   = isDuplicate
+            ? tr('account_already_exists_error')
+            : '${tr("error")} (${e.code})';
+        _showLoginLink = isDuplicate;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _loading = false; _error = '${tr("error")}: $e'; });
+      setState(() { _loading = false; _error = tr('error'); _showLoginLink = false; });
     }
+  }
+
+  void _goToLogin() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => route.isFirst,
+    );
   }
 
   // ── Step 3: Selfie ───────────────────────────────────────
 
   Future<void> _takeSelfie() async {
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.camera,
-      preferredCameraDevice: CameraDevice.front,
-      imageQuality: 75,
-    );
-    if (picked == null || !mounted) return;
-    setState(() => _selfieFile = File(picked.path));
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.front,
+        imageQuality: 75,
+        maxWidth: 1280,
+        maxHeight: 1280,
+      );
+      if (picked == null || !mounted) return;
+      setState(() => _selfieFile = File(picked.path));
+    } catch (e) {
+      debugPrint('[CustomerRegisterFlow] _takeSelfie EXCEPTION: $e');
+      if (!mounted) return;
+      setState(() => _error = tr('camera_permission_error'));
+    }
   }
 
   void _continueAfterSelfie() {
@@ -267,20 +318,34 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
   // ── Step 4: Location ─────────────────────────────────────
 
   Future<void> _useCurrentLocation() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() { _loading = true; _error = null; _locationDeniedForever = false; });
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
-        throw Exception(tr('must_enable_location'));
+        if (!mounted) return;
+        setState(() { _loading = false; _error = tr('must_enable_location'); });
+        return;
       }
       var perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) {
         perm = await Geolocator.requestPermission();
       }
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) {
-        throw Exception(tr('must_enable_location'));
+      if (perm == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _error = tr('location_denied_forever');
+          _locationDeniedForever = true;
+        });
+        return;
       }
-      final pos = await Geolocator.getCurrentPosition();
+      if (perm == LocationPermission.denied) {
+        if (!mounted) return;
+        setState(() { _loading = false; _error = tr('must_enable_location'); });
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        timeLimit: const Duration(seconds: 15),
+      );
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -288,8 +353,9 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
         _lng = pos.longitude;
       });
     } catch (e) {
+      debugPrint('[CustomerRegisterFlow] _useCurrentLocation EXCEPTION: $e');
       if (!mounted) return;
-      setState(() { _loading = false; _error = '$e'; });
+      setState(() { _loading = false; _error = tr('location_error'); });
     }
   }
 
@@ -311,7 +377,7 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
       if (!mounted) return;
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('🧪 Debug bypass — flow ຈົບແລ້ວ (ບໍ່ໄດ້ບັນທຶກຂໍ້ມູນແທ້)'),
+        content: Text('Debug bypass — flow ຈົບແລ້ວ (ບໍ່ໄດ້ບັນທຶກຂໍ້ມູນແທ້)'),
         backgroundColor: Colors.orange,
       ));
       Navigator.of(context).popUntil((route) => route.isFirst);
@@ -323,20 +389,30 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
       final uid  = user?.uid;
       if (uid == null) throw Exception('no-auth-user');
 
+      // ✅ [FIX ME-AUTH-6 / Medium-2] ອັບໂຫຼດຮູບກ່ອນຂຽນ Firestore — ຖ້າ
+      // Cloudinary upload ລົ້ມເຫຼວ (offline/network drop) ຈະບໍ່ຂຽນ profile
+      // doc ເລີຍ ບໍ່ໃຫ້ບັນຊີກາຍເປັນ "active" ຄ້າງໄວ້ໂດຍບໍ່ມີຮູບຖາວອນ.
+      String photoUrl = '';
+      if (_selfieFile != null) {
+        photoUrl = await CloudinaryService.instance
+                .uploadImage(_selfieFile!, folder: 'profiles/customers/$uid') ??
+            '';
+      }
+
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'uid':         uid,
         'displayName': _nameCtrl.text.trim(),
         'phone':       _normalizedPhone,
         'role':        'customer',
-        'photoUrl':    '',
+        'photoUrl':    photoUrl,
         'status':      'active',
         'lat':         _lat,
         'lng':         _lng,
         'createdAt':   FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      if (_selfieFile != null) {
-        await CloudinaryService.instance.uploadCustomerPhoto(_selfieFile!);
+      if (photoUrl.isNotEmpty) {
+        await FirebaseAuth.instance.currentUser?.updatePhotoURL(photoUrl);
       }
 
       if (!mounted) return;
@@ -356,8 +432,9 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
             : '${tr("error")} (${e.code})';
       });
     } catch (e) {
+      debugPrint('[CustomerRegisterFlow] _finish EXCEPTION: $e');
       if (!mounted) return;
-      setState(() { _loading = false; _error = '${tr("error")}: $e'; });
+      setState(() { _loading = false; _error = tr('error'); });
     }
   }
 
@@ -380,8 +457,28 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: C.text, size: 20),
-          onPressed: () {
-            if (_step > 0 && _step != 1) {
+          tooltip: tr('back_semantic'), // ✅ [FIX ME-AUTH-5]
+          // ✅ [FIX Medium-1] ຫ້າມກົດຍ້ອນຄືນລະຫວ່າງມີ request ຄ້າງຢູ່ — ອາດ
+          // ປ່ຽນ _step ກ່ອນ callback ຂອງ request ນັ້ນເຮັດວຽກແລ້ວມາ setState
+          // ຜິດ step
+          onPressed: _loading ? null : () {
+            // 🔒 [AUDIT QA-2 / ME-AUTH-1] ເງື່ອນໄຂເກົ່າກວດ step ປັດຈຸບັນ ບໍ່ແມ່ນ
+            // step ປາຍທາງ — ຈາກ step 2 (2>0 && 2!=1 → true) ຈະ decrement ໄປ
+            // step 1 (ໜ້າ OTP) ພໍດີ, ຂັດກັບ comment ຂ້າງລຸ່ມທີ່ຕັ້ງໃຈຫ້າມ. ຕອນນີ້
+            // ແຍກ step 2 ໃຫ້ຍ້ອນກັບໄປ step 0 ໂດຍກົງ (ຂໍ OTP ໃໝ່ຖ້າຈະແກ້ເບີ),
+            // ບໍ່ໃຫ້ຄ້າງຢູ່ step 1 ດ້ວຍ verificationId ເກົ່າ.
+            if (_step == 2) {
+              _resendTimer?.cancel();
+              setState(() {
+                _step = 0; _error = null; _showLoginLink = false;
+                _verificationId = null; _resendCooldown = 0;
+                _otpCtrl.clear();
+                // ✅ [FIX Medium-6] ລຶບ selfie/GPS ທີ່ເຄີຍຖ່າຍ/ຈັບໄວ້ ເພື່ອບໍ່ໃຫ້
+                // ຂໍ້ມູນຂອງເບີໂທເກົ່າຫຼຸດຕິດໄປກັບເບີໂທໃໝ່ທີ່ຈະລົງທະບຽນ
+                _selfieFile = null; _lat = null; _lng = null;
+                _locationDeniedForever = false;
+              });
+            } else if (_step > 0 && _step != 1) {
               // ✅ ບໍ່ໃຫ້ກັບຄືນຫາ OTP step ຫຼັງຢືນຢັນສຳເລັດແລ້ວ
               setState(() { _step -= 1; _error = null; });
             } else {
@@ -401,7 +498,20 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
               fontSize: 26, fontWeight: FontWeight.w900, color: C.primary,
             )),
           ]),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
+
+          // ✅ [FIX ME-AUTH-3] progress indicator — flow ນີ້ມີ 5 step (0-4),
+          // ກ່ອນໜ້ານີ້ບໍ່ມີວິທີໃດບອກຜູ້ໃຊ້ວ່າຍັງເຫຼືອອີກຈັກ step
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: (_step + 1) / 5,
+              minHeight: 6,
+              backgroundColor: C.border,
+              valueColor: const AlwaysStoppedAnimation(C.primary),
+            ),
+          ),
+          const SizedBox(height: 16),
 
           Text(_stepTitle, style: const TextStyle(
             fontSize: 26, fontWeight: FontWeight.w900, color: C.primary,
@@ -427,6 +537,24 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
                 ))),
               ]),
             ),
+            // ✅ [FIX HI-AUTH-1] ບັນຊີນີ້ມີແລ້ວ — ພາໄປ Login ໂດຍກົງ
+            if (_showLoginLink) ...[
+              const SizedBox(height: 8),
+              Center(
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: _goToLogin,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Text(tr('go_to_login'), style: const TextStyle(
+                          color: C.teal, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
 
           const SizedBox(height: 24),
@@ -449,16 +577,22 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
 
           if (_step == 1) ...[
             const SizedBox(height: 12),
+            // ✅ [FIX ME-AUTH-2] disable + ນັບຖອຍຫຼັງ ຕອນ cooldown ຍັງບໍ່ໝົດ
             Center(
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
-                  onTap: _loading ? null : _sendOtp,
+                  onTap: (_loading || _resendCooldown > 0) ? null : _sendOtp,
                   child: Padding(
                     padding: const EdgeInsets.all(8),
-                    child: Text(tr('resend_otp'), style: const TextStyle(
-                        color: C.teal, fontWeight: FontWeight.w700)),
+                    child: Text(
+                        _resendCooldown > 0
+                            ? '${tr("resend_otp")} (${_resendCooldown}s)'
+                            : tr('resend_otp'),
+                        style: TextStyle(
+                            color: _resendCooldown > 0 ? C.muted : C.teal,
+                            fontWeight: FontWeight.w700)),
                   ),
                 ),
               ),
@@ -477,7 +611,7 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
                   side: const BorderSide(color: Colors.orange),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                child: const Text('🧪 Bypass OTP (Debug Only)', style: TextStyle(
+                child: const Text('Bypass OTP (Debug Only)', style: TextStyle(
                     color: Colors.orange, fontWeight: FontWeight.w700)),
               ),
             ),
@@ -521,6 +655,7 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
       hint:       tr('phone_hint'),
       icon:       Icons.phone_outlined,
       inputType:  TextInputType.phone,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
     ),
   ];
 
@@ -533,6 +668,9 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
       hint:       '••••••',
       icon:       Icons.lock_clock_outlined,
       inputType:  TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      maxLength:  6,
+      textAlign:  TextAlign.center,
     ),
   ];
 
@@ -541,9 +679,12 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
     const SizedBox(height: 8),
     _TextField(
       controller: _nameCtrl,
-      hint:       'ສົມໃຈ ໄຊສົງຄາມ',
+      hint:       tr('name_hint'),
       icon:       Icons.person_outline,
       inputType:  TextInputType.name,
+      textCapitalization: TextCapitalization.words,
+      maxLength:  60,
+      autofillHints: const [AutofillHints.name],
     ),
     const SizedBox(height: 16),
 
@@ -554,9 +695,11 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
       hint:       '••••••••',
       icon:       Icons.lock_outline,
       obscure:    _obscure,
+      autofillHints: const [AutofillHints.newPassword],
       suffixIcon: IconButton(
         icon: Icon(_obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
             color: C.muted),
+        tooltip: _obscure ? tr('show_password_semantic') : tr('hide_password_semantic'),
         onPressed: () => setState(() => _obscure = !_obscure),
       ),
     ),
@@ -569,9 +712,11 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
       hint:       '••••••••',
       icon:       Icons.lock_outline,
       obscure:    _obscureConfirm,
+      autofillHints: const [AutofillHints.newPassword],
       suffixIcon: IconButton(
         icon: Icon(_obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
             color: C.muted),
+        tooltip: _obscureConfirm ? tr('show_password_semantic') : tr('hide_password_semantic'),
         onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
       ),
     ),
@@ -595,7 +740,8 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
             ),
             child: _selfieFile == null
                 ? const Icon(Icons.camera_alt_outlined, size: 48, color: C.muted)
-                : ClipOval(child: Image.file(_selfieFile!, fit: BoxFit.cover)),
+                : ClipOval(child: Image.file(_selfieFile!, fit: BoxFit.cover,
+                    cacheWidth: 320, cacheHeight: 320)),
           ),
         ),
       ),
@@ -633,7 +779,7 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
       width: double.infinity, height: 50,
       child: OutlinedButton.icon(
         onPressed: _loading ? null : _useCurrentLocation,
-        icon: const Icon(Icons.my_location, color: C.navy),
+        icon: const Icon(Icons.my_location, color: C.teal),
         style: OutlinedButton.styleFrom(
           side: const BorderSide(color: C.border),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -642,6 +788,23 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
             color: C.text, fontWeight: FontWeight.w700)),
       ),
     ),
+    // ✅ [FIX Medium-5] ຖ້າ user ປະຕິເສດ GPS "ຖາວອນ" (deniedForever),
+    // ບໍ່ມີການສະແດງ dialog ຂໍສິດອີກ — ຕ້ອງພາໄປ Settings ໂດຍກົງ
+    if (_locationDeniedForever) ...[
+      const SizedBox(height: 12),
+      SizedBox(
+        width: double.infinity, height: 46,
+        child: OutlinedButton(
+          onPressed: () => Geolocator.openAppSettings(),
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: C.teal),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: Text(tr('open_settings'), style: const TextStyle(
+              color: C.teal, fontWeight: FontWeight.w700)),
+        ),
+      ),
+    ],
   ];
 
   Widget _fieldLabel(String text) => Text(text, style: const TextStyle(
@@ -660,6 +823,11 @@ class _TextField extends StatelessWidget {
   final TextInputType?        inputType;
   final bool                  obscure;
   final Widget?               suffixIcon;
+  final List<TextInputFormatter>? inputFormatters;
+  final int?                  maxLength;
+  final TextAlign              textAlign;
+  final TextCapitalization     textCapitalization;
+  final List<String>?          autofillHints;
 
   const _TextField({
     required this.controller,
@@ -668,6 +836,11 @@ class _TextField extends StatelessWidget {
     this.inputType,
     this.obscure   = false,
     this.suffixIcon,
+    this.inputFormatters,
+    this.maxLength,
+    this.textAlign = TextAlign.start,
+    this.textCapitalization = TextCapitalization.none,
+    this.autofillHints,
   });
 
   @override
@@ -675,12 +848,18 @@ class _TextField extends StatelessWidget {
     controller:      controller,
     keyboardType:    inputType,
     obscureText:     obscure,
+    inputFormatters: inputFormatters,
+    maxLength:       maxLength,
+    textAlign:       textAlign,
+    textCapitalization: textCapitalization,
+    autofillHints:   autofillHints,
     style: const TextStyle(fontSize: 15, color: C.text),
     decoration: InputDecoration(
       hintText:    hint,
       hintStyle:   const TextStyle(color: C.muted),
       prefixIcon:  Icon(icon, color: C.teal, size: 20),
       suffixIcon:  suffixIcon,
+      counterText: maxLength != null ? '' : null,
       filled:      true,
       fillColor:   Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),

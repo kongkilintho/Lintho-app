@@ -7,10 +7,12 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'Booking.dart' show serviceIconForCategory;
 import 'app_colors.dart';
 import 'app_locale.dart';
 import 'booking_display_helpers.dart';
-import 'firestore_service.dart';
+import 'booking_repository.dart';
+import 'provider_details_screen.dart';
 import 'review_screen.dart';
 import 'tracking_screen.dart';
 
@@ -24,9 +26,17 @@ class BookingDetailScreen extends StatefulWidget {
 
 class _BookingDetailScreenState extends State<BookingDetailScreen> {
   bool _cancelling = false;
+  final _customerBookingRepo = CustomerBookingRepository();
 
+  // 🔒 [AUDIT H8] ກ່ອນໜ້ານີ້ FirestoreService.updateBookingStatus() ຂຽນ
+  // status ດິບໆ ໂດຍກົງ (ບໍ່ມີ transaction, ບໍ່ກວດ status ປັດຈຸບັນຄືນ, ບໍ່ບັນທຶກ
+  // cancelReason/cancelledBy/cancelFeeAmount) ແລະ ບໍ່ມີ catch — error ໃດກໍໄດ້
+  // ຈະບໍ່ຖືກຈັບ. ຕອນນີ້ໃຊ້ CustomerBookingRepository.cancelBooking() ແທນ
+  // (transaction-safe, ບັນທຶກ attribution+fee ຢ່າງຖືກຕ້ອງ) ພ້ອມເກັບເຫດຜົນ
+  // (ບໍ່ບັງຄັບ) ແລະ ຈັບ error ໃຫ້ຜູ້ໃຊ້ເຫັນ.
   Future<void> _confirmCancel(String status) async {
     if (!bookingIsCancelable(status)) return;
+    final reasonCtrl = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -34,8 +44,21 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
             borderRadius: BorderRadius.circular(16)),
         title: Text(tr('cancel_booking_title'), style: const TextStyle(
             fontWeight: FontWeight.w800, color: C.text)),
-        content: Text(tr('cancel_booking_confirm_msg'),
-            style: const TextStyle(color: C.muted)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(tr('cancel_booking_confirm_msg'),
+              style: const TextStyle(color: C.muted)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: reasonCtrl,
+            maxLength: 200,
+            maxLines: 2,
+            decoration: InputDecoration(
+              hintText: tr('cancel_reason_hint'),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ]),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -49,17 +72,26 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         ],
       ),
     );
+    final reason = reasonCtrl.text.trim();
+    reasonCtrl.dispose();
     if (confirmed != true || !mounted) return;
 
     setState(() => _cancelling = true);
     try {
-      await FirestoreService.updateBookingStatus(widget.bookingId, 'cancelled');
+      await _customerBookingRepo.cancelBooking(
+          widget.bookingId, reason.isEmpty ? 'ລູກຄ້າຍົກເລີກ' : reason);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(tr('cancel_booking_success')),
         backgroundColor: C.navy,
       ));
       Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${tr("error")}: $e'),
+        backgroundColor: C.red,
+      ));
     } finally {
       if (mounted) setState(() => _cancelling = false);
     }
@@ -153,9 +185,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                       color: C.bg,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Center(child: Text(
-                        b['serviceEmoji'] as String? ?? '🏠',
-                        style: const TextStyle(fontSize: 26))),
+                    // ✅ [FIX H11] Icon ຈາກ category ແທນ raw emoji ທີ່ເກັບໄວ້ໃນ doc
+                    child: Center(child: Icon(
+                        serviceIconForCategory(b['category'] as String? ?? ''),
+                        size: 26, color: C.navy)),
                   ),
                   const SizedBox(width: 12),
                   Expanded(child: Column(
@@ -192,37 +225,53 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
 
               const SizedBox(height: 12),
 
+              // ✅ [FIX H14] ກົດຊື່/ຮູບຊ່າງ → ໄປໜ້າໂປຣໄຟລ໌ຊ່າງ (ProviderDetailsScreen,
+              // ຫາກ່ອນນີ້ບໍ່ເຄີຍຖືກ navigate ໄປຫາຈາກຈຸດໃດເລີຍ)
               if (hasProvider)
                 _card(child: Row(children: [
-                  Container(
-                    width: 48, height: 48,
-                    decoration: BoxDecoration(
-                      color: C.gold.withValues(alpha: 0.15),
+                  Expanded(child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: C.gold.withValues(alpha: 0.3)),
+                      onTap: () => Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => ProviderDetailsScreen(
+                              providerId: b['providerId'] as String))),
+                      child: Row(children: [
+                        Container(
+                          width: 48, height: 48,
+                          decoration: BoxDecoration(
+                            color: C.gold.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: C.gold.withValues(alpha: 0.3)),
+                          ),
+                          child: Center(child: Text(
+                              ((b['providerName'] as String? ?? '?').isNotEmpty
+                                  ? (b['providerName'] as String).substring(0, 1)
+                                  : '?').toUpperCase(),
+                              style: const TextStyle(
+                                  fontSize: 20, fontWeight: FontWeight.w900,
+                                  color: C.gold))),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(b['providerName'] as String? ?? tr('provider'),
+                                style: const TextStyle(
+                                    fontSize: 14, fontWeight: FontWeight.w800,
+                                    color: C.text)),
+                            const SizedBox(height: 2),
+                            Text(tr('provider'), style: const TextStyle(
+                                fontSize: 12, color: C.muted)),
+                          ],
+                        )),
+                        const Icon(Icons.chevron_right_rounded,
+                            size: 20, color: C.muted),
+                      ]),
                     ),
-                    child: Center(child: Text(
-                        ((b['providerName'] as String? ?? '?').isNotEmpty
-                            ? (b['providerName'] as String).substring(0, 1)
-                            : '?').toUpperCase(),
-                        style: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w900,
-                            color: C.gold))),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(b['providerName'] as String? ?? tr('provider'),
-                          style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w800,
-                              color: C.text)),
-                      const SizedBox(height: 2),
-                      Text(tr('provider'), style: const TextStyle(
-                          fontSize: 12, color: C.muted)),
-                    ],
                   )),
-                  if (bookingIsTrackable(status))
+                  if (bookingIsTrackable(status)) ...[
+                    const SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: () => Navigator.push(context, MaterialPageRoute(
                           builder: (_) => TrackingScreen(
@@ -240,6 +289,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                             borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
+                  ],
                 ])),
 
               if (hasProvider) const SizedBox(height: 12),

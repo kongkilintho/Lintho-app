@@ -93,7 +93,7 @@ void main() {
       await tester.pumpWidget(_wrap(const TechnicianRegisterScreen()));
       await tester.pumpAndSettle();
 
-      final bypassBtn = find.text('🧪 Bypass OTP (Debug Only)');
+      final bypassBtn = find.text('Bypass OTP (Debug Only)');
       expect(bypassBtn, findsOneWidget,
           reason: 'ປ่ຸม debug bypass ຄວນສະແດງໃນ debug/test build');
 
@@ -128,8 +128,6 @@ void main() {
           'isOnline': false,
           'status': 'pending',
           'kycStatus': 'pending',
-          'kycDocUrl': 'https://cloudinary.example/id.jpg',
-          'kycSelfieUrl': 'https://cloudinary.example/selfie.jpg',
           'serviceTypes': ['aircon'],
           'experienceYears': 2,
           'fcmTokens': <String>[],
@@ -139,6 +137,14 @@ void main() {
           'totalJobs': 0,
           'completionRate': 0.0,
           'createdAt': FieldValue.serverTimestamp(),
+        };
+
+    // ▸ [AUDIT KYC-1] ຮູບ KYC ຍ້າຍໄປ kyc/{uid} (ອ່ານໄດ້ສະເພາະເຈົ້າຂອງ/admin)
+    //   ແທນ providers/{uid} (ອ່ານໄດ້ໂດຍ user login ໃດກໍໄດ້).
+    Map<String, dynamic> kycPayload() => {
+          'idDocUrl': 'https://cloudinary.example/id.jpg',
+          'selfieUrl': 'https://cloudinary.example/selfie.jpg',
+          'updatedAt': FieldValue.serverTimestamp(),
         };
 
     test(
@@ -177,16 +183,23 @@ void main() {
       final batch = db.batch();
       batch.set(db.collection('users').doc(uid), usersPayload(uid),
           SetOptions(merge: true));
+      batch.set(db.collection('kyc').doc(uid), kycPayload(),
+          SetOptions(merge: true));
       batch.set(db.collection('providers').doc(uid), providersPayload(uid),
           SetOptions(merge: true));
       await batch.commit();
 
       final usersDoc = await db.collection('users').doc(uid).get();
       final providersDoc = await db.collection('providers').doc(uid).get();
+      final kycDoc = await db.collection('kyc').doc(uid).get();
 
       expect(usersDoc.exists, isTrue);
       expect(providersDoc.exists, isTrue);
-      expect(providersDoc.data()?['kycDocUrl'], isNotEmpty);
+      expect(kycDoc.exists, isTrue);
+      expect(kycDoc.data()?['idDocUrl'], isNotEmpty);
+      expect(providersDoc.data()?.containsKey('kycDocUrl'), isFalse,
+          reason: 'ຮູບ KYC ຫ້າມຢູ່ໃນ providers/{uid} — doc ນັ້ນອ່ານໄດ້ໂດຍ '
+              'user login ໃດກໍໄດ້ (firestore.rules)');
       expect(providersDoc.data()?['serviceTypes'], contains('aircon'));
     });
   });

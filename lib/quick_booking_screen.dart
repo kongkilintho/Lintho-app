@@ -204,14 +204,27 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
     });
   }
 
+  // ✅ [FIX ME-14] ກ່ອນໜ້ານີ້ທຸກ failure branch ຄືນແບບງຽບໆ (ບໍ່ມີ SnackBar) —
+  // ຜູ້ໃຊ້ກົດປຸ່ມ GPS ແລ້ວບໍ່ມີຫຍັງເກີດຂຶ້ນ ອາດຄິດວ່າແອັບເສຍ. ຕອນນີ້ສະແດງຂໍ້ຄວາມ
+  // ໃຫ້ທຸກ branch, ຄືກັນກັບ booking_form_screen.dart's _useGps().
   Future<void> _useCurrentLocation() async {
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) return;
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('enable_gps_first')), backgroundColor: C.orange));
+        return;
+      }
       var perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) {
         perm = await Geolocator.requestPermission();
       }
-      if (perm == LocationPermission.deniedForever) return;
+      if (perm == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('gps_blocked')), backgroundColor: C.orange));
+        return;
+      }
       final pos = await Geolocator.getCurrentPosition();
       if (!mounted) return;
       var addr =
@@ -231,16 +244,26 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
         _location = GeoPoint(pos.latitude, pos.longitude);
         _address = addr;
       });
-    } catch (_) {}
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${tr("gps_error")}: $e'), backgroundColor: C.red));
+    }
   }
 
+  // ✅ [FIX ME-16] SavedAddress ຕອນນີ້ອາດມີ GeoPoint ແທ້ (ບັນທຶກໄວ້ຕັ້ງແຕ່
+  // ຕອນສ້າງ) — ໃຊ້ຄ່ານັ້ນຖ້າມີ. ຖ້າບໍ່ມີ (ທີ່ຢູ່ເກົ່າກ່ອນແກ້ໄຂນີ້), ແຈ້ງເຕືອນ
+  // ໃຫ້ຜູ້ໃຊ້ຮູ້ວ່າກຳລັງໃຊ້ພິກັດປະມານ ແທນທີ່ຈະງຽບໆໃຊ້ພິກັດຜິດ.
   void _useSavedAddress(SavedAddress saved) {
     setState(() {
       _address = saved.address;
       _labelCtrl.text = saved.label;
-      // ✅ SavedAddress ບໍ່ມີ GeoPoint — ໃຫ້ user ກວດ/ປັກໝຸດຄືນຢູ່ Map ຖ້າຕ້ອງການແກ້ໄຂ
-      _location ??= const GeoPoint(17.9757, 102.6331);
+      _location = saved.location ?? _location ?? const GeoPoint(17.9757, 102.6331);
     });
+    if (saved.location == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr('saved_address_no_location_warning'))));
+    }
   }
 
   @override
@@ -463,7 +486,6 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
           builder: (_) => MatchScreen(
                 bookingId: id,
                 initialServiceName: draft.serviceType,
-                initialServiceEmoji: draft.serviceEmoji,
                 initialAddress: draft.address,
                 customerLat: draft.location?.latitude,
                 customerLng: draft.location?.longitude,

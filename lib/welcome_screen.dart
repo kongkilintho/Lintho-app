@@ -24,20 +24,35 @@ class WelcomeScreen extends StatelessWidget {
       builder: (context, _) => Scaffold(
         backgroundColor: _bg,
         body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
+          // ✅ [FIX HI-AUTH-2] ກ່ອນໜ້ານີ້ໃຊ້ Column+Expanded ໂດຍບໍ່ scroll ແລະ
+          // ບໍ່ lock orientation — ຈໍນ້ອຍ ຫຼື ໝູນຈໍນອນ (landscape) ພື້ນທີ່ສູງ
+          // ບໍ່ພຽງພໍໃຫ້ illustration ຂະໜາດຄົງທີ່ 300x300 + header + ປຸ່ມ ຈະ
+          // overflow. ຕອນນີ້ໃຊ້ SingleChildScrollView + FittedBox ໃຫ້ illustration
+          // ຫຼຸດຂະໜາດແທນ clip, ແລະ ໜ້າຈໍ scroll ໄດ້ຖ້າພື້ນທີ່ບໍ່ພໍ.
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 4),
             child: Column(
               children: [
-                const SizedBox(height: 4),
                 Align(
                   alignment: Alignment.topRight,
                   child: IconButton(
                     icon: const Icon(Icons.language, color: Color(0xFF0F172A)),
+                    tooltip: tr('change_language_semantic'), // ✅ [FIX ME-AUTH-5]
                     onPressed: () => LanguageSelector.show(context),
                   ),
                 ),
                 const _WelcomeHeader(),
-                const Expanded(child: Center(child: _WelcomeIllustration())),
+                const SizedBox(height: 24),
+                Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: SizedBox(
+                      width: 300, height: 300,
+                      child: _WelcomeIllustration(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
                 const _WelcomeActionButtons(),
                 const SizedBox(height: 24),
               ],
@@ -296,8 +311,23 @@ class _OrbitIcon extends StatelessWidget {
 }
 
 /// BOTTOM AREA — "ລົງທະບຽນ" (filled) and "ເຂົ້າລະບົບ" (outlined) side-by-side.
-class _WelcomeActionButtons extends StatelessWidget {
+class _WelcomeActionButtons extends StatefulWidget {
   const _WelcomeActionButtons();
+
+  @override
+  State<_WelcomeActionButtons> createState() => _WelcomeActionButtonsState();
+}
+
+class _WelcomeActionButtonsState extends State<_WelcomeActionButtons> {
+  // ✅ [FIX Medium-9] ກັນກົດຮ້ອງທັນທີໆຫຼາຍເທື່ອ — ບໍ່ໃຫ້ push route ຊ້ຳກັນ
+  bool _navigating = false;
+
+  Future<void> _push(Widget page) async {
+    if (_navigating) return;
+    _navigating = true;
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+    if (mounted) _navigating = false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -311,9 +341,7 @@ class _WelcomeActionButtons extends StatelessWidget {
           child: SizedBox(
             height: height,
             child: ElevatedButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const RegisterPage()),
-              ),
+              onPressed: () => _push(const RegisterPage()),
               style: ElevatedButton.styleFrom(
                 backgroundColor: primary,
                 foregroundColor: Colors.white,
@@ -335,9 +363,7 @@ class _WelcomeActionButtons extends StatelessWidget {
           child: SizedBox(
             height: height,
             child: OutlinedButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const LoginPage()),
-              ),
+              onPressed: () => _push(const LoginPage()),
               style: OutlinedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: primary,

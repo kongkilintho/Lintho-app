@@ -133,11 +133,4 @@ class CouponRepository {
       return null;
     }
   }
-
-  /// ເພີ່ມ `usedCount` ຂອງ coupon +1 — ໃຊ້ໃນ WriteBatch ດຽວກັນກັບການ
-  /// ສ້າງ booking (atomic, ບໍ່ໃຫ້ coupon ຖືກນັບໃຊ້ໂດຍບໍ່ມີ booking ຄູ່ກັນ).
-  void incrementUsage(WriteBatch batch, String code) {
-    final ref = _db.collection('coupons').doc(code.trim().toUpperCase());
-    batch.update(ref, {'usedCount': FieldValue.increment(1)});
-  }
 }

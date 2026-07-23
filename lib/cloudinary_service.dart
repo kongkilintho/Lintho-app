@@ -1,7 +1,13 @@
 // ============================================================
 // cloudinary_service.dart — LinTho App
 // Upload ຮູບໄປ Cloudinary (ແທນ Firebase Storage)
-// Cloud: duznxeuny | Preset: Lintho uploads
+// Cloud: duznxeuny
+// 🔒 [Security fix] ອັບໂຫລດແບບ "signed" ຜ່ານ Cloud Function
+// getCloudinarySignature — ບໍ່ໃຊ້ unsigned upload preset ອີກຕໍ່ໄປ. ເມື່ອກ່ອນ
+// preset name + cloud name hardcode ຢູ່ client (ດຶງອອກຈາກ APK ໄດ້) ເຮັດໃຫ້
+// ໃຜກໍອັບໂຫລດເຂົ້າ account ນີ້ໄດ້ໂດຍກົງ ໂດຍບໍ່ຕ້ອງຜ່ານ auth — ຕອນນີ້ Cloud
+// Function ອອກ signature ໃຫ້ສະເພາະ user ທີ່ login ແລ້ວ ແລະ ຈຳກັດ folder ໃຫ້
+// ຢູ່ພາຍໃຕ້ uid/booking ຂອງຕົນເອງເທົ່ານັ້ນ (ເບິ່ງ functions/index.js).
 // ============================================================
 
 import 'dart:io';
@@ -9,27 +15,46 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class CloudinaryService {
   CloudinaryService._();
   static final instance = CloudinaryService._();
 
   static const _cloudName  = 'duznxeuny';
-  static const _uploadPreset = 'Lintho uploads';
   static const _uploadUrl =
       'https://api.cloudinary.com/v1_1/$_cloudName/image/upload';
 
-  // ── Upload ຮູບ ──────────────────────────────────────────
+  // ── Upload ຮູບ (signed) ─────────────────────────────────
 
-  Future<String?> uploadImage(File file, {String folder = 'profiles'}) async {
+  // 🔒 [AUDIT CRIT-5] ບໍ່ເຄີຍມີ timeout ໃນທັງ callable ແລະ http request ນີ້ —
+  // ຖ້າອອບໄລນ໌/ອິນເຕີເນັດອ່ອນ, ອັບໂຫລດຮູບ (ໜ້າວຽກ, KYC, profile) ຄ້າງໂຫລດ
+  // ຕະຫຼອດໄປໂດຍບໍ່ມີ error. ຕອນນີ້ timeout ທັງສອງຂັ້ນຕອນແຍກກັນ.
+  static const _kSignatureTimeout = Duration(seconds: 15);
+  static const _kUploadTimeout    = Duration(seconds: 30);
+
+  Future<String?> uploadImage(File file, {required String folder}) async {
     try {
+      final callable = FirebaseFunctions.instance
+          .httpsCallable('getCloudinarySignature');
+      final result = await callable.call<Map<String, dynamic>>({'folder': folder})
+          .timeout(_kSignatureTimeout, onTimeout: () => throw Exception(
+              'ໝົດເວລາການເຊື່ອມຕໍ່ (connection timed out)'));
+      final sig = result.data;
+
       final request = http.MultipartRequest('POST', Uri.parse(_uploadUrl))
-        ..fields['upload_preset'] = _uploadPreset
-        ..fields['folder']        = folder
+        ..fields['api_key']   = sig['apiKey'] as String
+        ..fields['timestamp'] = '${sig['timestamp']}'
+        ..fields['signature'] = sig['signature'] as String
+        ..fields['folder']    = folder
         ..files.add(await http.MultipartFile.fromPath('file', file.path));
 
-      final response = await request.send();
-      final body     = await response.stream.bytesToString();
+      final response = await request.send().timeout(_kUploadTimeout,
+          onTimeout: () => throw Exception(
+              'ອັບໂຫລດຮູບໝົດເວລາ, ກະລຸນາລອງໃໝ່ (upload timed out)'));
+      final body     = await response.stream.bytesToString()
+          .timeout(_kUploadTimeout, onTimeout: () => throw Exception(
+              'ອັບໂຫລດຮູບໝົດເວລາ, ກະລຸນາລອງໃໝ່ (upload timed out)'));
       final json     = jsonDecode(body) as Map<String, dynamic>;
 
       if (response.statusCode == 200) {
@@ -37,6 +62,8 @@ class CloudinaryService {
       } else {
         throw Exception(json['error']?['message'] ?? 'Upload failed');
       }
+    } on FirebaseFunctionsException catch (e) {
+      throw Exception('Cloudinary signature error: ${e.message}');
     } catch (e) {
       throw Exception('Cloudinary upload error: $e');
     }
@@ -50,10 +77,14 @@ class CloudinaryService {
 
     final url = await uploadImage(file, folder: 'profiles/customers/$uid');
     if (url != null) {
+      // 🔒 [AUDIT CRIT-5 follow-up] upload ຕົວຮູບເອງ timeout ແລ້ວ, ແຕ່ການຂຽນ
+      // url ກັບຄືນ Firestore ນີ້ບໍ່ເຄີຍມີ — ຄ້າງໄດ້ຢູ່ຂັ້ນຕອນສຸດທ້າຍ
       await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
-          .update({'photoUrl': url});
+          .update({'photoUrl': url})
+          .timeout(_kSignatureTimeout, onTimeout: () => throw Exception(
+              'ໝົດເວລາການເຊື່ອມຕໍ່ (connection timed out)'));
       await FirebaseAuth.instance.currentUser?.updatePhotoURL(url);
     }
     return url;
@@ -70,7 +101,9 @@ class CloudinaryService {
       await FirebaseFirestore.instance
           .collection('providers')
           .doc(uid)
-          .update({'photoUrl': url});
+          .update({'photoUrl': url})
+          .timeout(_kSignatureTimeout, onTimeout: () => throw Exception(
+              'ໝົດເວລາການເຊື່ອມຕໍ່ (connection timed out)'));
       await FirebaseAuth.instance.currentUser?.updatePhotoURL(url);
     }
     return url;
@@ -96,7 +129,9 @@ class CloudinaryService {
       await FirebaseFirestore.instance
           .collection('bookings')
           .doc(bookingId)
-          .update({isBefore ? 'beforePhotoUrl' : 'afterPhotoUrl': url});
+          .update({isBefore ? 'beforePhotoUrl' : 'afterPhotoUrl': url})
+          .timeout(_kSignatureTimeout, onTimeout: () => throw Exception(
+              'ໝົດເວລາການເຊື່ອມຕໍ່ (connection timed out)'));
     }
     return url;
   }

@@ -100,8 +100,12 @@ String bookingQuantityLabel(Map<String, dynamic> b) {
   return '1 ${tr('unit_item')}';
 }
 
+// ✅ [FIX ME-15] ກ່ອນໜ້ານີ້ອ່ານ grandTotal (ກ່ອນຫັກ coupon) ກ່ອນ price (ຫຼັງຫັກ
+// coupon, ຄືຍອດທີ່ລູກຄ້າຈ່າຍຈິງ) — booking ຈາກໜ້າຈອງຫຼັກມີທັງສອງ field ຄູ່ກັນ
+// ສະເໝີ, grandTotal ຈິ່ງຊະນະທຸກຄັ້ງ ເຮັດໃຫ້ສ່ວນຫຼຸດ coupon ຫາຍໄປຈາກໜ້າ
+// ປະຫວັດການຈອງຂອງລູກຄ້າເອງ. ປ່ຽນລຳດັບໃຫ້ price (ຍອດຈິງ) ຊະນະກ່ອນ.
 String bookingTotalLabel(Map<String, dynamic> b) {
-  final total = b['grandTotal'] ?? b['priceDisplay'] ?? b['price'];
+  final total = b['price'] ?? b['priceDisplay'] ?? b['grandTotal'];
   if (total is num) {
     return '₭ ${NumberFormat('#,###').format(total)}';
   }

@@ -275,7 +275,35 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _msgsRef     = FirebaseDatabase.instance.ref('chats/$_chatId/messages');
     _chatMetaRef = FirebaseDatabase.instance.ref('chats/$_chatId/meta');
-    _markAsRead();
+    _ensureIdentitySeeded();
+  }
+
+  // 🔒 [AUDIT H5] database.rules.json ອະນຸຍາດອ່ານ/ຂຽນ meta/messages ສະເພາະ
+  // 2 ຄົນທີ່ຖືກບັນທຶກເປັນ meta/customerId ແລະ meta/providerId ເທົ່ານັ້ນ (ຄ່າ
+  // immutable ຫຼັງຕັ້ງຄັ້ງທຳອິດ) — ບໍ່ໄດ້ໃຊ້ members map ແບບ self-add ອີກຕໍ່ໄປ
+  // (ການອອກແບບເດີມນັ້ນມີຊ່ອງໂຫວ່: user ໃດກໍໄດ້ສາມາດຂຽນ members/{ຕົນເອງ}:true
+  // ໃສ່ຫ້ອງແຊັດຄົນອື່ນໄດ້ໂດຍກົງ, ບໍ່ມີການກວດວ່າຕົນເອງແມ່ນ 1 ໃນ 2 ຄົນທີ່ຖືກເຊີນ).
+  // ບາງ entry point (ເຊັ່ນ provider_details_screen.dart's "ແຊັດ" ປຸ່ມ) ເປີດ
+  // ChatScreen ໂດຍກົງ ບໍ່ຜ່ານ ChatService.createOrGetChat() ມາກ່ອນ — seed
+  // customerId/providerId ຢູ່ນີ້ (best-effort; ຖ້າ doc ມີແລ້ວດ້ວຍຄ່າອື່ນ ການຂຽນ
+  // ຊ້ຳຈະຖືກ rules ປະຕິເສດຢ່າງປອດໄພ ເພາະ .validate ບັງຄັບ immutable — ບໍ່ເປັນຫຍັງ
+  // ເພາະ uid ຂອງເຮົາເອງກໍຖືກບັນທຶກໄວ້ແລ້ວໃນຄັ້ງທຳອິດຢູ່ດີ).
+  Future<void> _ensureIdentitySeeded() async {
+    final uid = _user?.uid;
+    final other = widget.receiverId;
+    if (uid == null || other == null || other.isEmpty) {
+      await _markAsRead();
+      return;
+    }
+    try {
+      await _chatMetaRef.update({
+        'customerId': uid,
+        'providerId': other,
+      }).timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('ChatScreen: _ensureIdentitySeeded failed (likely already seeded): $e');
+    }
+    await _markAsRead();
   }
 
   @override
@@ -289,7 +317,8 @@ class _ChatScreenState extends State<ChatScreen> {
     // ✅ [FIX] ບໍ່ມີ try/catch ມາກ່ອນ — ຖ້າອອບໄລນ໌/ບໍ່ມີສິດຂຽນ ຈະເກີດ
     // unhandled Future error ທຸກຄັ້ງທີ່ເປີດຫ້ອງແຊັດ (ບໍ່ຮ້າຍແຮງ, ແຕ່ບໍ່ຄວນ crash)
     try {
-      await _chatMetaRef.update({'unread_${_user?.uid}': 0});
+      await _chatMetaRef.update({'unread_${_user?.uid}': 0})
+          .timeout(const Duration(seconds: 15));
     } catch (e) {
       debugPrint('ChatScreen: _markAsRead failed: $e');
     }
@@ -305,28 +334,41 @@ class _ChatScreenState extends State<ChatScreen> {
     final now = DateTime.now().millisecondsSinceEpoch;
 
     try {
+      // 🔒 [AUDIT CRIT-5] ບໍ່ເຄີຍມີ timeout ຢູ່ນີ້ — ຖ້າອອບໄລນ໌, Realtime
+      // Database ຈະ queue write ໄວ້ລໍຖ້າ sync ໂດຍບໍ່ reject Future ເລີຍ,
+      // _sending ຄ້າງ true ຕະຫຼອດໄປ (ປຸ່ມສົ່ງ loading ບໍ່ຢຸດ) ໂດຍບໍ່ເຄີຍເຂົ້າ
+      // catch block ທີ່ມີຢູ່ແລ້ວຂ້າງລຸ່ມນີ້.
       await _msgsRef.push().set({
         'senderId':   _user?.uid,
         'senderName': _user?.displayName ?? 'User',
         'text':       text,
         'timestamp':  now,
         'read':       false,
-      });
+      }).timeout(const Duration(seconds: 15));
 
       await _chatMetaRef.update({
         'lastMessage':   text,
         'lastMessageAt': now,
-      });
+      }).timeout(const Duration(seconds: 15));
 
       try {
+        // 🔒 [AUDIT CRIT-5 follow-up] ບໍ່ເຄີຍມີ timeout ຢູ່ນີ້ — ຖ້າຄ້າງ,
+        // await ນີ້ຈະຄ້າງ _sending ໄວ້ (finally ຂ້າງລຸ່ມຍັງບໍ່ທັນເຖິງ) ຄືກັນກັບ
+        // ບັນຫາເດີມ, ພຽງແຕ່ຄ້າງຢູ່ write ຕໍ່ໄປແທນ.
+        // ✅ [Bonus fix — found while verifying H5] ບໍ່ຂຽນ 'members' ຢູ່ນີ້
+        // ອີກຕໍ່ໄປ — firestore.rules ບັງຄັບ members immutable ຫຼັງສ້າງ chat
+        // ຄັ້ງທຳອິດ (request.resource.data.members == resource.data.members).
+        // ກ່ອນໜ້ານີ້ຂຽນ [_user.uid, receiverId] ຊ້ຳທຸກຄັ້ງ — ຖ້າ provider ເປັນ
+        // ຄົນສົ່ງຂໍ້ຄວາມ, order ນີ້ກັບກັນກັບຄ່າເດີມ [customerId, providerId] —
+        // ຂຽນລົ້ມເຫລວງຽບໆ (catch ຂ້າງລຸ່ມ) ເຮັດໃຫ້ lastMessage/lastMessageAt
+        // ບໍ່ອັບເດດຕອນ provider ຕອບ, ໜ້າ chat list ຂອງລູກຄ້າຈຶ່ງບໍ່ອັບເດດຄືກັນ.
         await FirebaseFirestore.instance
             .collection('chats')
             .doc(_chatId)
             .set({
           'lastMessage':   text,
           'lastMessageAt': FieldValue.serverTimestamp(),
-          'members': [_user?.uid ?? '', widget.receiverId ?? ''],
-        }, SetOptions(merge: true));
+        }, SetOptions(merge: true)).timeout(const Duration(seconds: 15));
       } catch (e) {
         debugPrint('ChatScreen: Firestore metadata update failed: $e');
       }
@@ -883,6 +925,10 @@ class ChatService {
       });
     }
 
+    // 🔒 [AUDIT H5] ບໍ່ເຄີຍມີ database.rules.json ຢູ່ໃນ repo ນີ້ — ຂໍ້ຄວາມແຊັດຈິງ
+    // (ອາດມີເບີໂທ, ທີ່ຢູ່, ການຕໍ່ລອງລາຄາ) ຈຶ່ງບໍ່ມີ rule ໃດກວດສອບເລີຍ. ຕອນນີ້ເພີ່ມ
+    // database.rules.json ຈຳກັດອ່ານ/ຂຽນສະເພາະ meta/customerId ແລະ meta/
+    // providerId (immutable ຫຼັງຕັ້ງຄັ້ງທຳອິດ) — ຂຽນຢູ່ນີ້ຄັ້ງດຽວຕອນສ້າງຫ້ອງແຊັດ.
     await FirebaseDatabase.instance
         .ref('chats/$chatId/meta')
         .update({

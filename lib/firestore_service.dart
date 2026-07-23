@@ -114,11 +114,18 @@ class FirestoreService {
     return ref.id;
   }
 
+  // 🔒 [AUDIT H13] ບໍ່ເຄີຍມີ .limit()/.orderBy() ຢູ່ນີ້ — listener ນີ້ຖືກ mount
+  // ຕັ້ງແຕ່ເປີດແອັບ (BookingScreen ເປັນໜຶ່ງໃນ 3 tab ຂອງ IndexedStack ໃນ
+  // MainShell, main.dart) ແລະ ຄ້າງໄວ້ຕະຫຼອດ session — ລູກຄ້າເກົ່າທີ່ຈອງມາຫຼາຍປີ
+  // ຈະດາວໂຫລດທຸກ booking ທີ່ເຄີຍມີມາທັງໝົດທຸກຄັ້ງທີ່ເປີດແອັບ. ຕອນນີ້ຈຳກັດ 50
+  // ອັນລ້າສຸດ (ພຽງພໍສຳລັບ history/payment list) ຄືກັນກັບ query ອື່ນໆໃນແອັບ.
   static Stream<QuerySnapshot> getMyBookings() {
     final user = FirebaseAuth.instance.currentUser;
     return _db
         .collection('bookings')
         .where('customerId', isEqualTo: user?.uid)
+        .orderBy('createdAt', descending: true)
+        .limit(50)
         .snapshots();
   }
 
@@ -131,14 +138,6 @@ class FirestoreService {
 
   static Stream<QuerySnapshot> getAllBookings() =>
       _db.collection('bookings').snapshots();
-
-  static Future<void> updateBookingStatus(
-      String bookingId, String status) async {
-    await _db
-        .collection('bookings')
-        .doc(bookingId)
-        .update({'status': status});
-  }
 
   static Future<void> acceptBooking(String bookingId) async {
     final user = FirebaseAuth.instance.currentUser;

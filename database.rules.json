@@ -1,0 +1,28 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "chats": {
+      "$chatId": {
+
+        "meta": {
+          "customerId": {
+            ".validate": "!data.exists() || newData.val() == data.val()"
+          },
+          "providerId": {
+            ".validate": "!data.exists() || newData.val() == data.val()"
+          },
+
+          ".read": "auth != null && (auth.uid == data.child('customerId').val() || auth.uid == data.child('providerId').val())",
+          ".write": "auth != null && ((!data.exists() && (auth.uid == newData.child('customerId').val() || auth.uid == newData.child('providerId').val())) || (data.exists() && (auth.uid == data.child('customerId').val() || auth.uid == data.child('providerId').val())))"
+        },
+
+        "messages": {
+          ".read": "auth != null && (auth.uid == root.child('chats').child($chatId).child('meta').child('customerId').val() || auth.uid == root.child('chats').child($chatId).child('meta').child('providerId').val())",
+          ".write": "auth != null && (auth.uid == root.child('chats').child($chatId).child('meta').child('customerId').val() || auth.uid == root.child('chats').child($chatId).child('meta').child('providerId').val())"
+        }
+      }
+    }
+  }
+}

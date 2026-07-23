@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +8,21 @@ import 'coupon_repository.dart';
 import 'pricing_repository.dart';
 
 final _kipFormat = NumberFormat('#,##0', 'en_US');
+
+// 🔒 [AUDIT QA-1 / HI-6] ກ່ອນໜ້ານີ້ clientRequestId ຖືກ generate ໃໝ່ທຸກຄັ້ງ
+// ທີ່ confirmBooking() ຖືກເອີ້ນ (ຈາກ DateTime.now()) — ໝາຍຄວາມວ່າຖ້າ
+// confirmBooking() ຖືກເອີ້ນຊ້ຳ (double-tap, retry ຫຼັງເນັດຂາດ) ຈະໄດ້ ID
+// ໃໝ່ທຸກຄັ້ງ, ບໍ່ collapse ເປັນ doc ດຽວແບບທີ່ຕັ້ງໃຈ (ຕ່າງຈາກ main booking flow
+// ທີ່ clientRequestId ເປັນ final field ຄົງທີ່ຕະຫຼອດອາຍຸຂອງ BookingOrder ດຽວ).
+// ຕອນນີ້ generate ຄັ້ງດຽວຕອນເລີ່ມເລືອກບໍລິການ (selectService) ແລະ persist ໄວ້ໃນ
+// draft state ຕະຫຼອດ session ນີ້ — ຖືກລ້າງ (ໄດ້ ID ໃໝ່) ສະເພາະຕອນ draft reset
+// (ຫຼັງຈອງສຳເລັດ ຫຼືອອກຈາກ flow).
+String _generateQuickClientRequestId() {
+  final rnd = Random();
+  final ts = DateTime.now().millisecondsSinceEpoch;
+  final suffix = List.generate(8, (_) => rnd.nextInt(16).toRadixString(16)).join();
+  return 'qcr_${ts}_$suffix';
+}
 
 /// ຟໍແມັດລາຄາແບບ "300,000 ກີບ" — ໃຊ້ຮ່ວມກັນທົ່ວ Quick Booking + Referral UI
 String formatKip(num amount) => '${_kipFormat.format(amount)} ກີບ';
@@ -78,6 +94,7 @@ class QuickBookingDraft {
   final num?      couponDiscount;
   final bool      checkingCoupon;
   final String?   couponError;
+  final String?   clientRequestId;
 
   const QuickBookingDraft({
     this.serviceType,
@@ -96,6 +113,7 @@ class QuickBookingDraft {
     this.couponDiscount,
     this.checkingCoupon = false,
     this.couponError,
+    this.clientRequestId,
   });
 
   bool get canGoToSchedule => serviceType != null && packagePrice != null;
@@ -124,6 +142,7 @@ class QuickBookingDraft {
     bool? checkingCoupon,
     String? couponError,
     bool clearCoupon = false,
+    String? clientRequestId,
   }) => QuickBookingDraft(
     serviceType: serviceType ?? this.serviceType,
     serviceEmoji: serviceEmoji ?? this.serviceEmoji,
@@ -141,6 +160,7 @@ class QuickBookingDraft {
     couponDiscount: clearCoupon ? null : (couponDiscount ?? this.couponDiscount),
     checkingCoupon: checkingCoupon ?? this.checkingCoupon,
     couponError: clearCoupon ? null : couponError,
+    clientRequestId: clientRequestId ?? this.clientRequestId,
   );
 }
 
@@ -157,6 +177,9 @@ class QuickBookingNotifier extends Notifier<QuickBookingDraft> {
     state = state.copyWith(
       serviceType: type, serviceEmoji: emoji, packagePrice: price,
       category: category, step: QuickBookingStep.schedule,
+      // ✅ [FIX HI-6] generate ຄັ້ງດຽວຕໍ່ draft session — ຄົງຄ່າເກົ່າໄວ້ ຖ້າ
+      // selectService() ຖືກເອີ້ນຊ້ຳ (ຜູ້ໃຊ້ຍ້ອນກັບໄປປ່ຽນບໍລິການ) ໃນ session ດຽວກັນ
+      clientRequestId: state.clientRequestId ?? _generateQuickClientRequestId(),
     );
   }
 
@@ -205,7 +228,11 @@ class QuickBookingNotifier extends Notifier<QuickBookingDraft> {
     state = state.copyWith(isSubmitting: true, error: null);
     try {
       final repo = ref.read(customerBookingRepoProvider);
-      final clientRequestId = '${customerId}_${DateTime.now().millisecondsSinceEpoch}';
+      // ✅ [FIX HI-6] ໃຊ້ ID ທີ່ generate ໄວ້ຄັ້ງດຽວຕອນ selectService() —
+      // ຮັບປະກັນວ່າກົດຊ້ຳ/retry ພາຍໃນ session ດຽວກັນຈະໃຊ້ clientRequestId
+      // ດຽວກັນ (idempotent), ບໍ່ສ້າງ booking ຊ້ຳ. Fallback ນີ້ບໍ່ຄວນເກີດຂຶ້ນຈິງ
+      // ເພາະ canGoToCheckout ຮັບປະກັນວ່າ selectService() ຖືກເອີ້ນມາກ່ອນແລ້ວ.
+      final clientRequestId = state.clientRequestId ?? _generateQuickClientRequestId();
 
       final db = FirebaseFirestore.instance;
 
@@ -227,7 +254,10 @@ class QuickBookingNotifier extends Notifier<QuickBookingDraft> {
         'price': state.finalPrice,
         if (state.couponCode != null) 'couponCode': state.couponCode,
         if (state.couponDiscount != null) 'discountAmount': state.couponDiscount,
-        'createdAt': Timestamp.fromDate(DateTime.now()),
+        // ✅ [FIX LO-4] ໃຊ້ serverTimestamp() ຄືກັນກັບໜ້າຈອງຫຼັກ — client time
+        // ອາດຄາດເຄື່ອນຖ້າໂມງເຄື່ອງບໍ່ກົງ, ເຮັດໃຫ້ລຳດັບ createdAt ຜິດເມື່ອ sort
+        // ຮ່ວມກັບ booking ຈາກທັງສອງ flow
+        'createdAt': FieldValue.serverTimestamp(),
         'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(minutes: 10))),
         'paymentMethod': 'cash',
         'paymentStatus': 'pending',

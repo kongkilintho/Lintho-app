@@ -3,6 +3,19 @@
 // ============================================================
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart' show IconData, Icons;
+
+// 🔒 [AUDIT H11] serviceEmoji ຖືກເກັບເປັນ emoji character ຢູ່ໃນ Firestore doc
+// ເອງ (ບໍ່ແມ່ນ derive ຈາກ category ຝັ່ງ client) — render ຄືເກົ່າທຸກຄັ້ງທີ່ booking
+// ໃດຖືກສະແດງ (8+ ໜ້າຈໍ), ບໍ່ວ່າ widget-level "ປ່ຽນ emoji ເປັນ Material icon"
+// ຈະຖືກແກ້ໄຂຫຼາຍປານໃດ. ຕອນນີ້ resolve icon ຈາກ category (canonical key) ຢູ່
+// client ແທນ — serviceEmoji ຄົງໄວ້ໃນ model ເປັນ fallback ສະເພາະ doc ເກົ່າ/
+// unknown category ເທົ່ານັ້ນ, ບໍ່ໄດ້ຖືກ render ໂດຍກົງອີກຕໍ່ໄປ.
+IconData serviceIconForCategory(String category) => switch (category) {
+      'ac_clean'    => Icons.ac_unit_rounded,
+      'house_clean' => Icons.cleaning_services_rounded,
+      _             => Icons.build_rounded,
+    };
 
 // ── ENUMS ────────────────────────────────────────────────────
 
@@ -55,8 +68,19 @@ class Booking {
   final String?   customerPhotoUrl;
   final String    providerId;
   final String    serviceType;
+  // 🔒 [AUDIT QA-1 / HI-5] 'serviceType' ແມ່ນ display text (Quick Booking ຂຽນ
+  // label ພາສາລາວ, main flow ຂຽນ category key) — ບໍ່ຄວນໃຊ້ຄ່ານີ້ຈັບຄູ່ວຽກກັບ
+  // provider.serviceTypes (canonical key ສະເໝີ, ເບິ່ງ profile_tab.dart:674-675).
+  // ເພີ່ມ 'category' ແຍກຕ່າງຫາກໃຫ້ matching logic ໃຊ້ແທນ.
+  final String    category;
   final String    serviceEmoji;
   final String    address;
+  // ✅ [FIX ME-5] booking_form_screen.dart ຂຽນ landmark/specialInstructions/
+  // jobPhotoUrl ຕອນສ້າງ booking ແຕ່ບໍ່ເຄີຍຖືກອ່ານກັບຄືນ ຫຼື ສະແດງໃຫ້ຊ່າງເຫັນ —
+  // ເພີ່ມເຂົ້າ model ໃຫ້ provider job-detail screen ສະແດງໄດ້
+  final String    landmark;
+  final String    specialInstructions;
+  final String?   jobPhotoUrl;
   final GeoPoint  location;
   final DateTime  scheduledAt;
   final JobStatus status;
@@ -76,6 +100,10 @@ class Booking {
   final String?   clientRequestId;
   final String?   cancelledBy;
   final double?   cancelFeeAmount;
+  // ✅ [FIX H7] providers ທີ່ reject ວຽກນີ້ໄປແລ້ວ (ຕອນຍັງເປັນ open job board,
+  // providerId ຍັງວ່າງເປົ່າ) — ໃຊ້ຍົກເວັ້ນອອກຈາກ unassignedOpenJobsProvider
+  // ຂອງ provider ຄົນນັ້ນ ບໍ່ໃຫ້ວຽກທີ່ຕົນເອງເຄີຍປະຕິເສດແລ້ວປາກົດຄືນອີກ
+  final List<String> rejectedBy;
 
   const Booking({
     required this.id,
@@ -85,8 +113,12 @@ class Booking {
     this.customerPhotoUrl,
     required this.providerId,
     required this.serviceType,
+    this.category = '',
     required this.serviceEmoji,
     required this.address,
+    this.landmark = '',
+    this.specialInstructions = '',
+    this.jobPhotoUrl,
     required this.location,
     required this.scheduledAt,
     required this.status,
@@ -106,8 +138,17 @@ class Booking {
     this.clientRequestId,
     this.cancelledBy,
     this.cancelFeeAmount,
+    this.rejectedBy = const [],
   });
 
+  // 🔒 [AUDIT H10] ກ່ອນໜ້ານີ້ scheduledAt/createdAt/expiresAt (`as Timestamp`
+  // non-nullable) ແລະ status (`JobStatus.values.byName()`) throw ໄດ້ຖ້າ doc
+  // ໃດໜຶ່ງມີ field ຂາດ/ຜິດຮູບແບບ (legacy doc, write ຄ້າງກາງທາງ, ຫຼືແກ້ຈາກ
+  // console ໂດຍກົງ). ເນື່ອງຈາກ Booking.fromFirestore ຖືກເອີ້ນຢູ່ໃນ
+  // Stream.map(watchActiveBookings()/watchJobHistory()/watchOpenJobs()) —
+  // exception ຈາກ doc ດຽວຈະກາຍເປັນ stream error ຂອງ "ທັງ list" ບໍ່ແມ່ນສະເພາະ
+  // doc ນັ້ນ, ເຮັດໃຫ້ວຽກທັງໝົດຂອງ provider ຫາຍໄປຫລັງ error screen ຍ້ອນ doc
+  // ດຽວ. ຕອນນີ້ທຸກ field ເຫຼົ່ານີ້ default ປອດໄພແທນ throw.
   factory Booking.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return Booking(
@@ -122,11 +163,15 @@ class Booking {
       // ມີ provider ຈັບຄູ່. ໃຫ້ default ປອດໄພແທນ.
       providerId:                d['providerId']                as String? ?? '',
       serviceType:               d['serviceType']               as String? ?? (d['category'] as String? ?? ''),
+      category:                  d['category']                  as String? ?? '',
       serviceEmoji:              d['serviceEmoji']               as String? ?? '🔧',
       address:                   d['address']                   as String? ?? '',
+      landmark:                  d['landmark']                  as String? ?? '',
+      specialInstructions:       d['specialInstructions']       as String? ?? '',
+      jobPhotoUrl:               d['jobPhotoUrl']                as String?,
       location:                  d['location']                  as GeoPoint? ?? const GeoPoint(0, 0),
-      scheduledAt:              (d['scheduledAt']  as Timestamp).toDate(),
-      status:   JobStatus.values.byName(d['status'] as String),
+      scheduledAt:              (d['scheduledAt']  as Timestamp?)?.toDate() ?? DateTime.now(),
+      status:                    _parseStatus(d['status'] as String?),
       // ✅ ໃຊ້ as num? ບໍ່ແມ່ນ as num — booking ເກົ່າຈາກ booking_form_screen.dart
       // (ກ່ອນແກ້ໄຂ) ບໍ່ມີ field 'price' ມາກ່ອນ, cast ແບບບໍ່ null-safe ຈະ crash
       // ຕອນ rehydrate booking ເກົ່ານັ້ນ.
@@ -137,23 +182,38 @@ class Booking {
       beforePhotoUrl:            d['beforePhotoUrl']            as String?,
       afterPhotoUrl:             d['afterPhotoUrl']             as String?,
       cancelReason:              d['cancelReason']              as String?,
-      createdAt:                (d['createdAt']  as Timestamp).toDate(),
+      createdAt:                (d['createdAt']  as Timestamp?)?.toDate() ?? DateTime.now(),
       acceptedAt:               (d['acceptedAt'] as Timestamp?)?.toDate(),
       completedAt:              (d['completedAt'] as Timestamp?)?.toDate(),
-      expiresAt:                (d['expiresAt']  as Timestamp).toDate(),
+      expiresAt:                (d['expiresAt']  as Timestamp?)?.toDate() ?? DateTime.now(),
       paymentMethod:             d['paymentMethod']             as String? ?? 'cash',
       paymentStatus:             d['paymentStatus']             as String? ?? 'pending',
       clientRequestId:           d['clientRequestId']           as String?,
       cancelledBy:               d['cancelledBy']                as String?,
       cancelFeeAmount:          (d['cancelFeeAmount'] as num?)?.toDouble(),
+      rejectedBy:                List<String>.from(d['rejectedBy'] ?? const []),
     );
+  }
+
+  // ✅ [FIX H10] JobStatus.values.byName() throw ໃສ່ status ໃດກໍໄດ້ທີ່ບໍ່ຕົງ
+  // enum name ເປ๊ະ (legacy value, typo ຈາກ manual edit) — ໃຫ້ fallback ໄປ
+  // 'pending' ແທນ throw
+  static JobStatus _parseStatus(String? raw) {
+    if (raw == null) return JobStatus.pending;
+    for (final s in JobStatus.values) {
+      if (s.name == raw) return s;
+    }
+    return JobStatus.pending;
   }
 
   Map<String, dynamic> toMap() => {
     'customerId': customerId, 'customerName': customerName,
     'customerPhone': customerPhone, 'customerPhotoUrl': customerPhotoUrl,
     'providerId': providerId, 'serviceType': serviceType,
+    'category': category,
     'serviceEmoji': serviceEmoji, 'address': address,
+    'landmark': landmark, 'specialInstructions': specialInstructions,
+    'jobPhotoUrl': jobPhotoUrl,
     'location': location, 'scheduledAt': Timestamp.fromDate(scheduledAt),
     'status': status.name, 'price': price,
     'additionalCharges': additionalCharges,
@@ -169,6 +229,7 @@ class Booking {
     'clientRequestId': clientRequestId,
     'cancelledBy': cancelledBy,
     'cancelFeeAmount': cancelFeeAmount,
+    'rejectedBy': rejectedBy,
   };
 
   Booking copyWith({
@@ -181,7 +242,11 @@ class Booking {
     id: id, customerId: customerId, customerName: customerName,
     customerPhone: customerPhone, customerPhotoUrl: customerPhotoUrl,
     providerId: providerId, serviceType: serviceType,
-    serviceEmoji: serviceEmoji, address: address, location: location,
+    category: category,
+    serviceEmoji: serviceEmoji, address: address,
+    landmark: landmark, specialInstructions: specialInstructions,
+    jobPhotoUrl: jobPhotoUrl,
+    location: location,
     scheduledAt: scheduledAt,
     status:                    status               ?? this.status,
     price: price,
@@ -200,11 +265,14 @@ class Booking {
     clientRequestId: clientRequestId,
     cancelledBy: cancelledBy ?? this.cancelledBy,
     cancelFeeAmount: cancelFeeAmount ?? this.cancelFeeAmount,
+    rejectedBy: rejectedBy,
   );
 
   bool   get isExpired       => status == JobStatus.pending && expiresAt.isBefore(DateTime.now());
   double get totalPrice      => price + (additionalCharges ?? 0);
   String get formattedPrice  => _fmt(price);
+  // ✅ [FIX H11] ໃຊ້ແທນ serviceEmoji ໃນ UI ທຸກຈຸດ — ເບິ່ງ serviceIconForCategory()
+  IconData get serviceIcon   => serviceIconForCategory(category);
 
   static String _fmt(double v) =>
       '₭${v.toStringAsFixed(0).replaceAllMapped(

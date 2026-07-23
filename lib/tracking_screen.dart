@@ -27,6 +27,7 @@ import 'review_screen.dart';
 import 'booking_repository.dart';
 import 'chat_screen.dart';
 import 'widgets/status_stepper.dart' as shared;
+import 'widgets/app_icon_button.dart';
 
 // ════════════════════════════════════════════════════════════
 // STATUS MODEL
@@ -342,6 +343,81 @@ class _TrackingScreenState extends State<TrackingScreen>
     }
   }
 
+  // 🔒 [AUDIT H8 follow-up] ໜ້ານີ້ (onWay/arrived) ບໍ່ມີທາງຍົກເລີກໄດ້ເລີຍ
+  // ທັງໆທີ່ CustomerBookingRepository.cancelBooking() ຄິດໄລ່ຄ່າທຳນຽມ
+  // onWay/arrived ໄວ້ແລ້ວ (booking_repository.dart) — ໜ້າ match_screen.dart
+  // ມີແຕ່ປຸ່ມຍົກເລີກກ່ອນຮອດ onWay ເທົ່ານັ້ນ. ຕອນນີ້ເພີ່ມປຸ່ມນີ້ສະເພາະ
+  // pending(accepted)/onWay/arrived — ບໍ່ສະແດງຕອນ working ເພາະ cancelBooking()
+  // ຍັງບໍ່ມີ fee policy ສະເພາະສຳລັບວຽກທີ່ເລີ່ມແລ້ວ (product decision ຄ້າງ).
+  bool get _canCancel =>
+      _status == BookingStatus.pending ||
+      _status == BookingStatus.onWay ||
+      _status == BookingStatus.arrived;
+
+  Future<void> _confirmAndCancel() async {
+    final reasonCtrl = TextEditingController();
+    final showFeeWarning = _status == BookingStatus.onWay ||
+        _status == BookingStatus.arrived;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(tr('cancel_booking_question')),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(tr('cancel_confirm_short')),
+          if (showFeeWarning) ...[
+            const SizedBox(height: 8),
+            Text(tr('cancel_fee_warning'), style: const TextStyle(
+              color: C.red, fontSize: 12, fontWeight: FontWeight.w600,
+            )),
+          ],
+          const SizedBox(height: 12),
+          TextField(
+            controller: reasonCtrl,
+            maxLength:  200,
+            maxLines:   2,
+            decoration: InputDecoration(
+              hintText: tr('cancel_reason_hint'),
+              filled:   true,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(tr('no')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: C.red,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text(tr('cancel'), style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    final reason = reasonCtrl.text.trim();
+    reasonCtrl.dispose();
+    if (confirmed != true) return;
+
+    try {
+      await CustomerBookingRepository().cancelBooking(
+          widget.bookingId, reason.isEmpty ? 'ລູກຄ້າຍົກເລີກ' : reason);
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (e) {
+      debugPrint('cancelBooking: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${tr("error")}: $e'), backgroundColor: C.red));
+    }
+  }
+
   void _goReview() {
     if (!mounted) return;
     Navigator.pushReplacement(context, MaterialPageRoute(
@@ -635,25 +711,13 @@ class _TrackingScreenState extends State<TrackingScreen>
     padding: const EdgeInsets.all(16),
     child: Row(children: [
       // back button
-      Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap:        () => Navigator.pop(context),
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(
-              color:        Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(
-                color:      Colors.black.withValues(alpha: 0.1),
-                blurRadius: 8,
-              )],
-            ),
-            child: const Icon(Icons.arrow_back_ios,
-                color: C.primary, size: 18),
-          ),
-        ),
+      // 🔒 [AUDIT H12] 40×40 ຕ່ຳກວ່າ 44dp tap target ຂັ້ນຕ່ຳ ແລະ ບໍ່ມີ
+      // Semantics — ຕອນນີ້ໃຊ້ AppIconButton ຮ່ວມກັນ (ບັງຄັບ 44dp + tooltip)
+      AppIconButton(
+        icon:  Icons.arrow_back_ios,
+        color: C.primary,
+        label: tr('back_semantic'),
+        onTap: () => Navigator.pop(context),
       ),
       const SizedBox(width: 12),
 
@@ -721,49 +785,21 @@ class _TrackingScreenState extends State<TrackingScreen>
       // chat button — ສະເພາະຕອນ booking ຍັງ active (ບໍ່ done/cancelled)
       if (_status != BookingStatus.done &&
           _status != BookingStatus.cancelled) ...[
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap:        _openChat,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color:        C.primary,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [BoxShadow(
-                  color:      C.primary.withValues(alpha: 0.4),
-                  blurRadius: 8,
-                )],
-              ),
-              child: const Icon(Icons.chat_bubble_outline_rounded,
-                  color: Colors.white, size: 20),
-            ),
-          ),
+        AppIconButton(
+          icon:  Icons.chat_bubble_outline_rounded,
+          color: C.primary,
+          label: tr('chat_semantic'),
+          onTap: _openChat,
         ),
         const SizedBox(width: 12),
       ],
 
       // call button
-      Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap:        _callProvider,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(
-              color:        C.green,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(
-                color:      C.green.withValues(alpha: 0.4),
-                blurRadius: 8,
-              )],
-            ),
-            child: const Icon(Icons.phone_rounded,
-                color: Colors.white, size: 20),
-          ),
-        ),
+      AppIconButton(
+        icon:  Icons.phone_rounded,
+        color: C.green,
+        label: tr('call_provider_btn'),
+        onTap: _callProvider,
       ),
     ]),
   );
@@ -842,6 +878,23 @@ class _TrackingScreenState extends State<TrackingScreen>
                         fontWeight: FontWeight.w800,
                       ),
                     ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ] else if (_canCancel) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: _confirmAndCancel,
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: C.red.withValues(alpha: 0.4)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: Text(tr('cancel_booking_btn'), style: const TextStyle(
+                      color: C.red, fontSize: 14, fontWeight: FontWeight.w700,
+                    )),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -1062,11 +1115,11 @@ class _TrackingSkeletonState extends State<_TrackingSkeleton>
         SafeArea(child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(children: [
-            _box(40, 40, r: 12),
+            _box(44, 44, r: 12),
             const SizedBox(width: 12),
             Expanded(child: _box(double.infinity, 56, r: 14)),
             const SizedBox(width: 12),
-            _box(40, 40, r: 12),
+            _box(44, 44, r: 12),
           ]),
         )),
 

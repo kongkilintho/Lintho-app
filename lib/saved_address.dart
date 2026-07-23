@@ -10,18 +10,25 @@ class SavedAddress {
   final String id;
   final String label;
   final String address;
+  // ✅ [FIX ME-16] location ຖືກຂຽນຢູ່ແລ້ວຕອນບັນທຶກ (quick_booking_provider.dart
+  // saveAsDefaultAddress) ແຕ່ model ນີ້ບໍ່ເຄີຍອ່ານກັບຄືນມາກ່ອນ — ເຮັດໃຫ້
+  // _useSavedAddress() ໃນ quick_booking_screen.dart ຕ້ອງໃຊ້ພິກັດຄົງທີ່
+  // (ວຽງຈັນ) ແທນ ທຸກຄັ້ງ. ເພີ່ມເຂົ້າມາໃຫ້ໃຊ້ພິກັດແທ້ໄດ້.
+  final GeoPoint? location;
 
   const SavedAddress({
     required this.id,
     required this.label,
     required this.address,
+    this.location,
   });
 
   factory SavedAddress.fromMap(Map<String, dynamic> d, String id) =>
       SavedAddress(
-        id:      id,
-        label:   d['label']   as String? ?? '',
-        address: d['address'] as String? ?? '',
+        id:       id,
+        label:    d['label']   as String? ?? '',
+        address:  d['address'] as String? ?? '',
+        location: d['location'] as GeoPoint?,
       );
 }
 

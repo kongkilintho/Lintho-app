@@ -10,9 +10,13 @@ String laoPhoneDigitsOnly(String input) =>
     input.replaceAll(RegExp(r'[^0-9]'), '');
 
 /// ກວດສອບເບີໂທລາວ — ຮັບທັງ 11 ຫຼັກ (ນຳໜ້າ 0) ແລະ 10 ຫຼັກ (ບໍ່ນຳໜ້າ 0)
+/// ✅ [FIX Low-3] ເບີມືຖືລາວທຸກຄ້າຍ/ທຸກ operator ຂຶ້ນຕົ້ນດ້ວຍ 020 ສະເໝີ —
+/// ກ່ອນໜ້ານີ້ພຽງແຕ່ນັບຈຳນວນຫຼັກ ບໍ່ກວດ prefix ແທ້ ເຮັດໃຫ້ເບີທີ່ບໍ່ມີຢູ່ຈິງ
+/// (ເຊັ່ນ 01234567890) ຜ່ານ client-side validation ໄດ້ ແລ້ວມາລົ້ມເຫຼວຢູ່
+/// Firebase Auth ດ້ວຍ error code ທົ່ວໄປແທນ
 bool isValidLaoPhone(String input) {
   final digits = laoPhoneDigitsOnly(input);
-  return RegExp(r'^(0\d{10}|[1-9]\d{9})$').hasMatch(digits);
+  return RegExp(r'^0?20\d{8}$').hasMatch(digits);
 }
 
 /// ແປງເບີໂທລາວ (ບໍ່ວ່າຈະນຳໜ້າດ້ວຍ 0 ຫຼືບໍ່) ໃຫ້ເປັນ E.164 (+856...)

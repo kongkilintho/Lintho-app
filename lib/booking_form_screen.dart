@@ -22,6 +22,7 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -522,6 +523,15 @@ class BookingOrder {
       'customerName':  userName,
       'customerPhone': phone,
       'category':      category.key,
+      // ✅ [FIX CR-1] 'location' GeoPoint — Booking.fromFirestore ອ່ານ field ນີ້
+      // ເທົ່ານັ້ນ (ບໍ່ອ່ານ lat/lng ແຍກ), ຂາດມັນເຮັດໃຫ້ຊ່າງນຳທາງໄປພິກັດ (0,0)
+      'location':      GeoPoint(lat, lng),
+      // ✅ [FIX HI-4] 'serviceType' — Cloud Functions (onNewBooking,
+      // onBookingStatusChange, cleanupExpiredBookings) ອ່ານ field ນີ້ໂດຍກົງ
+      // ບໍ່ມີ fallback; ບໍ່ໃສ່ຈະເຮັດໃຫ້ notification ສະແດງ "undefined".
+      // ໃຊ້ຄ່າດຽວກັນກັບ category.key ເພາະນີ້ຄື canonical key ທີ່
+      // provider matching (unassignedOpenJobsProvider) ກໍ່ໃຊ້ຢູ່ແລ້ວ.
+      'serviceType':   category.key,
       if (category == ServiceCategory.acCleaning) ...{
         'acCart': acCart.map((i) => {
           'type':      i.type.name,
@@ -609,6 +619,9 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   BookingOrder? _order;
   bool          _loading = false;
   bool          _uploadingPhoto = false;
+  // ✅ [FIX ME-12] track ວ່າ live pricing (loadLive()) resolve ແລ້ວບໍ່ — ໃຊ້
+  // gate ບໍ່ໃຫ້ submit ກ່ອນລາຄາຫຼ້າສຸດຈາກ admin ຖືກໂຫລດ
+  bool          _pricingLoaded = false;
 
   // ✅ RULE: dispose() ທຸກ controller
   final _addressCtrl   = TextEditingController();
@@ -665,7 +678,12 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   // ຍັງໃຊ້ໄດ້ປົກກະຕິ. setState() ຫຼັງ fetch ສຳເລັດ ເພື່ອ rebuild ດ້ວຍລາຄາໃໝ່.
   Future<void> _loadLivePricing() async {
     await AppPricing.loadLive();
-    if (mounted) setState(() {});
+    // ✅ [FIX ME-12] AppPricing.loadLive() ບໍ່ throw ເດັດຂາດ (ຫຸ້ມ try/catch
+    // ໝົດແລ້ວ), ດັ່ງນັ້ນ _pricingLoaded ຈະຖືກຕັ້ງ true ສະເໝີບໍ່ວ່າ fetch
+    // ຈະສຳເລັດ ຫຼື fallback ໄປໃຊ້ຄ່າ default — ຈຸດປະສົງແມ່ນພຽງແຕ່ບໍ່ໃຫ້ຜູ້ໃຊ້
+    // submit ກ່ອນຮອບ fetch ນີ້ resolve (ຄ່າອາດປ່ຽນຈາກ default ເປັນ live ລະຫວ່າງ
+    // ນັ້ນ), ບໍ່ແມ່ນການລໍຖ້າໃຫ້ fetch "ສຳເລັດ" ໂດຍສະເພາະ.
+    if (mounted) setState(() => _pricingLoaded = true);
   }
 
   @override
@@ -718,9 +736,17 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       case 2: return _order!.isNow || _order!.scheduledAt != null;
       case 3:
         if (_order!.address.trim().length < 5) return false;
+        // ✅ [FIX ME-10] ຄ່ອຍໆບັງຄັບແຕ່ທີ່ຢູ່ພິມມືເອງ (ບໍ່ແມ່ນ GPS) ຕ້ອງມີເລກ
+        // ຢ່າງໜ້ອຍ 1 ໂຕ (ບ້ານເລກທີ/ຮ່ອມ) — ກັນຂໍ້ຄວາມທີ່ບໍ່ມີຄວາມໝາຍເຊັ່ນ "aaaaa"
+        if (!_order!.isGpsAddress &&
+            !RegExp(r'\d').hasMatch(_order!.address)) {
+          return false;
+        }
         if (_needsPhoneInput && _phoneCtrl.text.trim().length < 8) return false;
         return true;
-      case 4: return true;
+      // ✅ [FIX ME-12] ບໍ່ໃຫ້ submit ກ່ອນ live pricing fetch resolve — ກັນ
+      // ກໍລະນີຜູ້ໃຊ້ໄວກົດຈົນຮອດ submit ກ່ອນລາຄາຫຼ້າສຸດຈາກ admin ຖືກໂຫລດ
+      case 4: return _pricingLoaded;
       default: return false;
     }
   }
@@ -728,12 +754,27 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   // ── submit ───────────────────────────────────────────────
   Future<void> _submit() async {
     if (_order == null) return;
+    // ✅ [FIX ME-17] method-level guard — defense-in-depth ນອກເໜືອຈາກ
+    // button-level `!isLoading` check ຢູ່ _BottomBar (ບໍ່ອີງໃສ່ widget rebuild
+    // timing ຝ່າຍດຽວ)
+    if (_loading) return;
+
+    // ✅ [FIX ME-18] ກ່ອນໜ້ານີ້ບໍ່ໄດ້ກວດ currentUser == null ກ່ອນສົ່ງ booking —
+    // ຖ້າ session ໝົດອາຍຸກາງທາງ, write ຈະຖືກ reject ຈາກ firestore.rules ແລ້ວ
+    // ສະແດງ raw exception ທີ່ອ່ານບໍ່ຮູ້ເລື່ອງ. ຕອນນີ້ກວດກ່ອນ ແລະ ສະແດງຂໍ້ຄວາມ
+    // ຊັດເຈນ ຄືກັນກັບ quick_booking_screen.dart's _confirm().
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr('please_login_first'))));
+      return;
+    }
+
     setState(() => _loading = true);
     try {
-      final user = FirebaseAuth.instance.currentUser;
       final data = _order!.toFirestore(
-        user?.uid         ?? '',
-        user?.displayName ?? tr('customer'),
+        user.uid,
+        user.displayName ?? tr('customer'),
         _resolvedPhone,
       );
       if (widget.providerId != null) data['providerId'] = widget.providerId;
@@ -880,7 +921,11 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
     if (source == null || !mounted) return;
 
     try {
-      final picked = await ImagePicker().pickImage(source: source, imageQuality: 80);
+      // ✅ [FIX ME-2] ເພີ່ມ maxWidth/maxHeight — imageQuality ຄວບຄຸມສະເພາະລະດັບ
+      // JPEG compression ບໍ່ຄວບຄຸມຄວາມລະອຽດ (pixel), ຮູບຈາກກ້ອງມືຖືສະໄໝໃໝ່ຈຶ່ງ
+      // ຍັງອັບໂຫລດຂະໜາດໃຫຍ່ຫຼາຍ MB ຢູ່ໄດ້ຖ້າບໍ່ຈຳກັດ dimension ນຳ
+      final picked = await ImagePicker().pickImage(
+          source: source, imageQuality: 80, maxWidth: 1600, maxHeight: 1600);
       if (picked == null || !mounted) return;
 
       setState(() => _uploadingPhoto = true);
@@ -987,14 +1032,14 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       const SizedBox(height: 12),
       Row(children: [
         Expanded(child: _QuickBookCard(
-          emoji: '❄️', title: tr('quickbook_ac_title'), sub: '${tr("quickbook_ac_sub")} ${AppPricing.fmt(AppPricing.acStdPrice[AcBtuSize.small]!)} ${tr("kip_currency")}',
+          icon: Icons.ac_unit_outlined, title: tr('quickbook_ac_title'), sub: '${tr("quickbook_ac_sub")} ${AppPricing.fmt(AppPricing.acStdPrice[AcBtuSize.small]!)} ${tr("kip_currency")}',
           color: Colors.blue[50]!, accent: const Color(0xFF1D4ED8),
           badge: tr('quickbook_ac_badge'),
           onTap: _quickBookAc,
         )),
         const SizedBox(width: 12),
         Expanded(child: _QuickBookCard(
-          emoji: '🧹', title: tr('svc_house_clean'), sub: '${tr("quickbook_cleaning_sub")} ${AppPricing.fmt(AppPricing.calcCleanHourly(2))} ${tr("kip_currency")}',
+          icon: Icons.cleaning_services_outlined, title: tr('svc_house_clean'), sub: '${tr("quickbook_cleaning_sub")} ${AppPricing.fmt(AppPricing.calcCleanHourly(2))} ${tr("kip_currency")}',
           color: Colors.green[50]!, accent: const Color(0xFF15803D),
           onTap: _quickBookCleaning,
         )),
@@ -1003,7 +1048,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       _Label(tr('label_or_choose_category'), sub: tr('sub_other_needs')),
       const SizedBox(height: 20),
       _BigCatCard(
-        emoji: '❄️', title: tr('svc_ac_clean'), sub: tr('cat_ac_sub'),
+        icon: Icons.ac_unit_outlined, title: tr('svc_ac_clean'), sub: tr('cat_ac_sub'),
         note: tr('bigcat_ac_note'),
         bullets: [tr('ac_type_general_wash'), tr('bigcat_ac_bullet_deep'), tr('ac_type_refill')],
         color: const Color(0xFFEFF6FF), accent: const Color(0xFF1D4ED8),
@@ -1015,7 +1060,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       ),
       const SizedBox(height: 16),
       _BigCatCard(
-        emoji: '🧹', title: tr('svc_house_clean'), sub: tr('cat_house_sub'),
+        icon: Icons.cleaning_services_outlined, title: tr('svc_house_clean'), sub: tr('cat_house_sub'),
         note: tr('bigcat_house_note'),
         bullets: [tr('bigcat_house_bullet_general'), tr('bigcat_house_bullet_deep'), tr('bigcat_house_bullet_specialist')],
         color: const Color(0xFFF0FDF4), accent: const Color(0xFF15803D),
@@ -1089,7 +1134,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         _Label(tr('label_device_qty')),
         const SizedBox(height: 10),
         _QtyRow(
-            qty: o.acDraftQty, minQty: 1, label: tr('unit_device'),
+            qty: o.acDraftQty, minQty: 1, maxQty: 20, label: tr('unit_device'),
             onChanged: (v) => setState(() => o.acDraftQty = v)),
 
         const SizedBox(height: 14),
@@ -1112,13 +1157,18 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
 
         const SizedBox(height: 16),
         SizedBox(
-          width: double.infinity, height: 46,
+          width: double.infinity,
+          // ✅ [FIX ME-8] revert ກັບ tinted-fill ElevatedButton ເດີມ — ຮູບແບບ
+          // OutlinedButton ຂອບສີ primary ທີ່ໃຊ້ຢູ່ນີ້ບໍ່ກົງກັບທັງ convention
+          // grey-outline (quick_booking_screen.dart) ຫຼື filled-primary
+          // (ປຸ່ມ "Next" ຢູ່ໜ້າດຽວກັນ) — ແຂ່ງສາຍຕາກັບປຸ່ມ primary ແທ້
           child: ElevatedButton.icon(
             onPressed: () => _addAcDraftToCart(o),
             style: ElevatedButton.styleFrom(
               backgroundColor: C.primary.withValues(alpha: 0.1),
               foregroundColor: C.primary,
               elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),
@@ -1201,7 +1251,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           const SizedBox(height: 20),
           _Label(tr('label_hours_qty'), sub: tr('sub_min_2hrs')),
           const SizedBox(height: 10),
-          _QtyRow(qty: o.hours, minQty: 2, label: tr('hours_unit'),
+          _QtyRow(qty: o.hours, minQty: 2, maxQty: 12, label: tr('hours_unit'),
               onChanged: (v) => setState(() => o.hours = v)),
           const SizedBox(height: 14),
           _PriceInfoBox(color: const Color(0xFFF0FDF4), lines: [
@@ -1215,15 +1265,22 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           const SizedBox(height: 20),
           _Label(tr('label_room_size')),
           const SizedBox(height: 10),
+          // ✅ [FIX ME-13] ກ່ອນໜ້ານີ້ minP/maxP ເປັນ literal ຄົງທີ່, ບໍ່ເຄີຍອ່ານ
+          // ຈາກ AppPricing.cleanRoomPrices (ຄ່າດຽວກັນທີ່ serviceTotal ໃຊ້ຄິດເງິນ
+          // ຈິງ) — ຮາຄາທີ່ສະແດງອາດບໍ່ກົງກັບຮາຄາທີ່ຄິດເງິນ ຖ້າ admin ປ່ຽນລາຄາຜ່ານ
+          // loadLive(). ຕອນນີ້ອ່ານຈາກ AppPricing.cleanRoomPrices ໂດຍກົງ.
           ...[
-            ('1bed', tr('room_1bed_title'), tr('room_1bed_sub'), 250000, 350000),
-            ('2bed', tr('room_2bed_title'), tr('room_2bed_sub'), 350000, 500000),
-          ].map((r) => _RoomTile(
-            id: r.$1, title: r.$2, sub: r.$3,
-            minP: r.$4, maxP: r.$5,
-            selected: o.roomType == r.$1,
-            onTap: () => setState(() => o.roomType = r.$1),
-          )),
+            ('1bed', tr('room_1bed_title'), tr('room_1bed_sub')),
+            ('2bed', tr('room_2bed_title'), tr('room_2bed_sub')),
+          ].map((r) {
+            final priceData = AppPricing.cleanRoomPrices[r.$1];
+            return _RoomTile(
+              id: r.$1, title: r.$2, sub: r.$3,
+              minP: priceData?['min'] ?? 0, maxP: priceData?['max'] ?? 0,
+              selected: o.roomType == r.$1,
+              onTap: () => setState(() => o.roomType = r.$1),
+            );
+          }),
 
           // ── Add-on Services ───────────────────────────────
           const SizedBox(height: 20),
@@ -1246,9 +1303,11 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             controller: _maidNotesCtrl,
             onChanged: (v) => setState(() => o.maidNotes = v),
             maxLines: 3,
+            maxLength: 300, // ✅ [FIX ME-11]
             decoration: InputDecoration(
               hintText:  tr('hint_maid_notes'),
               hintStyle: const TextStyle(color: C.muted, fontSize: 13),
+              counterText: '',
               filled: true, fillColor: Colors.white,
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
@@ -1331,6 +1390,9 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   }
 
   // ✅ ພົ່ນຢາຂ້າເຊື້ອ ຄິດເປັນຕາແມັດ — ໃຫ້ລະບຸແຍກຕ່າງຫາກຫຼັງກົດເລືອກ
+  // ✅ [FIX ME-9] ກ່ອນໜ້ານີ້ປຸ່ມ OK ເປີດໃຫ້ກົດໄດ້ສະເໝີ ແລະ parse ຄ່າໂດຍບໍ່ກວດ —
+  // ຮັບຄ່າ 0/ຕິດລົບໄດ້, ເຮັດໃຫ້ລາຄາລວມຫຼຸດລົງໂດຍບໍ່ມີການເຕືອນ. ຕອນນີ້ໃຊ້
+  // StatefulBuilder ໃຫ້ reactive: disable OK ແລະ ສະແດງ error ຖ້າຄ່າ <= 0.
   Future<void> _showPestSqmDialog(BookingOrder o) async {
     final ctrl = TextEditingController(
         text: o.pestSqm > 0 ? o.pestSqm.toStringAsFixed(0) : '');
@@ -1340,56 +1402,65 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-            20, 16, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(child: Container(
-            width: 40, height: 4,
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-                color: C.border, borderRadius: BorderRadius.circular(4)),
-          )),
-          Text(tr('pest_spray_title'),
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: C.textPrimary)),
-          const SizedBox(height: 4),
-          Text(
-            '${tr("pest_sqm_dialog_hint")} '
-            '${AppPricing.fmt(AppPricing.pestSqmMin)}–${AppPricing.fmt(AppPricing.pestSqmMax)} ${tr("kip_currency")}/${tr("unit_sqm")}',
-            style: const TextStyle(fontSize: 12, color: C.muted),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: ctrl,
-            autofocus: true,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              hintText: tr('hint_pest_sqm'),
-              suffixText: tr('unit_sqm'),
-              filled: true, fillColor: Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: C.border)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: C.border)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: C.primary, width: 1.5)),
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity, height: 48,
-            child: ElevatedButton(
-              onPressed: () =>
-                  Navigator.pop(ctx, double.tryParse(ctrl.text.trim()) ?? 0),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: C.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final parsed  = double.tryParse(ctrl.text.trim());
+          final hasError = ctrl.text.trim().isNotEmpty && (parsed == null || parsed <= 0);
+          final canSubmit = parsed != null && parsed > 0;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+                20, 16, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Center(child: Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                    color: C.border, borderRadius: BorderRadius.circular(4)),
+              )),
+              Text(tr('pest_spray_title'),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: C.textPrimary)),
+              const SizedBox(height: 4),
+              Text(
+                '${tr("pest_sqm_dialog_hint")} '
+                '${AppPricing.fmt(AppPricing.pestSqmMin)}–${AppPricing.fmt(AppPricing.pestSqmMax)} ${tr("kip_currency")}/${tr("unit_sqm")}',
+                style: const TextStyle(fontSize: 12, color: C.muted),
               ),
-              child: Text(tr('ok'), style: const TextStyle(fontWeight: FontWeight.w800)),
-            ),
-          ),
-        ]),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) => setSheetState(() {}),
+                decoration: InputDecoration(
+                  hintText: tr('hint_pest_sqm'),
+                  suffixText: tr('unit_sqm'),
+                  errorText: hasError ? tr('pest_sqm_error_positive') : null,
+                  filled: true, fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: C.border)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: C.border)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: C.primary, width: 1.5)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity, height: 48,
+                child: ElevatedButton(
+                  onPressed: canSubmit ? () => Navigator.pop(ctx, parsed) : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: C.primary,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: C.border,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: Text(tr('ok'), style: const TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ]),
+          );
+        },
       ),
     );
     if (result != null && mounted) setState(() => o.pestSqm = result);
@@ -1406,13 +1477,13 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       const SizedBox(height: 16),
       Row(children: [
         Expanded(child: _TimeToggle(
-          emoji: '⚡', title: tr('now_option_title'), sub: '30–60 ${tr('minutes_unit')}',
+          icon: Icons.bolt_rounded, title: tr('now_option_title'), sub: '30–60 ${tr('minutes_unit')}',
           selected: o.isNow,
           onTap: () => setState(() { o.isNow = true; o.scheduledAt = null; }),
         )),
         const SizedBox(width: 12),
         Expanded(child: _TimeToggle(
-          emoji: '📅', title: tr('scheduled_option_title'), sub: tr('select_datetime'),
+          icon: Icons.event_outlined, title: tr('scheduled_option_title'), sub: tr('select_datetime'),
           selected: !o.isNow,
           onTap: () => setState(() => o.isNow = false),
         )),
@@ -1528,10 +1599,16 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         TextField(
           controller: _phoneCtrl,
           keyboardType: TextInputType.phone,
+          // ✅ [FIX ME-10] ຈຳກັດໃຫ້ພິມໄດ້ສະເພາະຕົວເລກ — ກ່ອນໜ້ານີ້ຮັບໄດ້ທຸກ
+          // ຕົວອັກສອນເຖິງວ່າຈະຕັ້ງ keyboardType ເປັນ phone ແລ້ວກໍຕາມ
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          // ✅ [FIX ME-11] ຈຳກັດຄວາມຍາວ
+          maxLength: 15,
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             hintText:  tr('hint_phone_example'),
             hintStyle: const TextStyle(color: C.muted, fontSize: 13),
+            counterText: '',
             filled: true, fillColor: Colors.white,
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -1613,10 +1690,12 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       TextField(
         controller: _landmarkCtrl,
         onChanged: (v) => setState(() => o.landmark = v),
+        maxLength: 100, // ✅ [FIX ME-11]
         decoration: InputDecoration(
           hintText:  tr('hint_landmark'),
           hintStyle: const TextStyle(color: C.muted, fontSize: 13),
           prefixIcon: const Icon(Icons.signpost_outlined, color: C.muted, size: 20),
+          counterText: '',
           filled: true, fillColor: Colors.white,
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
@@ -1646,9 +1725,11 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           o.distanceKm   = 0;
         }),
         maxLines: 3,
+        maxLength: 200, // ✅ [FIX ME-11]
         decoration: InputDecoration(
           hintText:  tr('hint_manual_address'),
           hintStyle: const TextStyle(color: C.muted, fontSize: 13),
+          counterText: '',
           filled: true, fillColor: Colors.white,
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
@@ -1673,9 +1754,11 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         controller: _instructionsCtrl,
         onChanged: (v) => setState(() => o.specialInstructions = v),
         maxLines: 3,
+        maxLength: 300, // ✅ [FIX ME-11]
         decoration: InputDecoration(
           hintText:  tr('hint_notes_to_tech'),
           hintStyle: const TextStyle(color: C.muted, fontSize: 13),
+          counterText: '',
           filled: true, fillColor: Colors.white,
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
@@ -1708,6 +1791,27 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   Widget _buildStep4() {
     final o = _order!;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // ✅ [FIX ME-12] ໃຫ້ຜູ້ໃຊ້ຮູ້ວ່າເປັນຫຍັງປຸ່ມ "ຢືນຢັນ" ຍັງກົດບໍ່ໄດ້ (ຖ້າຍັງ
+      // syncing) ແທນທີ່ຈະງຽບໆ disable ໂດຍບໍ່ອະທິບາຍ
+      if (!_pricingLoaded) ...[
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: C.muted.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(children: [
+            const SizedBox(
+              width: 14, height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2, color: C.muted),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text(tr('syncing_pricing_note'),
+                style: const TextStyle(fontSize: 12, color: C.muted))),
+          ]),
+        ),
+        const SizedBox(height: 14),
+      ],
       _Label(tr('label_review_booking'), sub: tr('sub_check_before_confirm')),
       const SizedBox(height: 12),
       _BookingReviewCard(
@@ -1730,7 +1834,9 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       _Label(tr('label_payment_method')),
       const SizedBox(height: 12),
       _PaymentCard(
-        method: 'cash', emoji: '💵',
+        // ✅ [FIX ME-7] icon override (ຄືກັນກັບ bcel ຂ້າງລຸ່ມ) — ບໍ່ດັ່ງນັ້ນ
+        // build() ຈະ fallback ໄປໃຊ້ emoji ຕໍ່
+        method: 'cash', emoji: '💵', icon: Icons.payments_outlined,
         title: tr('payment_cash_title'), sub: tr('payment_cash_sub'),
         selected: o.paymentMethod == 'cash',
         onTap: () => setState(() => o.paymentMethod = 'cash'),
@@ -1844,7 +1950,7 @@ class _AcCartTile extends StatelessWidget {
             style: const TextStyle(fontSize: 11, color: C.muted),
           ),
           const SizedBox(height: 6),
-          _QtyRow(qty: item.qty, minQty: 1, label: tr('unit_device'),
+          _QtyRow(qty: item.qty, minQty: 1, maxQty: 20, label: tr('unit_device'),
               onChanged: onQtyChanged, compact: true),
         ])),
         const SizedBox(width: 8),
@@ -2486,12 +2592,15 @@ class _BcelQrBox extends StatelessWidget {
 // ════════════════════════════════════════════════════════════
 
 class _QuickBookCard extends StatelessWidget {
-  final String emoji, title, sub;
+  // ✅ [FIX ME-7] emoji -> icon — Step 0 ແມ່ນໜ້າທຳອິດທີ່ຜູ້ໃຊ້ທຸກຄົນເຫັນ,
+  // ໃຫ້ກົງກັນກັບ Material icon migration ທີ່ເລີ່ມຢູ່ _BtuSelector/_AcTypeCard
+  final IconData icon;
+  final String title, sub;
   final Color  color, accent;
   final String? badge;
   final VoidCallback onTap;
   const _QuickBookCard({
-    required this.emoji, required this.title, required this.sub,
+    required this.icon, required this.title, required this.sub,
     required this.color, required this.accent,
     this.badge,
     required this.onTap,
@@ -2521,7 +2630,7 @@ class _QuickBookCard extends StatelessWidget {
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Text(emoji, style: const TextStyle(fontSize: 26)),
+                Icon(icon, size: 26, color: accent),
                 const Spacer(),
                 Icon(Icons.arrow_forward_rounded, size: 18, color: accent),
               ]),
@@ -2559,13 +2668,15 @@ class _QuickBookCard extends StatelessWidget {
 }
 
 class _BigCatCard extends StatelessWidget {
-  final String       emoji, title, sub, note;
+  // ✅ [FIX ME-7] emoji -> icon, ຄືກັນກັບ _QuickBookCard
+  final IconData     icon;
+  final String       title, sub, note;
   final List<String> bullets;
   final Color        color, accent;
   final bool         selected;
   final VoidCallback onTap;
   const _BigCatCard({
-    required this.emoji,   required this.title,
+    required this.icon,    required this.title,
     required this.sub,     required this.note,
     required this.bullets, required this.color,
     required this.accent,  required this.selected,
@@ -2603,8 +2714,7 @@ class _BigCatCard extends StatelessWidget {
                     color: accent.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: Center(child: Text(emoji,
-                      style: const TextStyle(fontSize: 32))),
+                  child: Center(child: Icon(icon, size: 32, color: accent)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2754,14 +2864,24 @@ class _BtuSelector extends StatelessWidget {
   const _BtuSelector({required this.selected, required this.onChanged});
 
   // ✅ [i18n] 3rd tuple element ຄື tr() KEY — ເບິ່ງ comment ຢູ່ _AcTypeCard._data
+  // ✅ ປ່ຽນຈາກ emoji (🧊❄️🏢) ມາໃຊ້ Line Icon ໂທນດຽວກັນກັບ _AcTypeCard ຂ້າງເທິງ
+  // ✅ [FIX ME-6] small/large ເຄີຍໃຊ້ icon ດຽວກັນ (ac_unit_outlined ຊ້ຳ), ແລະ
+  // cabinet ໃຊ້ dns_outlined (ຮູບ server rack ບໍ່ກ່ຽວກັບແອ) — ຕອນນີ້ໃຫ້ 3 tier
+  // ມີ icon ແຍກກັນຢ່າງຊັດເຈນ: small=outline snowflake, large=filled snowflake
+  // (ນ້ຳໜັກສາຍຕາໜັກກວ່າ = ຂະໜາດໃຫຍ່ກວ່າ), cabinet=ອາຄານ (ຄືຄວາມໝາຍເດີມຂອງ 🏢)
   static const _items = [
-    (AcBtuSize.small,   '🧊', 'ac_btu_small_title',   '9,000–13,000 BTU'),
-    (AcBtuSize.large,   '❄️', 'ac_btu_large_title',   '18,000–24,000 BTU'),
-    (AcBtuSize.cabinet, '🏢', 'ac_btu_cabinet_title', '30,000+ BTU'),
+    (AcBtuSize.small,   Icons.ac_unit_outlined,   'ac_btu_small_title',   '9,000–13,000 BTU'),
+    (AcBtuSize.large,   Icons.ac_unit,            'ac_btu_large_title',   '18,000–24,000 BTU'),
+    (AcBtuSize.cabinet, Icons.apartment_outlined, 'ac_btu_cabinet_title', '30,000+ BTU'),
   ];
 
   @override
+  // ✅ [FIX LO-2] crossAxisAlignment.start ກັນ icon ບໍ່ຢູ່ລະດັບດຽວກັນ ຖ້າ
+  // title ຂອງບາງ tier ຍາວກວ່າ tier ອື່ນ (ໂດຍສະເພາະພາສາລາວ) ຈົນເຮັດໃຫ້ card
+  // ສູງບໍ່ເທົ່າກັນ — Row ແບບເກົ່າ (default center) ຈະຈັດ card ສັ້ນກວ່າໃຫ້ຢູ່
+  // ກາງແທນ ເຮັດໃຫ້ icon ແຕ່ລະຄໍລໍາເບ້ບໍ່ກົງກັນ
   Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: _items.asMap().entries.map((e) {
       final i = e.key; final item = e.value;
       final sel = selected == item.$1;
@@ -2782,9 +2902,18 @@ class _BtuSelector extends StatelessWidget {
                     color: sel ? C.primary : C.border, width: sel ? 2 : 1),
               ),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text(item.$2, style: const TextStyle(fontSize: 26)),
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: C.primary.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(item.$2, size: 20, color: C.primary),
+                ),
                 const SizedBox(height: 6),
-                Text(tr(item.$3), textAlign: TextAlign.center, style: TextStyle(
+                Text(tr(item.$3), textAlign: TextAlign.center,
+                    maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
                     fontSize: 11, fontWeight: FontWeight.w700,
                     color: sel ? C.primary : C.textPrimary)),
                 const SizedBox(height: 4),
@@ -3081,7 +3210,7 @@ class _SpecialistRow extends StatelessWidget {
                 style: const TextStyle(fontSize: 10.5, color: C.muted, fontStyle: FontStyle.italic)),
           ],
         ])),
-        _QtyRow(qty: qty, minQty: 0,
+        _QtyRow(qty: qty, minQty: 0, maxQty: 20,
             label: tr(data['unit'] as String),
             onChanged: onChanged, compact: true),
       ]),
@@ -3122,13 +3251,17 @@ class _PestRow extends StatelessWidget {
           ),
         ])),
         Row(mainAxisSize: MainAxisSize.min, children: [
-          _CBtn(icon: Icons.remove_rounded, onTap: selected ? onClear : null),
+          _CBtn(icon: Icons.remove_rounded,
+              semanticLabel: tr('qty_decrease_semantic'),
+              onTap: selected ? onClear : null),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Text(selected ? sqm.toStringAsFixed(0) : '0', style: const TextStyle(
                 fontSize: 16, fontWeight: FontWeight.w900, color: C.textPrimary)),
           ),
-          _CBtn(icon: Icons.add_rounded, onTap: onTap),
+          _CBtn(icon: Icons.add_rounded,
+              semanticLabel: tr('qty_increase_semantic'),
+              onTap: onTap),
         ]),
       ]),
     );
@@ -3140,10 +3273,13 @@ class _QtyRow extends StatelessWidget {
   final String            label;
   final ValueChanged<int> onChanged;
   final bool              compact;
+  // ✅ [FIX LO-7] ຂອບເຂດເທິງສຸດ — ກ່ອນໜ້ານີ້ບໍ່ມີ, ກົດ "+" ຊ້ຳໆໄດ້ຄ່າບໍ່ຈຳກັດ
+  final int               maxQty;
   const _QtyRow({
     required this.qty, required this.minQty,
     required this.label, required this.onChanged,
     this.compact = false,
+    this.maxQty = 99,
   });
 
   @override
@@ -3158,6 +3294,7 @@ class _QtyRow extends StatelessWidget {
     ),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
       _CBtn(icon: Icons.remove_rounded,
+          semanticLabel: tr('qty_decrease_semantic'),
           onTap: qty > minQty ? () => onChanged(qty - 1) : null),
       Padding(
         padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 16),
@@ -3165,7 +3302,9 @@ class _QtyRow extends StatelessWidget {
             fontSize: compact ? 16 : 22,
             fontWeight: FontWeight.w900, color: C.textPrimary)),
       ),
-      _CBtn(icon: Icons.add_rounded, onTap: () => onChanged(qty + 1)),
+      _CBtn(icon: Icons.add_rounded,
+          semanticLabel: tr('qty_increase_semantic'),
+          onTap: qty < maxQty ? () => onChanged(qty + 1) : null),
       if (!compact) ...[
         const SizedBox(width: 8),
         Text(label, style: const TextStyle(fontSize: 13, color: C.muted)),
@@ -3177,36 +3316,47 @@ class _QtyRow extends StatelessWidget {
 class _CBtn extends StatelessWidget {
   final IconData      icon;
   final VoidCallback? onTap;
-  const _CBtn({required this.icon, required this.onTap});
+  // ✅ [FIX LO-3] ກ່ອນໜ້ານີ້ບໍ່ມີ Semantics label ເລີຍ — screen reader ອ່ານໄດ້
+  // ພຽງແຕ່ "button" ບໍ່ບອກວ່າເພີ່ມ/ຫຼຸດ
+  final String?       semanticLabel;
+  const _CBtn({required this.icon, required this.onTap, this.semanticLabel});
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.transparent,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        width: 32, height: 32,
-        decoration: BoxDecoration(
-          color: onTap != null
-              ? C.primary.withValues(alpha: 0.08)
-              : C.border.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(8),
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: semanticLabel,
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        // ✅ [FIX LO-3] ຂະໜາດ tap target ເພີ່ມຈາກ 32 -> 36dp — ຍັງບໍ່ຮອດ 44dp
+        // ຄາດຫວັງເຕັມທີ່ (ຈະຕ້ອງແກ້ layout compact row ອ້ອມຂ້າງນຳ) ແຕ່ດີກວ່າເກົ່າ
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+            color: onTap != null
+                ? C.primary.withValues(alpha: 0.08)
+                : C.border.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 16,
+              color: onTap != null ? C.primary : C.muted),
         ),
-        child: Icon(icon, size: 16,
-            color: onTap != null ? C.primary : C.muted),
       ),
     ),
   );
 }
 
 class _TimeToggle extends StatelessWidget {
-  final String       emoji, title, sub;
+  // ✅ [FIX ME-7] emoji -> icon — Step 2 ເຫັນໂດຍທຸກ booking, ບໍ່ຄວນເຫຼືອ emoji
+  final IconData     icon;
+  final String       title, sub;
   final bool         selected;
   final VoidCallback onTap;
   const _TimeToggle({
-    required this.emoji, required this.title,
+    required this.icon,  required this.title,
     required this.sub,   required this.selected,
     required this.onTap,
   });
@@ -3228,7 +3378,7 @@ class _TimeToggle extends StatelessWidget {
               width: selected ? 2 : 1),
         ),
         child: Column(children: [
-          Text(emoji, style: const TextStyle(fontSize: 26)),
+          Icon(icon, size: 26, color: selected ? Colors.white : C.primary),
           const SizedBox(height: 6),
           Text(title, style: TextStyle(
               fontWeight: FontWeight.w800,

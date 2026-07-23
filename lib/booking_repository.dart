@@ -16,7 +16,13 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'Booking.dart';
 import 'fcm_service.dart';
 import 'cloudinary_service.dart';
-import 'coupon_repository.dart';
+
+// 🔒 [AUDIT CRIT-5] ກ່ອນໜ້ານີ້ ມີແຕ່ createBooking()/redeemPointsForCoupon()
+// ທີ່ມີ .timeout() — ທຸກ write/read ອື່ນໆໃນ repository ນີ້ ຖ້າອອບໄລນ໌ Firestore
+// offline persistence ຄ້າງລໍຖ້າ sync ບໍ່ມີກຳນົດ, ປຸ່ມຈະ loading ຄ້າງຕະຫຼອດໄປ
+// ໂດຍບໍ່ມີ error ໃຫ້ຜູ້ໃຊ້ເຫັນ. ຕອນນີ້ທຸກ method ຂ້າງລຸ່ມນີ້ ownership ຫຸ້ມດ້ວຍ
+// .timeout() ອັນດຽວກັນ ໃຫ້ throw error ຊັດເຈນແທນ ຄ້າງຕະຫຼອດໄປ.
+const Duration kNetworkOpTimeout = Duration(seconds: 15);
 
 // ════════════════════════════════════════════════════════════
 // BOOKING REPOSITORY
@@ -29,6 +35,9 @@ class BookingRepository {
   String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   Stream<List<Booking>> watchActiveBookings() {
+    // ✅ [FIX ME-1] ເພີ່ມ .limit() ໃຫ້ກົງກັນກັບ query ອື່ນໆໃນ repository ນີ້
+    // (watchJobHistory limit 50, watchOpenJobs limit 50) — ວຽກ active ຕາມປົກກະຕິ
+    // ມີໜ້ອຍ ແຕ່ນີ້ເປັນຂອບເຂດປ້ອງກັນຖ້າມີວຽກຄ້າງສະຖານະຜິດປົກກະຕິ
     return _db
         .collection('bookings')
         .where('providerId', isEqualTo: _uid)
@@ -40,6 +49,7 @@ class BookingRepository {
       JobStatus.inProgress.name,
     ])
         .orderBy('createdAt', descending: true)
+        .limit(30)
         .snapshots()
         .map((s) => s.docs.map(Booking.fromFirestore).toList());
   }
@@ -102,7 +112,8 @@ class BookingRepository {
         'acceptedAt': FieldValue.serverTimestamp(),
         'providerId': _uid,
       });
-    });
+    }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+        'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
 
     // ✅ Cloud Function `onBookingStatusChange` already notifies the customer
     // on every status write — no client-side notification here (was double-firing).
@@ -110,9 +121,16 @@ class BookingRepository {
 
   // ── ປະຕິເສດ ───────────────────────────────────────────────
 
-  // ✅ Transaction: ກວດ status ປັດຈຸບັນກ່ອນຂຽນ — ປ້ອງກັນ overwrite booking
-  // ທີ່ status ປ່ຽນໄປແລ້ວ (ເຊັ່ນ ລູກຄ້າຍົກເລີກ ຫຼື provider ອື່ນ accept ໄປແລ້ວ
-  // ໃນຊ່ວງເວລາດຽວກັນ)
+  // 🔒 [AUDIT H7] ກ່ອນໜ້ານີ້ reject() ປ່ຽນ status ເປັນ 'rejected' (terminal)
+  // ສະເໝີ — ບໍ່ວ່າ booking ນີ້ຈະຖືກມອບໝາຍໃຫ້ provider ຄົນນີ້ໂດຍສະເພາະ ຫຼື ຍັງເປັນ
+  // ວຽກເປີດຢູ່ໃນ job board (providerId ຍັງວ່າງເປົ່າ, ສົ່ງໃຫ້ provider ຫຼາຍຄົນເບິ່ງ
+  // ພ້ອມກັນ). ກໍລະນີຫຼັງ, provider ຄົນດຽວ reject ("ໄກເກີນໄປ") ຈະຂ້າ booking
+  // ນັ້ນຖິ້ມທັນທີ ເຖິງແມ່ນ provider ອື່ນອາດຮັບໄດ້ພາຍໃນວິນາທີຕໍ່ມາ. ຕອນນີ້ແຍກ 2
+  // ກໍລະນີ: (1) ບໍ່ມີ providerId ມາກ່ອນ → ບັນທຶກວ່າຕົນເອງ reject ໄປແລ້ວ
+  // (rejectedBy) ແຕ່ຄົງ status='pending' ໄວ້ໃຫ້ provider ອື່ນຍັງເຫັນ/ຮັບໄດ້;
+  // (2) ຖືກມອບໝາຍໂດຍສະເພາະ (providerId == ຕົນເອງ, ເຊັ່ນ ລູກຄ້າຈອງຊ່າງຄົນນີ້
+  // ໂດຍກົງຜ່ານ provider_details_screen.dart) → ບໍ່ມີ "board" ໃຫ້ຖອຍໄປ, reject
+  // ຈຶ່ງ terminal ແທ້ ຄືເກົ່າ.
   Future<void> rejectBooking(String bookingId, String reason) async {
     if (_uid.isEmpty) return; // ✅ [FIX-1] guard
     final ref = _db.collection('bookings').doc(bookingId);
@@ -123,30 +141,66 @@ class BookingRepository {
       if (b.status == JobStatus.completed || b.status == JobStatus.cancelled) {
         throw Exception('ບໍ່ສາມາດປະຕິເສດໄດ້: ສະຖານະປ່ຽນໄປແລ້ວ');
       }
-      tx.update(ref, {
-        'status':       JobStatus.rejected.name,
-        'cancelReason': reason,
-      });
-    });
+      if (b.providerId.isEmpty || b.providerId != _uid) {
+        // ວຽກເປີດຢູ່ໃນ job board — ບໍ່ໄດ້ຖືກມອບໝາຍໃຫ້ຕົນເອງໂດຍສະເພາະ
+        tx.update(ref, {
+          'rejectedBy': FieldValue.arrayUnion([_uid]),
+          'updatedAt':  FieldValue.serverTimestamp(),
+        });
+      } else {
+        // ຖືກມອບໝາຍໃຫ້ຕົນເອງໂດຍສະເພາະ (ຈອງກົງ) — reject ຈົບຈິງ
+        tx.update(ref, {
+          'status':       JobStatus.rejected.name,
+          'cancelReason': reason,
+        });
+      }
+    }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+        'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
 
     // ✅ Cloud Function `onBookingStatusChange` already notifies the customer
     // on every status write — no client-side notification here (was double-firing).
+    // ✅ onBookingStatusChange ຮັບຮູ້ສະເພາະ status change ຈິງ — ກໍລະນີ (1) ຂ້າງ
+    // ເທິງບໍ່ໄດ້ປ່ຽນ status ເລີຍ ຈຶ່ງບໍ່ trigger notification ໃດ, ຖືກຕ້ອງແລ້ວ
+    // (ລູກຄ້າບໍ່ຄວນຮູ້ວ່າມີ provider ຄົນໜຶ່ງປະຕິເສດ, ຕາບໃດທີ່ຍັງມີຄົນອື່ນຮັບໄດ້).
   }
 
   // ── ອັບເດດ status ─────────────────────────────────────────
 
-  // ✅ ບໍ່ມີ payment gateway webhook ແທ້ — ນີ້ແມ່ນຊ່າງຢືນຢັນວ່າໄດ້ຮັບເງິນແລ້ວ
-  // (cash ໃນມື ຫຼື ເຫັນ BCEL ໂອນເຂົ້າແທ້) ກ່ອນປິດງານ.
+  // 🔒 [AUDIT CRIT-1] ນີ້ແມ່ນຊ່າງຢືນຢັນວ່າໄດ້ຮັບເງິນແລ້ວ (cash ໃນມື ຫຼື ເຫັນ BCEL
+  // ໂອນເຂົ້າແທ້) ກ່ອນປິດງານ — ບໍ່ມີ payment gateway webhook ແທ້. ກ່ອນໜ້ານີ້
+  // method ນີ້ບໍ່ມີ caller ຢູ່ໃນ UI ໃດເລີຍ (ບໍ່ມີປຸ່ມ/ໜ້າຈໍໃດເອີ້ນ) — ໝາຍຄວາມວ່າ
+  // updateStatus(completed) ຂ້າງລຸ່ມນີ້ throw ຕະຫຼອດເວລາ ແລະ ບໍ່ມີວຽກໃດປິດ
+  // ໄດ້ຈັກອັນ. ຕອນນີ້ເອີ້ນຈາກ job_workflow_Screen.dart ຜ່ານ
+  // BookingNotifier.confirmPayment() (booking_provider.dart) ເປັນ step ກ່ອນ
+  // "ສຳເລັດວຽກ" ຕອນ status == inProgress.
   Future<void> confirmPaymentReceived(String bookingId) async {
     if (_uid.isEmpty) return;
-    await _db.collection('bookings').doc(bookingId).update({
-      'paymentStatus': 'paid',
-    });
+    final ref = _db.collection('bookings').doc(bookingId);
+
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      if (!snap.exists) {
+        throw Exception('ບໍ່ພົບຂໍ້ມູນການຈອງນີ້');
+      }
+      final b = Booking.fromFirestore(snap);
+      if (b.providerId != _uid) {
+        throw Exception('ທ່ານບໍ່ແມ່ນຊ່າງທີ່ຮັບຜິດຊອບງານນີ້');
+      }
+      if (b.status.isFinished) {
+        throw Exception('ບໍ່ສາມາດຢືນຢັນໄດ້: ສະຖານະປ່ຽນໄປແລ້ວ');
+      }
+      if (b.paymentStatus == 'paid') return; // idempotent — already confirmed
+      tx.update(ref, {'paymentStatus': 'paid'});
+    }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+        'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
   }
 
   Future<void> updateStatus(String bookingId, JobStatus status) async {
     if (_uid.isEmpty) return; // ✅ [FIX-1] guard
-    final doc = await _db.collection('bookings').doc(bookingId).get();
+    final ref = _db.collection('bookings').doc(bookingId);
+    final doc = await ref.get().timeout(kNetworkOpTimeout,
+        onTimeout: () => throw Exception(
+            'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
     final b   = Booking.fromFirestore(doc);
 
     if (status == JobStatus.completed && b.paymentStatus != 'paid') {
@@ -157,7 +211,9 @@ class BookingRepository {
     if (status == JobStatus.completed) {
       data['completedAt'] = FieldValue.serverTimestamp();
     }
-    await _db.collection('bookings').doc(bookingId).update(data);
+    await ref.update(data).timeout(kNetworkOpTimeout,
+        onTimeout: () => throw Exception(
+            'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
 
     // ✅ Cloud Function `onBookingStatusChange` is the single source of truth
     // for side effects (notifications, wallet increment, transaction record)
@@ -186,14 +242,19 @@ class BookingRepository {
       String note,
       ) async {
     if (_uid.isEmpty) return; // ✅ [FIX-1] guard
-    final doc = await _db.collection('bookings').doc(bookingId).get();
+    if (amount <= 0) throw Exception('ຈຳນວນເງິນຕ້ອງຫຼາຍກວ່າ 0');
+    final ref = _db.collection('bookings').doc(bookingId);
+    final doc = await ref.get().timeout(kNetworkOpTimeout,
+        onTimeout: () => throw Exception(
+            'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
     final b   = Booking.fromFirestore(doc);
 
-    await _db.collection('bookings').doc(bookingId).update({
+    await ref.update({
       'additionalCharges':         amount,
       'additionalChargesNote':     note,
       'additionalChargesApproved': false,
-    });
+    }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+        'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
 
     await NotificationSender.additionalCharges(
       customerId: b.customerId,
@@ -214,20 +275,19 @@ class CustomerBookingRepository {
   // ✅ idempotent: ໃຊ້ clientRequestId ເປັນ doc id — ກົດຈອງຊໍ້າ/network retry
   // ຈະ overwrite doc ດຽວກັນ ບໍ່ສ້າງ booking ຊໍ້າ.
   //
-  // ✅ [Coupon] ຖ້າມີ `couponCode`, ການສ້າງ booking + ການ increment
-  // `coupons/{code}.usedCount` ຈະຢູ່ໃນ WriteBatch ດຽວກັນ (atomic) — ບໍ່ໃຫ້
-  // coupon ຖືກນັບໃຊ້ໂດຍບໍ່ມີ booking ຄູ່ກັນ (ຫຼື booking ຖືກສ້າງແຕ່ coupon
-  // ບໍ່ຖືກນັບ).
+  // 🔒 [AUDIT QA-1 / HI-7] ກ່ອນໜ້ານີ້ exists-check (`ref.get()`) ເກີດຂຶ້ນກ່ອນ
+  // WriteBatch ຄົນລະ round-trip — ບໍ່ atomic. ຖ້າ submit ຖືກເອີ້ນຊ້ຳພ້ອມກັນ
+  // (double-tap, retry ຫຼັງເນັດຂາດ) ທັງສອງ invocation ອາດອ່ານ
+  // existing.exists==false ພ້ອມກັນກ່ອນອັນໃດຈະຂຽນ — booking doc converge ເປັນ
+  // ອັນດຽວ (doc ID ດຽວກັນ) ແຕ່ coupon usedCount ຈະຖືກ increment ຊ້ຳສອງເທື່ອ
+  // ສຳລັບ booking ດຽວ. ຕອນນີ້ໃຊ້ runTransaction ດຽວໃຫ້ exists-check + booking
+  // write + coupon increment ເປັນ atomic ທັງໝົດ (Firestore ບັງຄັບໃຫ້ທຸກ get()
+  // ໃນ transaction ເກີດກ່ອນ set()/update() ໃດໆ ຢູ່ແລ້ວ).
   Future<String> createBooking(Map<String, dynamic> data, {String? couponCode}) async {
     final clientRequestId = data['clientRequestId'] as String?;
     final ref = (clientRequestId == null || clientRequestId.isEmpty)
         ? _db.collection('bookings').doc()
         : _db.collection('bookings').doc(clientRequestId);
-
-    if (clientRequestId != null && clientRequestId.isNotEmpty) {
-      final existing = await ref.get();
-      if (existing.exists) return ref.id;
-    }
 
     // ✅ [AUDIT C5] ລວມ referral lookup ໄວ້ບ່ອນດຽວແທນທີ່ຈະໃຫ້ແຕ່ລະໜ້າຈໍຈອງ
     // (quick_booking_provider.dart, booking_form_screen.dart) ຂຽນແຍກກັນເອງ —
@@ -236,6 +296,8 @@ class CustomerBookingRepository {
     // ເຮັດໃຫ້ໂປຣແກຣມແນະນຳໝູ່ (onNewBooking ໃນ functions/index.js ອ່ານ field
     // ນີ້) ບໍ່ໄດ້ຜົນສຳລັບການຈອງສ່ວນຫຼາຍແບບງຽບໆ. ຕອນນີ້ createBooking() ດຶງ
     // users/{customerId}.referredBy ໃຫ້ອັດຕະໂນມັດ ຖ້າຜູ້ຮຽກຍັງບໍ່ໄດ້ໃສ່ມາເອງ.
+    // (read-only lookup — ບໍ່ຕ້ອງການ atomicity ກັບການສ້າງ booking, ດຶງກ່ອນເຂົ້າ
+    // transaction ໄດ້ຢ່າງປອດໄພ)
     if (!data.containsKey('referralCode')) {
       final customerId = data['customerId'] as String?;
       if (customerId != null && customerId.isNotEmpty) {
@@ -247,12 +309,63 @@ class CustomerBookingRepository {
       }
     }
 
-    final batch = _db.batch();
-    batch.set(ref, data);
-    if (couponCode != null && couponCode.isNotEmpty) {
-      CouponRepository.instance.incrementUsage(batch, couponCode);
-    }
-    await batch.commit();
+    final couponRef = (couponCode != null && couponCode.isNotEmpty)
+        ? _db.collection('coupons').doc(couponCode.trim().toUpperCase())
+        : null;
+
+    // 🔒 [AUDIT QA-1 / HI-8] ກ່ອນໜ້ານີ້ບໍ່ມີ timeout ເລີຍ — ຖ້າອອບໄລນ໌ Firestore
+    // offline persistence ຈະຄ້າງລໍຖ້າ sync ບໍ່ມີກຳນົດ, spinner ຄ້າງຕະຫຼອດໄປ, ບໍ່ມີ
+    // error ໃຫ້ຜູ້ໃຊ້ເຫັນ. ຕອນນີ້ timeout ຫຼັງ 20 ວິນາທີ ແລ້ວ throw ໃຫ້ caller
+    // (booking_form_screen.dart _submit() / quick_booking_provider.dart
+    // confirmBooking()) ສະແດງ error ແລະ ປົດລ໋ອກປຸ່ມ — ຜູ້ໃຊ້ກົດ submit ຄືນໄດ້
+    // ໂດຍໃຊ້ clientRequestId ດຽວກັນ (idempotent, ບໍ່ສ້າງ booking ຊ້ຳ) ແທນທີ່ຈະ
+    // ອອກຈາກໜ້າແລ້ວເປີດໃໝ່ (ເຊິ່ງຈະໄດ້ order/draft ໃໝ່ ແລະ ID ໃໝ່).
+    await _db.runTransaction((tx) async {
+      if (clientRequestId != null && clientRequestId.isNotEmpty) {
+        final existing = await tx.get(ref);
+        if (existing.exists) return;
+      }
+
+      // 🔒 [AUDIT H1] ກ່ອນໜ້ານີ້ tx.update(couponRef, {usedCount: increment(1)})
+      // ບໍ່ເຄີຍ re-check status/validUntil/usageLimit ພາຍໃນ transaction ເລີຍ —
+      // CouponRepository.validate() ກວດຄ່າເຫຼົ່ານີ້ພຽງແຕ່ຕອນພິມລະຫັດ (ອາດຫ່າງ
+      // ຈາກ submit ຫຼາຍນາທີ), ແລະ firestore.rules ອະນຸຍາດ increment ໂດຍບໍ່ກວດ
+      // ຂອບເຂດຫຍັງເລີຍນອກຈາກ usedCount+1. Coupon usageLimit:100 ຈຶ່ງຖືກໃຊ້ໄດ້
+      // ບໍ່ຈຳກັດພາຍໃຕ້ concurrent/serial redemption. ຕອນນີ້ re-read + re-validate
+      // ພາຍໃນ transaction ດຽວກັນ (ກ່ອນ write ໃດໆ, ຕາມກົດ Firestore transaction)
+      // ແລ້ວ abort ທັງ booking ນີ້ຖ້າ coupon ບໍ່ຖືກຕ້ອງອີກຕໍ່ໄປ — ຜູ້ໃຊ້ຈະເຫັນ
+      // error ແລະ ຕ້ອງ submit ຄືນໃໝ່ (ອາດຕ້ອງແກ້/ຖອນ coupon code).
+      if (couponRef != null) {
+        final couponSnap = await tx.get(couponRef);
+        if (!couponSnap.exists) {
+          throw Exception('ລະຫັດສ່ວນຫຼຸດບໍ່ຖືກຕ້ອງ ຫຼື ຖືກລຶບໄປແລ້ວ');
+        }
+        final c = couponSnap.data()!;
+        final status = c['status'] as String? ?? 'inactive';
+        if (status != 'active') {
+          throw Exception('ລະຫັດສ່ວນຫຼຸດນີ້ບໍ່ສາມາດໃຊ້ໄດ້ອີກຕໍ່ໄປ');
+        }
+        final now = DateTime.now();
+        final validFrom = (c['validFrom'] as Timestamp?)?.toDate();
+        final validUntil = (c['validUntil'] as Timestamp?)?.toDate();
+        if (validFrom != null && now.isBefore(validFrom)) {
+          throw Exception('ລະຫັດສ່ວນຫຼຸດນີ້ຍັງບໍ່ທັນເລີ່ມໃຊ້ໄດ້');
+        }
+        if (validUntil != null && now.isAfter(validUntil)) {
+          throw Exception('ລະຫັດສ່ວນຫຼຸດນີ້ໝົດອາຍຸແລ້ວ');
+        }
+        final usageLimit = c['usageLimit'] as num?;
+        final usedCount = (c['usedCount'] as num?) ?? 0;
+        if (usageLimit != null && usedCount >= usageLimit) {
+          throw Exception('ລະຫັດສ່ວນຫຼຸດນີ້ຖືກໃຊ້ຄົບຈຳນວນແລ້ວ');
+        }
+      }
+
+      tx.set(ref, data);
+      if (couponRef != null) {
+        tx.update(couponRef, {'usedCount': FieldValue.increment(1)});
+      }
+    }).timeout(const Duration(seconds: 20));
     return ref.id;
   }
 
@@ -286,7 +399,8 @@ class CustomerBookingRepository {
         'cancelledBy':     'customer',
         'cancelFeeAmount': fee,
       });
-    });
+    }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+        'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
   }
 
   // ── ອະນຸມັດ/ປະຕິເສດ ຄ່າໃຊ້ຈ່າຍເພີ່ມ (ຝັ່ງລູກຄ້າ) ──────────────
@@ -333,7 +447,9 @@ class EarningsRepository {
 
   Future<void> requestWithdrawal(double amount) async {
     if (_uid.isEmpty) return; // ✅ [FIX-1] guard
-    final walletDoc = await _db.collection('wallets').doc(_uid).get();
+    final walletDoc = await _db.collection('wallets').doc(_uid).get()
+        .timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+            'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
     final balance   = (walletDoc.data()?['balance'] as num?)
         ?.toDouble() ?? 0;
     if (amount < 50000) throw Exception('ຂັ້ນຕ່ຳ ₭50,000');
@@ -343,7 +459,8 @@ class EarningsRepository {
       'amount':     amount,
       'status':     'pending',
       'createdAt':  FieldValue.serverTimestamp(),
-    });
+    }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+        'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
   }
 
   Future<void> updateBankInfo({
@@ -357,7 +474,9 @@ class EarningsRepository {
       'bankAccount': bankAccount,
       'bankHolder':  bankHolder,
       'updatedAt':   FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    }, SetOptions(merge: true)).timeout(kNetworkOpTimeout,
+        onTimeout: () => throw Exception(
+            'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
   }
 }
 
@@ -399,23 +518,39 @@ class ProfileRepository {
     });
   }
 
+  // 🔒 [AUDIT CRIT-5 follow-up] uploadProfilePhoto()/uploadKyc() ໄດ້ timeout
+  // ຂັ້ນຕອນ upload ຮູບແລ້ວ, ແຕ່ call ນີ້ (ຂຽນ url ກັບຄືນ providers/{uid}) ຢູ່
+  // ທ້າຍ method ທັງສອງບໍ່ມີ timeout — ຍັງຄ້າງໄດ້ຢູ່ຂັ້ນຕອນສຸດທ້າຍນີ້.
   Future<void> updateProfile(Map<String, dynamic> data) async {
     if (_uid.isEmpty) return; // ✅ [FIX-1] guard
     await _db.collection('providers').doc(_uid).set(
       {...data, 'updatedAt': FieldValue.serverTimestamp()},
       SetOptions(merge: true),
-    );
+    ).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+        'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
     if (data.containsKey('displayName')) {
       await _auth.currentUser
-          ?.updateDisplayName(data['displayName'] as String);
+          ?.updateDisplayName(data['displayName'] as String)
+          .timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+              'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
     }
   }
+
+  // 🔒 [AUDIT CRIT-5] ອັບໂຫລດຮູບ (network-bound, ບໍ່ແມ່ນ Firestore) ບໍ່ເຄີຍມີ
+  // timeout — ຖ້າອັບໂຫລດຄ້າງ (ອອບໄລນ໌/ອິນເຕີເນັດອ່ອນ) ໜ້າຈໍຈະ loading ຄ້າງ
+  // ຕະຫຼອດໄປ. ໃຊ້ timeout ດົນກວ່າ query ທຳມະດາ (30s) ເພາະ file upload ໃຊ້ເວລາ
+  // ດົນກວ່າໂດຍທຳມະຊາດ.
+  static const _kUploadTimeout = Duration(seconds: 30);
 
   Future<String> uploadProfilePhoto(File photo) async {
     final ref  = _storage.ref('providers/$_uid/profile.jpg');
     final task = await ref.putFile(
-        photo, SettableMetadata(contentType: 'image/jpeg'));
-    final url  = await task.ref.getDownloadURL();
+        photo, SettableMetadata(contentType: 'image/jpeg'))
+        .timeout(_kUploadTimeout, onTimeout: () => throw Exception(
+            'ອັບໂຫລດຮູບໝົດເວລາ, ກະລຸນາລອງໃໝ່ (upload timed out)'));
+    final url  = await task.ref.getDownloadURL().timeout(kNetworkOpTimeout,
+        onTimeout: () => throw Exception(
+            'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
     await updateProfile({'photoUrl': url});
     return url;
   }
@@ -426,18 +561,34 @@ class ProfileRepository {
   }) async {
     final idUrl = await (await _storage
         .ref('kyc/$_uid/id.jpg')
-        .putFile(idPhoto))
+        .putFile(idPhoto)
+        .timeout(_kUploadTimeout, onTimeout: () => throw Exception(
+            'ອັບໂຫລດຮູບໝົດເວລາ, ກະລຸນາລອງໃໝ່ (upload timed out)')))
         .ref
-        .getDownloadURL();
+        .getDownloadURL()
+        .timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+            'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
     final selfieUrl = await (await _storage
         .ref('kyc/$_uid/selfie.jpg')
-        .putFile(selfiePhoto))
+        .putFile(selfiePhoto)
+        .timeout(_kUploadTimeout, onTimeout: () => throw Exception(
+            'ອັບໂຫລດຮູບໝົດເວລາ, ກະລຸນາລອງໃໝ່ (upload timed out)')))
         .ref
-        .getDownloadURL();
+        .getDownloadURL()
+        .timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+            'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
+    // 🔒 [AUDIT KYC-1] ຮູບບັດປະຈຳຕົວ/selfie ຫ້າມຢູ່ໃນ providers/{uid} — doc ນັ້ນ
+    // ອ່ານໄດ້ໂດຍ user login ໃດກໍໄດ້ (firestore.rules). ເກັບໄວ້ໃນ kyc/{uid} ແທນ
+    // (ອ່ານໄດ້ສະເພາະເຈົ້າຂອງ/admin), ແລະ kycStatus ຢູ່ໃນ providers/{uid} ຄືເກົ່າ
+    // ເພາະຍັງຕ້ອງໃຊ້ໂດຍ isVerifiedProvider() (firestore.rules).
+    await _db.collection('kyc').doc(_uid).set({
+      'idDocUrl':  idUrl,
+      'selfieUrl': selfieUrl,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true)).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+        'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
     await updateProfile({
-      'kycIdUrl':     idUrl,
-      'kycSelfieUrl': selfieUrl,
-      'kycStatus':    KycStatus.pending.name,
+      'kycStatus': KycStatus.pending.name,
     });
   }
 

@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// 🔒 [AUDIT H4] ກ່ອນໜ້ານີ້ບໍ່ມີ storage.rules ຢູ່ໃນ repo ນີ້ເລີຍ (ບໍ່ມີ "storage"
+// key ໃນ firebase.json ນຳ), ແຕ່ ProfileRepository.uploadKyc()/uploadProfilePhoto()
+// (lib/booking_repository.dart) ຂຽນຮູບບັດປະຈຳຕົວ/selfie/ຮູບໂປຣໄຟລ໌ ໂດຍກົງໃສ່
+// Firebase Storage. ຄວາມປອດໄພຂອງ bucket ຈຶ່ງອາໄສແຕ່ຄ່າທີ່ຕັ້ງໄວ້ໃນ Firebase
+// Console (ອາດເປັນ "test mode" ທີ່ເປີດກວ້າງ ຫຼືບໍ່ຖືກຕັ້ງເລີຍ) ໂດຍບໍ່ມີການກວດ
+// ສອບໃນ source control. ຕອນນີ້ຈຳກັດແຕ່ລະ path ໃຫ້ຂຽນໄດ້ສະເພາະເຈົ້າຂອງ uid ຂອງ
+// ຕົນເອງ, ແລະ ຈຳກັດຂະໜາດ/ປະເພດໄຟລ໌ພື້ນຖານ.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    function isValidImage() {
+      return request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // KYC ID/selfie ຮູບ — ຂໍ້ມູນລະອຽດອ່ອນທີ່ສຸດ, ອ່ານ/ຂຽນໄດ້ສະເພາະເຈົ້າຂອງ
+    // ເອງເທົ່ານັ້ນ (admin ອ່ານຜ່ານ Admin SDK ຝັ່ງ server, ບໍ່ຜ່ານ rules ນີ້)
+    match /kyc/{uid}/{fileName} {
+      allow read, write: if isAuth() && isOwner(uid) && isValidImage();
+    }
+
+    // ຮູບໂປຣໄຟລ໌ຊ່າງ — ລູກຄ້າຕ້ອງເຫັນໄດ້ (ໜ້າ provider_details_screen.dart),
+    // ຂຽນໄດ້ສະເພາະເຈົ້າຂອງ
+    match /providers/{uid}/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && isOwner(uid) && isValidImage();
+    }
+
+    // ຮູບໂປຣໄຟລ໌ລູກຄ້າ — ຂຽນໄດ້ສະເພາະເຈົ້າຂອງ
+    match /users/{uid}/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && isOwner(uid) && isValidImage();
+    }
+
+    // ຄ່າເລີ່ມຕົ້ນ: ປະຕິເສດທຸກຢ່າງທີ່ບໍ່ກົງກັບ path ຂ້າງເທິງ
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

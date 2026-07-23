@@ -19,6 +19,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'Booking.dart' show serviceIconForCategory;
 import 'provider_dashboard.dart';
 import 'firestore_service.dart';
 import 'review_screen.dart';
@@ -37,6 +38,7 @@ import 'booking_detail_screen.dart';
 import 'fcm_service.dart';
 import 'cloudinary_service.dart';
 import 'quick_booking_screen.dart';
+import 'referral_screen.dart';
 import 'package:intl/intl.dart';
 import 'lao_phone.dart';
 import 'widgets/pulsing_fade.dart';
@@ -212,6 +214,9 @@ class _RoleRouterState extends State<RoleRouter> {
             body: _RoleRouterSkeleton(),
           );
         }
+        if (snapshot.data?.exists != true) {
+          return const _IncompleteRegistrationScreen();
+        }
         final data   = snapshot.data?.data() as Map<String, dynamic>?;
         final role   = data?['role'] as String? ?? 'customer';
         final status = data?['status'] as String? ?? 'active';
@@ -221,6 +226,49 @@ class _RoleRouterState extends State<RoleRouter> {
         }
         return const MainShell();
       },
+    );
+  }
+}
+
+// ✅ [C-1 fix] ຖ້າ Firebase Auth ມີ user ແຕ່ບໍ່ມີ users/{uid} doc (ລົງທະບຽນ
+// ບໍ່ສຳເລັດ — ປິດແອັບກາງຄັນຫຼັງ OTP ແຕ່ກ່ອນ _finish() ຂຽນ Firestore),
+// ຫ້າມ default ໄປເປັນ role:customer/status:active ເພາະ Firestore rules
+// ຫ້າມປ່ຽນ role ພາຍຫຼັງ — ຈະລັອກເບີໂທນັ້ນເປັນ customer ຖາວອນ.
+class _IncompleteRegistrationScreen extends StatelessWidget {
+  const _IncompleteRegistrationScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: C.bg,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.person_add_alt_1, size: 64, color: AppColors.navy),
+              const SizedBox(height: 20),
+              Text(
+                tr('incomplete_registration_title'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                tr('incomplete_registration_msg'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: Colors.black54),
+              ),
+              const SizedBox(height: 28),
+              ElevatedButton(
+                onPressed: () => FirebaseAuth.instance.signOut(),
+                child: Text(tr('back_to_registration')),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -325,7 +373,14 @@ class _LoginPageState extends State<LoginPage>
     }
     // ✅ ຊ່ອງນີ້ຮັບເບີໂທ — ແປງເປັນ synthetic email ໃຫ້ກົງກັບ
     // ການລົງທະບຽນ (register_otp.dart). ຮອງຮັບ email ກົງໆນຳ (admin/legacy).
-    final email = input.contains('@') ? input : '$input@lintho.app';
+    // 🔒 [AUDIT QA-2 / CR2-AUTH] ກ່ອນໜ້ານີ້ບໍ່ໄດ້ຕັດ space/ຕົວອັກສອນອອກ —
+    // ຊ່ອງນີ້ແນະນຳໃຫ້ພິມແບບມີວັກ ('020 7X XXX XXX') ແຕ່ registration ໃຊ້
+    // laoPhoneDigitsOnly() ສ້າງ synthetic email, ເຮັດໃຫ້ບັນຊີທີ່ຖືກຕ້ອງ login
+    // ບໍ່ໄດ້ (invalid-email) ຖ້າພິມຕາມ hint ຂອງຊ່ອງນີ້ເອງ. ຕອນນີ້ໃຊ້ function
+    // ດຽວກັນນຳ ໃຫ້ຄ່າກົງກັນສະເໝີ.
+    final email = input.contains('@')
+        ? input
+        : '${laoPhoneDigitsOnly(input)}@lintho.app';
     setState(() { _loading = true; _error = null; });
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -385,57 +440,103 @@ class _LoginPageState extends State<LoginPage>
     }
   }
 
+  // 🔒 [AUDIT QA-2 / CR1-AUTH] ກ່ອນໜ້ານີ້ທັງ success ແລະ error ຄືກັນຫມົດຈະ
+  // pop(true) ໃຫ້ຂຶ້ນ "ສົ່ງລິ້ງແລ້ວ" ສະເໝີ — ບໍ່ວ່າ sendPasswordResetEmail ຈະ
+  // throw ຫຼືບໍ່. ນອກນັ້ນ dialog ຍັງ prefill ດ້ວຍຄ່າຈາກຊ່ອງ login (ຮັບເບີໂທ,
+  // ບໍ່ແມ່ນ email) ເຊິ່ງບໍ່ມີທາງເປັນ email ທີ່ຖືກຕ້ອງໄດ້ເລີຍ. ຕອນນີ້:
+  //  1) prefill ສະເພາະຖ້າຄ່າເດີມມີ '@' ຢູ່ແລ້ວ (email ຈິງ, ບໍ່ແມ່ນເບີໂທ)
+  //  2) ກວດຮູບແບບ email ກ່ອນເອີ້ນ Firebase
+  //  3) ສະແດງ error ຈິງໃນ dialog ຖ້າ throw, ປິດ dialog ດ້ວຍ "ສຳເລັດ" ສະເພາະ
+  //     ຕອນ sendPasswordResetEmail() ຜ່ານແທ້ໆເທົ່ານັ້ນ
   Future<void> _forgotPassword() async {
-    final ctrl = TextEditingController(text: _emailCtrl.text.trim());
+    final initial = _emailCtrl.text.trim();
+    final ctrl = TextEditingController(text: initial.contains('@') ? initial : '');
+    String? dialogError;
+    var sending = false;
+
     final sent = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(tr('reset_password'), style: const TextStyle(
-            fontWeight: FontWeight.w800, color: C.text)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(tr('reset_password_hint'),
-                style: const TextStyle(color: C.muted, fontSize: 13)),
-            const SizedBox(height: 14),
-            TextField(
-              controller: ctrl,
-              keyboardType: TextInputType.emailAddress,
-              decoration: _fieldDecoration(
-                  hint: 'example@email.com', icon: Icons.email_outlined),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(tr('reset_password'), style: const TextStyle(
+              fontWeight: FontWeight.w800, color: C.text)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(tr('reset_password_hint'),
+                  style: const TextStyle(color: C.muted, fontSize: 13)),
+              const SizedBox(height: 14),
+              TextField(
+                controller: ctrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: _fieldDecoration(
+                    hint: 'example@email.com', icon: Icons.email_outlined),
+              ),
+              if (dialogError != null) ...[
+                const SizedBox(height: 10),
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Icon(Icons.error_outline, color: C.red, size: 14),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(dialogError!,
+                      style: const TextStyle(color: C.red, fontSize: 12))),
+                ]),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: sending ? null : () => Navigator.pop(ctx, false),
+              child: Text(tr('cancel')),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: C.primary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: sending ? null : () async {
+                final email = ctrl.text.trim();
+                if (email.isEmpty || !email.contains('@')) {
+                  setDialogState(
+                      () => dialogError = tr('reset_password_invalid_email'));
+                  return;
+                }
+                setDialogState(() { sending = true; dialogError = null; });
+                try {
+                  await FirebaseAuth.instance
+                      .sendPasswordResetEmail(email: email);
+                  if (ctx.mounted) Navigator.pop(ctx, true);
+                } on FirebaseAuthException catch (e) {
+                  setDialogState(() {
+                    sending = false;
+                    dialogError = switch (e.code) {
+                      'user-not-found' => tr('reset_password_not_found'),
+                      'invalid-email'  => tr('reset_password_invalid_email'),
+                      _ => '${tr("error")} (${e.code})',
+                    };
+                  });
+                } catch (e) {
+                  setDialogState(() {
+                    sending = false;
+                    dialogError = '${tr("error")}: $e';
+                  });
+                }
+              },
+              child: sending
+                  ? const SizedBox(
+                      width: 16, height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : Text(tr('send_reset_link'),
+                      style: const TextStyle(color: Colors.white)),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(tr('cancel')),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: C.primary,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-            onPressed: () async {
-              final email = ctrl.text.trim();
-              if (email.isEmpty) return;
-              try {
-                await FirebaseAuth.instance
-                    .sendPasswordResetEmail(email: email);
-                if (ctx.mounted) Navigator.pop(ctx, true);
-              } catch (_) {
-                if (ctx.mounted) Navigator.pop(ctx, true);
-              }
-            },
-            child: Text(tr('send_reset_link'),
-                style: const TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
+    ctrl.dispose();
     if (sent == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(tr('reset_link_sent'))),
@@ -522,6 +623,10 @@ class _LoginPageState extends State<LoginPage>
                                 : Icons.visibility_outlined,
                             color: C.muted,
                           ),
+                          // ✅ [FIX ME-AUTH-5]
+                          tooltip: _obscure
+                              ? tr('show_password_semantic')
+                              : tr('hide_password_semantic'),
                           onPressed: () =>
                               setState(() => _obscure = !_obscure),
                         ),
@@ -937,7 +1042,12 @@ class _PromoCarouselState extends State<_PromoCarousel> {
             final colors = p['colors'] as List<Color>;
             final isReferral = i == _referralIndex;
             final isMonthly = i == 1;
-            return Container(
+            // ✅ [FIX H14] ບັດ referral ນີ້ (index 2) ບໍ່ເຄີຍມີ onTap ມາກ່ອນ —
+            // ReferralScreen ຖືກສ້າງແລ້ວ ແລະ ໃຊ້ໄດ້ຈິງ (referral_provider.dart
+            // ມີ logic ຄົບ) ແຕ່ບໍ່ເຄີຍຖືກ navigate ໄປຫາຈາກຈຸດໃດເລີຍ. ບັດອື່ນ
+            // (promo ທົ່ວໄປ/monthly) ຍັງເປັນ decorative ລ້ວນໆ, ບໍ່ມີໜ້າຈໍສະເພາະ
+            // ໃຫ້ໄປ, ຈຶ່ງບໍ່ໄດ້ເພີ່ມ onTap.
+            final card = Container(
               padding: const EdgeInsets.fromLTRB(20, 18, 16, 18),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -973,6 +1083,18 @@ class _PromoCarouselState extends State<_PromoCarousel> {
                           fontSize: isReferral ? 44 : (isMonthly ? 48.6 : 36))),
                 ),
               ]),
+            );
+
+            if (!isReferral) return card;
+            return Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(18),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ReferralScreen())),
+                child: card,
+              ),
             );
           },
         ),
@@ -1425,9 +1547,10 @@ class _BookingScreenState extends State<BookingScreen> {
                             color: C.bg,
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          child: Center(child: Text(
-                              b['serviceEmoji'] as String? ?? '🏠',
-                              style: const TextStyle(fontSize: 26))),
+                          // ✅ [FIX H11] Icon ຈາກ category ແທນ raw emoji
+                          child: Center(child: Icon(
+                              serviceIconForCategory(b['category'] as String? ?? ''),
+                              size: 26, color: C.navy)),
                         ),
                         const SizedBox(width: 12),
                         Expanded(child: Column(
@@ -2936,9 +3059,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  Text(title, style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w700,
-                      color: C.text)),
+                  Flexible(child: Text(title,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w700,
+                          color: C.text))),
                   if (badge != null) ...[
                     const SizedBox(width: 6),
                     Container(

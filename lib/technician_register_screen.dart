@@ -16,9 +16,11 @@
 //   ✅ mounted check ຫຼັງ async
 // ============================================================
 
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -28,6 +30,7 @@ import 'app_locale.dart';
 import 'brand_mark_tile.dart';
 import 'cloudinary_service.dart';
 import 'lao_phone.dart';
+import 'main.dart' show LoginPage;
 
 const _serviceCategories = <(String id, String labelKey)>[
   ('aircon',       'service_aircon'),
@@ -56,12 +59,31 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
   bool    _obscure = true;
   bool    _obscureConfirm = true;
   String? _error;
+  // ✅ [FIX HI-AUTH-1]
+  bool    _showLoginLink = false;
 
   String? _verificationId;
   String? _serviceCategory;
   File?   _idDocFile;
   File?   _idSelfieFile;
   double? _lat, _lng;
+  bool    _locationDeniedForever = false;
+
+  // ✅ [FIX ME-AUTH-2] cooldown ຕອນ "ສົ່ງ OTP ຄືນ"
+  Timer?  _resendTimer;
+  int     _resendCooldown = 0;
+
+  void _startResendCooldown() {
+    _resendTimer?.cancel();
+    setState(() => _resendCooldown = 45);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) { t.cancel(); return; }
+      setState(() {
+        _resendCooldown -= 1;
+        if (_resendCooldown <= 0) t.cancel();
+      });
+    });
+  }
 
   // ✅ DEBUG-ONLY: true ຫຼັງກົດ 'Bypass OTP' — ຂ້າມ Firebase Auth call ທຸກອັນ
   // ໃນ step ຕໍ່ໄປ ເພື່ອທົດສອບ UI flow ຕອນ Firebase Console ບລັອກການສະໝັກ
@@ -76,6 +98,7 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
     _passCtrl.dispose();
     _confirmCtrl.dispose();
     _experienceCtrl.dispose();
+    _resendTimer?.cancel();
     super.dispose();
   }
 
@@ -142,6 +165,7 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
             _verificationId = verificationId;
             _step = 1;
           });
+          _startResendCooldown(); // ✅ [FIX ME-AUTH-2]
         },
         codeAutoRetrievalTimeout: (String verificationId) {
           _verificationId = verificationId;
@@ -150,7 +174,7 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
     } catch (e) {
       debugPrint('[TechnicianRegister] verifyPhoneNumber EXCEPTION: $e');
       if (!mounted) return;
-      setState(() { _loading = false; _error = '${tr("error")}: $e'; });
+      setState(() { _loading = false; _error = tr('error'); });
     }
   }
 
@@ -204,7 +228,7 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
     } catch (e) {
       debugPrint('[TechnicianRegister] verifyOtp EXCEPTION: $e');
       if (!mounted) return;
-      setState(() { _loading = false; _error = '${tr("error")}: $e'; });
+      setState(() { _loading = false; _error = tr('error'); });
     }
   }
 
@@ -215,9 +239,9 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
     final pass    = _passCtrl.text;
     final confirm = _confirmCtrl.text;
 
-    if (name.isEmpty)    { setState(() => _error = tr('fill_all')); return; }
-    if (pass.length < 6) { setState(() => _error = tr('pass_min')); return; }
-    if (pass != confirm) { setState(() => _error = tr('password_mismatch')); return; }
+    if (name.isEmpty)                     { setState(() => _error = tr('fill_all')); return; }
+    if (pass.trim().isEmpty || pass.length < 6) { setState(() => _error = tr('pass_min')); return; }
+    if (pass != confirm)                  { setState(() => _error = tr('password_mismatch')); return; }
 
     setState(() { _loading = true; _error = null; });
 
@@ -244,14 +268,29 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
       setState(() { _loading = false; _step = 3; });
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
+      // 🔒 [AUDIT QA-2 / HI-AUTH-1] ເບີໂທນີ້ມີບັນຊີ role ດຽວກັນ (provider) ຢູ່
+      // ແລ້ວ — ແຈ້ງຊັດເຈນ ແລະ ໃຫ້ປຸ່ມພາໄປ Login ແທນ raw error code
+      final isDuplicate = e.code == 'provider-already-linked' ||
+          e.code == 'email-already-in-use' ||
+          e.code == 'credential-already-in-use';
       setState(() {
         _loading = false;
-        _error   = '${tr("error")} (${e.code})';
+        _error   = isDuplicate
+            ? tr('account_already_exists_error')
+            : '${tr("error")} (${e.code})';
+        _showLoginLink = isDuplicate;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _loading = false; _error = '${tr("error")}: $e'; });
+      setState(() { _loading = false; _error = tr('error'); _showLoginLink = false; });
     }
+  }
+
+  void _goToLogin() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => route.isFirst,
+    );
   }
 
   // ── Step 3: ທັກສະ + ປະສົບການ ───────────────────────────
@@ -261,7 +300,9 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
       setState(() => _error = tr('must_select_service'));
       return;
     }
-    if (int.tryParse(_experienceCtrl.text.trim()) == null) {
+    // ✅ [FIX Medium-7] ຫ້າມຮັບຄ່າຕິດລົບ ຫຼື ຫຼາຍເກີນໄປ — ຈຳກັດ 0-60 ປີ
+    final exp = int.tryParse(_experienceCtrl.text.trim());
+    if (exp == null || exp < 0 || exp > 60) {
       setState(() => _error = tr('must_fill_experience_years'));
       return;
     }
@@ -270,22 +311,63 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
 
   // ── Step 4: KYC ──────────────────────────────────────────
 
-  Future<void> _pickIdDocument() async {
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery, imageQuality: 75,
+  // ✅ [FIX Low-8] ID document ເຄີຍມີແຕ່ gallery — ບໍ່ມີທາງຖ່າຍຮູບໃໝ່ໂດຍກົງ
+  // ຖ້າຜູ້ໃຊ້ບໍ່ມີຮູບບັດແຕ່ກ່ອນ. ຕອນນີ້ໃຫ້ເລືອກກ້ອງ ຫຼື ຄັງຮູບໄດ້.
+  Future<ImageSource?> _chooseImageSource() {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Wrap(children: [
+          ListTile(
+            leading: const Icon(Icons.camera_alt_outlined, color: C.teal),
+            title: Text(tr('take_photo')),
+            onTap: () => Navigator.pop(ctx, ImageSource.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined, color: C.teal),
+            title: Text(tr('choose_from_gallery')),
+            onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+          ),
+        ]),
+      ),
     );
-    if (picked == null || !mounted) return;
-    setState(() => _idDocFile = File(picked.path));
+  }
+
+  Future<void> _pickIdDocument() async {
+    final source = await _chooseImageSource();
+    if (source == null || !mounted) return;
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: source, imageQuality: 75, maxWidth: 1600, maxHeight: 1600,
+      );
+      if (picked == null || !mounted) return;
+      setState(() => _idDocFile = File(picked.path));
+    } catch (e) {
+      debugPrint('[TechnicianRegister] _pickIdDocument EXCEPTION: $e');
+      if (!mounted) return;
+      setState(() => _error = tr('camera_permission_error'));
+    }
   }
 
   Future<void> _takeIdSelfie() async {
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.camera,
-      preferredCameraDevice: CameraDevice.front,
-      imageQuality: 75,
-    );
-    if (picked == null || !mounted) return;
-    setState(() => _idSelfieFile = File(picked.path));
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.front,
+        imageQuality: 75,
+        maxWidth: 1280,
+        maxHeight: 1280,
+      );
+      if (picked == null || !mounted) return;
+      setState(() => _idSelfieFile = File(picked.path));
+    } catch (e) {
+      debugPrint('[TechnicianRegister] _takeIdSelfie EXCEPTION: $e');
+      if (!mounted) return;
+      setState(() => _error = tr('camera_permission_error'));
+    }
   }
 
   void _submitKycStep() {
@@ -303,20 +385,34 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
   // ── Step 5: Location ─────────────────────────────────────
 
   Future<void> _useCurrentLocation() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() { _loading = true; _error = null; _locationDeniedForever = false; });
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
-        throw Exception(tr('must_enable_location'));
+        if (!mounted) return;
+        setState(() { _loading = false; _error = tr('must_enable_location'); });
+        return;
       }
       var perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) {
         perm = await Geolocator.requestPermission();
       }
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) {
-        throw Exception(tr('must_enable_location'));
+      if (perm == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _error = tr('location_denied_forever');
+          _locationDeniedForever = true;
+        });
+        return;
       }
-      final pos = await Geolocator.getCurrentPosition();
+      if (perm == LocationPermission.denied) {
+        if (!mounted) return;
+        setState(() { _loading = false; _error = tr('must_enable_location'); });
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        timeLimit: const Duration(seconds: 15),
+      );
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -324,8 +420,9 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
         _lng = pos.longitude;
       });
     } catch (e) {
+      debugPrint('[TechnicianRegister] _useCurrentLocation EXCEPTION: $e');
       if (!mounted) return;
-      setState(() { _loading = false; _error = '$e'; });
+      setState(() { _loading = false; _error = tr('location_error'); });
     }
   }
 
@@ -349,7 +446,7 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
       if (!mounted) return;
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('🧪 Debug bypass — flow ຈົບແລ້ວ (ບໍ່ໄດ້ບັນທຶກຂໍ້ມູນແທ້)'),
+        content: Text('Debug bypass — flow ຈົບແລ້ວ (ບໍ່ໄດ້ບັນທຶກຂໍ້ມູນແທ້)'),
         backgroundColor: Colors.orange,
       ));
       Navigator.of(context).popUntil((route) => route.isFirst);
@@ -391,6 +488,15 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
         'createdAt':   FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
+      // 🔒 [AUDIT KYC-1] ຮູບບັດປະຈຳຕົວ/selfie ຫ້າມຢູ່ໃນ providers/{uid} — doc
+      // ນັ້ນອ່ານໄດ້ໂດຍ user login ໃດກໍໄດ້ (firestore.rules). ເກັບໄວ້ໃນ kyc/{uid}
+      // ແທນ (ອ່ານໄດ້ສະເພາະເຈົ້າຂອງ/admin).
+      batch.set(FirebaseFirestore.instance.collection('kyc').doc(uid), {
+        'idDocUrl':  idDocUrl ?? '',
+        'selfieUrl': idSelfieUrl ?? '',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
       final expYears = int.tryParse(_experienceCtrl.text.trim()) ?? 0;
       batch.set(FirebaseFirestore.instance.collection('providers').doc(uid), {
         'displayName':     name,
@@ -398,8 +504,6 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
         'isOnline':        false,
         'status':          'pending',
         'kycStatus':       'pending',
-        'kycDocUrl':       idDocUrl ?? '',
-        'kycSelfieUrl':    idSelfieUrl ?? '',
         'serviceTypes':    [_serviceCategory],
         'experienceYears': expYears,
         'fcmTokens':       <String>[],
@@ -431,8 +535,9 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
             : '${tr("error")} (${e.code})';
       });
     } catch (e) {
+      debugPrint('[TechnicianRegister] _finish EXCEPTION: $e');
       if (!mounted) return;
-      setState(() { _loading = false; _error = '${tr("error")}: $e'; });
+      setState(() { _loading = false; _error = tr('error'); });
     }
   }
 
@@ -456,8 +561,25 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: C.text, size: 20),
-          onPressed: () {
-            if (_step > 0 && _step != 1) {
+          tooltip: tr('back_semantic'), // ✅ [FIX ME-AUTH-5]
+          // ✅ [FIX Medium-1] ຫ້າມກົດຍ້ອນຄືນລະຫວ່າງມີ request ຄ້າງຢູ່
+          onPressed: _loading ? null : () {
+            // 🔒 [AUDIT QA-2 / ME-AUTH-1] ຈາກ step 2, ເງື່ອນໄຂເກົ່າ decrement ໄປ
+            // step 1 (ໜ້າ OTP) ພໍດີ, ຂັດກັບ comment ຂ້າງລຸ່ມ — ຕອນນີ້ຍ້ອນກັບໄປ
+            // step 0 ໂດຍກົງແທນ
+            if (_step == 2) {
+              _resendTimer?.cancel();
+              setState(() {
+                _step = 0; _error = null; _showLoginLink = false;
+                _verificationId = null; _resendCooldown = 0;
+                _otpCtrl.clear();
+                // ✅ [FIX Medium-6] ລຶບຂໍ້ມູນ KYC/ທັກສະ/GPS ທີ່ເຄີຍໃສ່ໄວ້ ເພື່ອບໍ່ໃຫ້
+                // ຂໍ້ມູນຂອງເບີໂທເກົ່າຫຼຸດຕິດໄປກັບເບີໂທໃໝ່ທີ່ຈະລົງທະບຽນ
+                _serviceCategory = null; _experienceCtrl.clear();
+                _idDocFile = null; _idSelfieFile = null;
+                _lat = null; _lng = null; _locationDeniedForever = false;
+              });
+            } else if (_step > 0 && _step != 1) {
               // ✅ ບໍ່ໃຫ້ກັບຄືນຫາ OTP step ຫຼັງຢືນຢັນສຳເລັດແລ້ວ
               setState(() { _step -= 1; _error = null; });
             } else {
@@ -477,7 +599,19 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
               fontSize: 26, fontWeight: FontWeight.w900, color: C.primary,
             )),
           ]),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
+
+          // ✅ [FIX ME-AUTH-3] progress indicator — flow ນີ້ມີ 6 step (0-5)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: (_step + 1) / 6,
+              minHeight: 6,
+              backgroundColor: C.border,
+              valueColor: const AlwaysStoppedAnimation(C.primary),
+            ),
+          ),
+          const SizedBox(height: 16),
 
           Text(_stepTitle, style: const TextStyle(
             fontSize: 26, fontWeight: FontWeight.w900, color: C.primary,
@@ -503,6 +637,24 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
                 ))),
               ]),
             ),
+            // ✅ [FIX HI-AUTH-1]
+            if (_showLoginLink) ...[
+              const SizedBox(height: 8),
+              Center(
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: _goToLogin,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Text(tr('go_to_login'), style: const TextStyle(
+                          color: C.teal, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
 
           const SizedBox(height: 24),
@@ -525,16 +677,22 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
 
           if (_step == 1) ...[
             const SizedBox(height: 12),
+            // ✅ [FIX ME-AUTH-2] disable + ນັບຖອຍຫຼັງ ຕອນ cooldown ຍັງບໍ່ໝົດ
             Center(
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
-                  onTap: _loading ? null : _sendOtp,
+                  onTap: (_loading || _resendCooldown > 0) ? null : _sendOtp,
                   child: Padding(
                     padding: const EdgeInsets.all(8),
-                    child: Text(tr('resend_otp'), style: const TextStyle(
-                        color: C.teal, fontWeight: FontWeight.w700)),
+                    child: Text(
+                        _resendCooldown > 0
+                            ? '${tr("resend_otp")} (${_resendCooldown}s)'
+                            : tr('resend_otp'),
+                        style: TextStyle(
+                            color: _resendCooldown > 0 ? C.muted : C.teal,
+                            fontWeight: FontWeight.w700)),
                   ),
                 ),
               ),
@@ -552,7 +710,7 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
                   side: const BorderSide(color: Colors.orange),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                child: const Text('🧪 Bypass OTP (Debug Only)', style: TextStyle(
+                child: const Text('Bypass OTP (Debug Only)', style: TextStyle(
                     color: Colors.orange, fontWeight: FontWeight.w700)),
               ),
             ),
@@ -601,6 +759,7 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
       hint:       tr('phone_hint'),
       icon:       Icons.phone_outlined,
       inputType:  TextInputType.phone,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
     ),
   ];
 
@@ -615,6 +774,9 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
       hint:       '••••••',
       icon:       Icons.lock_clock_outlined,
       inputType:  TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      maxLength:  6,
+      textAlign:  TextAlign.center,
     ),
   ];
 
@@ -628,6 +790,9 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
       hint:       tr('name_hint'),
       icon:       Icons.person_outline,
       inputType:  TextInputType.name,
+      textCapitalization: TextCapitalization.words,
+      maxLength:  60,
+      autofillHints: const [AutofillHints.name],
     ),
     const SizedBox(height: 16),
 
@@ -638,9 +803,11 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
       hint:       '••••••••',
       icon:       Icons.lock_outline,
       obscure:    _obscure,
+      autofillHints: const [AutofillHints.newPassword],
       suffixIcon: IconButton(
         icon: Icon(_obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
             color: C.muted),
+        tooltip: _obscure ? tr('show_password_semantic') : tr('hide_password_semantic'),
         onPressed: () => setState(() => _obscure = !_obscure),
       ),
     ),
@@ -653,9 +820,11 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
       hint:       '••••••••',
       icon:       Icons.lock_outline,
       obscure:    _obscureConfirm,
+      autofillHints: const [AutofillHints.newPassword],
       suffixIcon: IconButton(
         icon: Icon(_obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
             color: C.muted),
+        tooltip: _obscureConfirm ? tr('show_password_semantic') : tr('hide_password_semantic'),
         onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
       ),
     ),
@@ -705,6 +874,8 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
       hint:       tr('experience_years_hint'),
       icon:       Icons.work_outline,
       inputType:  TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      maxLength:  2,
     ),
   ];
 
@@ -761,6 +932,22 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
             color: C.text, fontWeight: FontWeight.w700)),
       ),
     ),
+    // ✅ [FIX Medium-5] deniedForever — ບໍ່ມີ dialog ຂໍສິດອີກ, ພາໄປ Settings ໂດຍກົງ
+    if (_locationDeniedForever) ...[
+      const SizedBox(height: 12),
+      SizedBox(
+        width: double.infinity, height: 46,
+        child: OutlinedButton(
+          onPressed: () => Geolocator.openAppSettings(),
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: C.teal),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: Text(tr('open_settings'), style: const TextStyle(
+              color: C.teal, fontWeight: FontWeight.w700)),
+        ),
+      ),
+    ],
   ];
 
   Widget _fieldLabel(String text) => Text(text, style: const TextStyle(
@@ -807,14 +994,24 @@ class _UploadTile extends StatelessWidget {
                 const SizedBox(width: 10),
                 Text(placeholderLabel, style: const TextStyle(color: C.muted, fontSize: 14)),
               ])
-            : Row(children: [
+            // ✅ [FIX ME-AUTH-4] ຂະຫຍາຍ thumbnail ຈາກ 48x48 -> 96x96 ໃຫ້ກວດຄວາມ
+            // ຄົມຊັດຂອງເອກະສານກ່ອນສົ່ງໄດ້ຈິງ (ຂອງເກົ່ານ້ອຍເກີນໄປ ບໍ່ພໍໃຫ້ກວດ)
+            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.file(file!, width: 48, height: 48, fit: BoxFit.cover),
+                  child: Image.file(file!, width: 96, height: 96, fit: BoxFit.cover,
+                      cacheWidth: 192, cacheHeight: 192),
                 ),
                 const SizedBox(width: 12),
-                Expanded(child: Text(changeLabel,
-                    style: const TextStyle(color: C.primary, fontWeight: FontWeight.w700, fontSize: 13))),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.check_circle, color: C.green, size: 18),
+                    const SizedBox(height: 4),
+                    Text(changeLabel,
+                        style: const TextStyle(color: C.primary, fontWeight: FontWeight.w700, fontSize: 13)),
+                  ],
+                )),
               ]),
       ),
     ),
@@ -832,6 +1029,11 @@ class _TextField extends StatelessWidget {
   final TextInputType?        inputType;
   final bool                  obscure;
   final Widget?               suffixIcon;
+  final List<TextInputFormatter>? inputFormatters;
+  final int?                  maxLength;
+  final TextAlign              textAlign;
+  final TextCapitalization     textCapitalization;
+  final List<String>?          autofillHints;
 
   const _TextField({
     required this.controller,
@@ -840,6 +1042,11 @@ class _TextField extends StatelessWidget {
     this.inputType,
     this.obscure   = false,
     this.suffixIcon,
+    this.inputFormatters,
+    this.maxLength,
+    this.textAlign = TextAlign.start,
+    this.textCapitalization = TextCapitalization.none,
+    this.autofillHints,
   });
 
   @override
@@ -847,12 +1054,18 @@ class _TextField extends StatelessWidget {
     controller:      controller,
     keyboardType:    inputType,
     obscureText:     obscure,
+    inputFormatters: inputFormatters,
+    maxLength:       maxLength,
+    textAlign:       textAlign,
+    textCapitalization: textCapitalization,
+    autofillHints:   autofillHints,
     style: const TextStyle(fontSize: 15, color: C.text),
     decoration: InputDecoration(
       hintText:    hint,
       hintStyle:   const TextStyle(color: C.muted),
       prefixIcon:  Icon(icon, color: C.teal, size: 20),
       suffixIcon:  suffixIcon,
+      counterText: maxLength != null ? '' : null,
       filled:      true,
       fillColor:   Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),

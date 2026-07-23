@@ -9,8 +9,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:async';
 import 'main.dart' show firebaseOptions;
+import 'app_colors.dart';
+import 'app_locale.dart';
+import 'Booking.dart';
+import 'job_workflow_Screen.dart';
+import 'booking_detail_screen.dart';
+import 'chat_screen.dart';
+import 'provider_dashboard.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage msg) async {
@@ -190,19 +198,89 @@ class FCMService {
 
   void _onTap(RemoteMessage msg) => _navigate(msg.data);
 
-  void _navigate(Map<String, dynamic> data) {
+  // 🔒 [AUDIT CRIT-4] ກ່ອນໜ້ານີ້ໃຊ້ named-route navigation (job-workflow,
+  // chat, earnings) ແຕ່ MaterialApp (main.dart) ບໍ່ມີ `routes:` ຫຼື
+  // `onGenerateRoute` ຖືກປະກາດໄວ້ເລີຍ — ນຳທາງດ້ວຍຊື່ route ທີ່ບໍ່ຮູ້ຈັກຈະ throw
+  // ທັນທີ. ໝາຍຄວາມວ່າການກົດແຈ້ງເຕືອນ (ຫຼືປຸ່ມ "ເບິ່ງ" ໃນ in-app banner) ຈະ
+  // crash ແທນທີ່ຈະໄປໜ້າທີ່ຖືກຕ້ອງ, ທຸກຄັ້ງ, ໂດຍບໍ່ມີຂໍ້ຍົກເວັ້ນ.
+  // ✅ ຕອນນີ້ນຳທາງໂດຍກົງດ້ວຍ Navigator.push(MaterialPageRoute(...)), ດຶງ
+  // booking doc ທີ່ຈຳເປັນມາກ່ອນ (ມີ timeout + error handling), ແລະ ເລືອກໜ້າຈໍ
+  // ໃຫ້ຖືກຕ້ອງຕາມ role ຂອງຜູ້ຮັບ notification ຈິງ — 'new_booking' ສົ່ງຫາ
+  // provider ເທົ່ານັ້ນ (ໄປ JobWorkflowScreen); 'booking_update' ແລະ
+  // 'additional_charges' ສົ່ງຫາ customer ເທົ່ານັ້ນ (ໄປ BookingDetailScreen) —
+  // ກ່ອນໜ້ານີ້ທັງສາມ type ນີ້ຖືກສົ່ງໄປໜ້າດຽວກັນ (job-workflow, ໜ້າສະເພາະ
+  // provider) ເຊິ່ງຈະ permission-denied ຖ້າ customer ກົດ action ໃດໆໃນນັ້ນ.
+  Future<void> _navigate(Map<String, dynamic> data) async {
     final type      = data['type']      as String? ?? '';
     final bookingId = data['bookingId'] as String? ?? '';
     final nav       = navigatorKey?.currentState;
     if (nav == null) return;
+    final ctx = nav.context;
 
-    if (['new_booking', 'booking_update', 'additional_charges']
-        .contains(type) && bookingId.isNotEmpty) {
-      nav.pushNamed('/job-workflow', arguments: bookingId);
-    } else if (type == 'chat' && bookingId.isNotEmpty) {
-      nav.pushNamed('/chat', arguments: bookingId);
-    } else if (type == 'payment') {
-      nav.pushNamed('/earnings');
+    void showNavError() {
+      if (!ctx.mounted) return;
+      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+          content: Text(tr('error_try_again')),
+          backgroundColor: C.red));
+    }
+
+    try {
+      if (type == 'new_booking' && bookingId.isNotEmpty) {
+        final doc = await _db.collection('bookings').doc(bookingId).get()
+            .timeout(const Duration(seconds: 10));
+        if (!doc.exists) return showNavError();
+        final booking = Booking.fromFirestore(doc);
+        if (!ctx.mounted) return;
+        nav.push(MaterialPageRoute(
+            builder: (_) => JobWorkflowScreen(initialBooking: booking)));
+      } else if ((type == 'booking_update' || type == 'additional_charges') &&
+          bookingId.isNotEmpty) {
+        nav.push(MaterialPageRoute(
+            builder: (_) => BookingDetailScreen(bookingId: bookingId)));
+      } else if (type == 'chat' && bookingId.isNotEmpty) {
+        final doc = await _db.collection('bookings').doc(bookingId).get()
+            .timeout(const Duration(seconds: 10));
+        if (!doc.exists) return showNavError();
+        final booking = Booking.fromFirestore(doc);
+        final me       = FirebaseAuth.instance.currentUser?.uid;
+        final isMeProvider = me != null && me == booking.providerId;
+
+        // ✅ Booking.dart ບໍ່ມີ field providerName (ບໍ່ຖືກຂຽນໂດຍ
+        // acceptBooking() ຕົວຈິງ) — ຖ້າຄົນເປີດແຊັດເປັນລູກຄ້າ, ດຶງຊື່ຊ່າງແທ້ຈາກ
+        // providers/{providerId}.displayName ແທນທີ່ຈະປ່ອຍ otherName ວ່າງເປົ່າ
+        var otherName = booking.customerName;
+        if (!isMeProvider && booking.providerId.isNotEmpty) {
+          try {
+            final providerDoc = await _db.collection('providers')
+                .doc(booking.providerId).get()
+                .timeout(const Duration(seconds: 10));
+            otherName = providerDoc.data()?['displayName'] as String? ?? '';
+          } catch (_) {
+            otherName = '';
+          }
+        }
+
+        if (!ctx.mounted) return;
+        nav.push(MaterialPageRoute(builder: (_) => ChatScreen(
+          chatId:         '${bookingId}_chat',
+          otherName:      otherName,
+          bookingService: booking.serviceType,
+          receiverId:     isMeProvider ? booking.customerId : booking.providerId,
+          receiverName:   otherName,
+        )));
+      } else if (type == 'payment') {
+        // ✅ ຄ່າແຮງ/wallet notification ສົ່ງຫາ provider ເທົ່ານັ້ນ — ໄປ
+        // ProviderDashboard tab ລາຍຮັບ (index 2, ເບິ່ງ provider_dashboard.dart)
+        ProviderScope.containerOf(ctx, listen: false)
+            .read(navIndexProvider.notifier).state = 2;
+        if (!ctx.mounted) return;
+        nav.push(MaterialPageRoute(builder: (_) => const ProviderDashboard()));
+      }
+    } on TimeoutException {
+      showNavError();
+    } catch (e) {
+      debugPrint('FCMService._navigate error: $e');
+      showNavError();
     }
   }
 }

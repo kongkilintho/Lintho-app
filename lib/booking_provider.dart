@@ -7,6 +7,7 @@
 //      ເພື່ອ track loadingIds per booking (ບໍ່ disable ທຸກ card)
 // ============================================================
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'Booking.dart';
 import 'booking_repository.dart';
@@ -45,14 +46,24 @@ final openJobsProvider = StreamProvider<List<Booking>>((ref) {
 // ✅ [FIX-3] ວຽກ pending ທີ່ providerId ຍັງວ່າງເປົ່າ (ບໍ່ຖືກມອບໝາຍໃຫ້ໃຜ) —
 // ກອງໃຫ້ເຫຼືອສະເພາະປະເພດວຽກທີ່ provider ນີ້ຮັບໄດ້ (serviceTypes ຫວ່າງ
 // = ຮັບໄດ້ທຸກປະເພດ, ບໍ່ຮູ້ຈັກ profile ຍັງ)
+// 🔒 [AUDIT QA-1 / HI-5] ກ່ອນໜ້ານີ້ກອງດ້ວຍ b.serviceType — ແຕ່ Quick Booking
+// ຂຽນ label ພາສາລາວ (display text) ໃສ່ field ນີ້, ບໍ່ແມ່ນ canonical key
+// (ຕ່າງຈາກ provider.serviceTypes ທີ່ເປັນ key ສະເໝີ ເຊັ່ນ 'ac_clean') — ເຮັດໃຫ້
+// contains() ບໍ່ເຄີຍກົງກັນ ແລະ ວຽກຈາກ Quick Booking ຫາຍໄປຈາກຄິວຂອງ provider
+// ທີ່ຕັ້ງກອງ serviceTypes ໄວ້. ໃຊ້ b.category (canonical key ສະເໝີ, ທັງສອງ flow
+// ຂຽນຄ່າດຽວກັນ) ແທນ.
 final unassignedOpenJobsProvider = Provider<List<Booking>>((ref) {
   final jobs = ref.watch(openJobsProvider).valueOrNull ?? [];
   final myTypes = ref.watch(profileStreamProvider).valueOrNull?.serviceTypes ?? [];
+  final myUid = FirebaseAuth.instance.currentUser?.uid;
   return jobs
       .where((b) =>
           b.providerId.isEmpty &&
           !b.isExpired &&
-          (myTypes.isEmpty || myTypes.contains(b.serviceType)))
+          // ✅ [FIX H7] ວຽກທີ່ຕົນເອງເຄີຍ reject ໄປແລ້ວ (ຍັງ status='pending'
+          // ໃຫ້ provider ອື່ນເຫັນ) ບໍ່ຄວນປາກົດຄືນໃນລາຍການຂອງຕົນເອງອີກ
+          (myUid == null || !b.rejectedBy.contains(myUid)) &&
+          (myTypes.isEmpty || myTypes.contains(b.category)))
       .toList();
 });
 
@@ -167,6 +178,24 @@ class BookingNotifier extends Notifier<BookingState> {
     _setLoading(bookingId, true);
     try {
       await _repo.updateStatus(bookingId, status);
+      _setLoading(bookingId, false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        loadingIds: Set.from(state.loadingIds)..remove(bookingId),
+        error:      e.toString(),
+      );
+      return false;
+    }
+  }
+
+  // ✅ [FIX CRIT-1] step ໃໝ່ ຢືນຢັນຮັບເງິນ — ຕ້ອງເອີ້ນກ່ອນ updateStatus(completed)
+  // ຈຶ່ງຈະຜ່ານ (booking_repository.dart / firestore.rules ບັງຄັບ paymentStatus
+  // == 'paid' ກ່ອນປິດງານໄດ້).
+  Future<bool> confirmPayment(String bookingId) async {
+    _setLoading(bookingId, true);
+    try {
+      await _repo.confirmPaymentReceived(bookingId);
       _setLoading(bookingId, false);
       return true;
     } catch (e) {

@@ -103,7 +103,17 @@ class _ReviewScreenState extends State<ReviewScreen>
           .collection('providers')
           .doc(widget.provider.uid);
 
-      // 1) ບັນທຶກລົງ reviews subcollection
+      // 🔒 [AUDIT H6/H9/H13] ກ່ອນໜ້ານີ້ຫຼັງຂຽນ review ນີ້ຈະອ່ານ reviews
+      // subcollection ທັງໝົດ + count() booking 3 ຄັ້ງ + ຂຽນ providers/{id}
+      // ໂດຍກົງ + ຕັ້ງ reviewed:true ເອງ — 4 round-trip ເພີ່ມ, ບໍ່ atomic
+      // (partial failure ລະຫວ່າງທາງເຮັດໃຫ້ reviewed ຄ້າງ false, review ຄືນໄດ້
+      // ຊ້ຳ), ແລະ firestore.rules ອະນຸຍາດ client ຂຽນ rating/totalJobs/
+      // completionRate ໂດຍກົງ (ບໍ່ຕ້ອງມີ review ຈິງ — ຊ່ອງໂຫວ່ໃຫ້ປອມຄະແນນ).
+      // ຕອນນີ້ client ຂຽນສະເພາະ review doc ດຽວ — Cloud Function
+      // `onReviewCreated` (functions/index.js) ຄິດໄລ່ rating ສະເລ່ຍ ແລະ
+      // ຕັ້ງ bookings/{id}.reviewed = true ໃຫ້ອັດຕະໂນມັດ, ໃນ transaction ດຽວ,
+      // ຫຼັງຈາກກວດ server-side ວ່າ booking ນີ້ເປັນຂອງລູກຄ້າ+ຊ່າງຄູ່ນີ້ແທ້,
+      // completed ແລ້ວ, ແລະ ຍັງບໍ່ເຄີຍ review.
       await provRef.collection('reviews').add({
         'customerId':       user?.uid     ?? '',
         'customerName':     user?.displayName ?? 'ລູກຄ້າ',
@@ -114,69 +124,12 @@ class _ReviewScreenState extends State<ReviewScreen>
         'bookingId':        widget.bookingId,
         'serviceName':      widget.serviceName,
         'createdAt':        now,
-      });
+      }).timeout(const Duration(seconds: 15));
 
       // ✅ RULE: mounted check ຫຼັງ async
       if (!mounted) return;
 
-      // 2) ຄຳນວນ rating ສະເລ່ຍ (ຈາກ reviews subcollection)
-      final reviewsSnap = await provRef.collection('reviews').get();
-
-      if (!mounted) return;
-
-      double total = 0;
-      for (final doc in reviewsSnap.docs) {
-        total += (doc.data()['rating'] as num?)?.toDouble() ?? 0;
-      }
-      final avg = reviewsSnap.docs.isNotEmpty
-          ? total / reviewsSnap.docs.length
-          : 0.0;
-
-      // ✅ [FIX-4] totalJobs = ຈຳນວນງານທີ່ "ສຳເລັດ" ແທ້ (ບໍ່ແມ່ນຈຳນວນ review)
-      final bookingsRef = db.collection('bookings');
-      final completedCountSnap = await bookingsRef
-          .where('providerId', isEqualTo: widget.provider.uid)
-          .where('status', isEqualTo: 'completed')
-          .count()
-          .get();
-      final cancelledCountSnap = await bookingsRef
-          .where('providerId', isEqualTo: widget.provider.uid)
-          .where('status', isEqualTo: 'cancelled')
-          .count()
-          .get();
-      final rejectedCountSnap = await bookingsRef
-          .where('providerId', isEqualTo: widget.provider.uid)
-          .where('status', isEqualTo: 'rejected')
-          .count()
-          .get();
-
-      if (!mounted) return;
-
-      final completedCount = completedCountSnap.count ?? 0;
-      final cancelledCount = cancelledCountSnap.count ?? 0;
-      final rejectedCount  = rejectedCountSnap.count ?? 0;
-      final totalAttempted = completedCount + cancelledCount + rejectedCount;
-      final completionRate = totalAttempted > 0
-          ? (completedCount / totalAttempted) * 100
-          : 0.0;
-
-      await provRef.update({
-        'rating':         double.parse(avg.toStringAsFixed(1)),
-        'totalJobs':      completedCount,
-        'completionRate': double.parse(completionRate.toStringAsFixed(1)),
-      });
-
-      if (!mounted) return;
-
-      // 3) ໝາຍ reviewed ໃນ bookings
-      await db
-          .collection('bookings')
-          .doc(widget.bookingId)
-          .update({'reviewed': true});
-
-      if (!mounted) return;
-
-      // 4) ແຈ້ງເຕືອນຊ່າງວ່າມີຣີວິວໃໝ່
+      // ແຈ້ງເຕືອນຊ່າງວ່າມີຣີວິວໃໝ່
       await NotificationSender.reviewReceived(
         providerId: widget.provider.uid,
         bookingId:  widget.bookingId,

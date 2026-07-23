@@ -33,6 +33,16 @@ service cloud.firestore {
       return isAuth() && getRole() == 'provider';
     }
 
+    // 🔒 [AUDIT QA-1 / ME-4] isProvider() ພຽງແຕ່ກວດ role ທີ່ user ຕັ້ງເອງຕອນ
+    // ສະໝັກ — ບໍ່ກວດ KYC — ໝາຍຄວາມວ່າບັນຊີ provider ໃໝ່/ຍັງບໍ່ຜ່ານກວດ ສາມາດ
+    // ອ່ານ PII (ຊື່/ເບີ/ທີ່ຢູ່/ຮູບ) ຂອງລູກຄ້າທຸກຄົນຜ່ານ open job board ໄດ້.
+    // ຕອນນີ້ເພີ່ມການກວດ providers/{uid}.kycStatus == 'verified' ນຳ.
+    function isVerifiedProvider() {
+      return isProvider() &&
+        exists(/databases/$(database)/documents/providers/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/providers/$(request.auth.uid)).data.kycStatus == 'verified';
+    }
+
     // ກວດຄ່າ lat/lng ໃຫ້ຖືກປະເພດ ແລະ ຢູ່ໃນຂອບເຂດທີ່ເປັນໄປໄດ້
     // (ໃຊ້ໃນ booking create) — ອະນຸຍາດໃຫ້ບໍ່ມີ lat/lng ໄດ້ (ກໍລະນີລູກຄ້າພິມທີ່ຢູ່ເອງ
     // ບໍ່ໄດ້ກົດ GPS) ແຕ່ຖ້າມີຄ່າມາ ຕ້ອງເປັນ number ແລະ ຢູ່ໃນຂອບເຂດທີ່ຖືກຕ້ອງ
@@ -54,14 +64,75 @@ service cloud.firestore {
          request.resource.data.lng >= -180 && request.resource.data.lng <= 180);
     }
 
+    // 🔒 [AUDIT QA-1 / CR-3, CR-4] ກ່ອນໜ້ານີ້ booking create ບໍ່ໄດ້ກວດ
+    // status/paymentStatus ຫຼືຂອບເຂດລາຄາເລີຍ — modified client ສາມາດສົ່ງ
+    // status:'completed', paymentStatus:'paid', price:0 (ຫຼືສູງເກີນຈິງ) ໄດ້
+    // ໂດຍກົງ. ຕອນນີ້ບັງຄັບວ່າ booking ໃໝ່ຕ້ອງເລີ່ມຕົ້ນເປັນ status='pending',
+    // paymentStatus='pending', ແລະ price ຕ້ອງເປັນຕົວເລກທີ່ບໍ່ຕິດລົບ ແລະ ຢູ່ໃນ
+    // ຂອບເຂດທີ່ເປັນໄປໄດ້ (ບໍ່ແມ່ນການຄິດໄລ່ລາຄາຄືນທັງໝົດຝັ່ງ server — ນັ້ນຕ້ອງການ
+    // Cloud Function ແຍກຕ່າງຫາກ — ແຕ່ພຽງພໍປ້ອງກັນຄ່າ 0/ຕິດລົບ/ສູງເກີນຈິງແບບຊັດເຈນ).
+    // 'price' ຖືກຂຽນໂດຍທັງສອງ flow ສະເໝີ (booking_form_screen.dart,
+    // quick_booking_provider.dart) — 'grandTotal' ຂຽນສະເພາະ flow ຫຼັກ
+    // (Quick Booking ບໍ່ມີ field ນີ້), ຈຶ່ງກວດແບບມີເງື່ອນໄຂ (optional) ເພື່ອບໍ່ໃຫ້
+    // Quick Booking booking ທຸກອັນຖືກ deny (Firestore rules throw error ຕອນ
+    // access key ທີ່ບໍ່ມີ, ບໍ່ແມ່ນ return null).
+    //
+    // ✅ providerId ອະນຸຍາດໃຫ້ມີມາໄດ້ຕອນ create (booking_form_screen.dart ຮັບ
+    // ຄ່າ providerId ຕອນລູກຄ້າຈອງຊ່າງສະເພາະຄົນໂດຍກົງ — ເບິ່ງ
+    // provider_details_screen.dart:751) — ບໍ່ໄດ້ເປັນຊ່ອງໂຫວ່ ເພາະ status ຖືກ
+    // ບັງຄັບເປັນ 'pending' ຢູ່ແລ້ວຂ້າງເທິງ, providerId ນັ້ນຍັງຕ້ອງຜ່ານຂັ້ນຕອນ
+    // acceptBooking() (transaction, booking_repository.dart) ຂອງຊ່າງເອງ ຈຶ່ງຈະ
+    // ປ່ຽນເປັນ 'accepted' ໄດ້ — ບໍ່ແມ່ນການຂ້າມຂັ້ນຕອນຮັບງານແຕ່ຢ່າງໃດ.
+    function isValidNewBookingShape() {
+      return request.resource.data.status == 'pending' &&
+        request.resource.data.paymentStatus == 'pending' &&
+        request.resource.data.price is number &&
+        request.resource.data.price >= 0 && request.resource.data.price <= 50000000 &&
+        (!('grandTotal' in request.resource.data) ||
+          (request.resource.data.grandTotal is number &&
+           request.resource.data.grandTotal >= 0 && request.resource.data.grandTotal <= 50000000));
+    }
+
+    // 🔒 [AUDIT QA-1 / HI-2] ກ່ອນໜ້ານີ້ update ບໍ່ໄດ້ກວດຄ່າ/transition ຂອງ
+    // status ເລີຍ — customer ຫຼື provider ສາມາດຂຽນ status='completed' ໂດຍກົງ
+    // ໂດຍທີ່ paymentStatus ຍັງບໍ່ເຄີຍເປັນ 'paid' (guard ນີ້ຢູ່ໃນ Flutter client
+    // ເທົ່ານັ້ນ, booking_repository.dart:152), ເຮັດໃຫ້ onBookingStatusChange
+    // ຝາກເງິນເຂົ້າ wallet ຊ່າງໃຫ້ວຽກທີ່ບໍ່ເຄີຍຈ່າຍເງິນ. ຕອນນີ້ບັງຄັບວ່າຖ້າ status
+    // ໃໝ່ຈະເປັນ 'completed', paymentStatus ສຸດທ້າຍຕ້ອງເປັນ 'paid' ນຳ.
+    function isValidCompletionPayment() {
+      return request.resource.data.status != 'completed' ||
+        (('paymentStatus' in request.resource.data) &&
+         request.resource.data.paymentStatus == 'paid');
+    }
+
+    // 🔒 [AUDIT QA-1 / ME-3] ກ່ອນໜ້ານີ້ customer ສາມາດຂຽນ additionalCharges/
+    // additionalChargesNote ເປັນຄ່າໃດກໍໄດ້ໂດຍກົງ (ບໍ່ຈຳກັດແຕ່ approve/reject) —
+    // ໝາຍຄວາມວ່າ customer ສາມາດປອມ "ຄ່າໃຊ້ຈ່າຍເພີ່ມ" ຂອງຕົນເອງ ແລ້ວອະນຸມັດ
+    // ໂດຍບໍ່ມີການຮ້ອງຂໍຈາກຊ່າງກ່ອນ. ຕອນນີ້ customer ຂຽນ 2 field ນີ້ໄດ້ສະເພາະ
+    // ຄ່າ null ເທົ່ານັ້ນ (ກໍລະນີປະຕິເສດ, ເບິ່ງ respondToAdditionalCharges())
+    // — approve (additionalChargesApproved) ຍັງເຮັດໄດ້ປົກກະຕິ, ບໍ່ຖືກຈຳກັດ.
+    function isValidCustomerChargesResponse() {
+      return (!('additionalCharges' in request.resource.data.diff(resource.data).affectedKeys()) ||
+              request.resource.data.additionalCharges == null) &&
+             (!('additionalChargesNote' in request.resource.data.diff(resource.data).affectedKeys()) ||
+              request.resource.data.additionalChargesNote == null);
+    }
+
     // ADMIN — ອ່ານ/ຂຽນໄດ້ທັງໝົດ
     match /{document=**} {
       allow read, write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     match /users/{uid} {
-      // ແກ້ໄຂ: ໃຫ້ອ່ານໄດ້ເລີຍຖ້າ Auth ແລ້ວ ເພື່ອປ້ອງກັນ Infinite Loop ຈາກ getRole()
-      allow read: if isAuth();
+      // 🔒 [AUDIT CRIT-2] ກ່ອນໜ້ານີ້ `allow read: if isAuth();` ໝາຍຄວາມວ່າ
+      // user ໃດກໍໄດ້ທີ່ login ແລ້ວ (ລວມທັງບັນຊີສະໝັກໃໝ່) ສາມາດອ່ານ users/{uid}
+      // ຂອງທຸກຄົນໄດ້ໂດຍກົງ (collection('users').get() ດຶງ PII ທັງໝົດ: ເບີໂທ,
+      // lat/lng ບ້ານ, ຊື່, ຮູບ, ຄະແນນລາງວັນ). ຄໍາເຫັນເດີມອ້າງວ່າຕ້ອງເປີດກວ້າງ
+      // ເພື່ອປ້ອງກັນ infinite loop ຈາກ getRole() — ແຕ່ getRole() ບໍ່ຖືກເອີ້ນໃນ
+      // rule ນີ້ເລີຍ, ຈຶ່ງບໍ່ຈຳເປັນ. ຢືນຢັນແລ້ວວ່າ client ບໍ່ມີບ່ອນໃດອ່ານ
+      // users/{uid} ຂອງຄົນອື່ນທີ່ບໍ່ແມ່ນຕົນເອງ (grep ທົ່ວ lib/) ຈຶ່ງຈຳກັດເປັນ
+      // ເຈົ້າຂອງ ຫຼື admin ເທົ່ານັ້ນໂດຍບໍ່ກະທົບ feature ໃດເລີຍ.
+      allow read: if isAuth() && (isOwner(uid) || isAdmin());
       // 🔒 [AUDIT C1] ກ່ອນໜ້ານີ້ create ບໍ່ໄດ້ຈຳກັດ field 'role' ເລີຍ — user ໃໝ່
       // ສາມາດ set({role: 'admin'}) ຕອນສ້າງ doc ຄັ້ງທຳອິດໄດ້ ແລ້ວຜ່ານ admin
       // bypass rule (line 58-60) ຄວບຄຸມຖານຂໍ້ມູນທັງໝົດ. ຕອນນີ້ບັງຄັບວ່າຖ້າມີ
@@ -103,7 +174,7 @@ service cloud.firestore {
         resource == null ||
         resource.data.customerId == request.auth.uid ||
         resource.data.providerId == request.auth.uid ||
-        (isProvider() && resource.data.status == 'pending')
+        (isVerifiedProvider() && resource.data.status == 'pending')
       );
 
       // ປັບໃຫ້ Customer ທຸກຄົນທີ່ Login ສາມາດສ້າງ Booking ໄດ້ງ່າຍຂຶ້ນ
@@ -114,7 +185,7 @@ service cloud.firestore {
       // ຕ້ອງເປັນ auth.uid ຕົນເອງ "ແລະ" ຕ້ອງເປັນ role customer ນຳ.
       allow create: if isAuth() &&
         request.resource.data.customerId == request.auth.uid && isCustomer() &&
-        isValidLatLng();
+        isValidLatLng() && isValidNewBookingShape();
 
       // ປັບປຸງໃຫ້ Customer ສາມາດອັບເດດຂໍ້ມູນການຊຳລະເງິນ ແລະ ສະຖານະໄດ້
       // lat/lng ບໍ່ຢູ່ໃນ list ນີ້ — ບໍ່ໃຫ້ແກ້ໄຂຕຳແໜ່ງພາຍຫຼັງສ້າງ booking ແລ້ວ
@@ -126,13 +197,25 @@ service cloud.firestore {
       //     ຫຼື 2) ບໍ່ມີເຈົ້າຂອງ ແລະ status='pending' (ກຳລັງຮັບງານໃໝ່) ເທົ່ານັ້ນ
       // ແລະ additionalChargesApproved ຖືກຍົກອອກຈາກ list ນີ້ — ມີແຕ່ customer
       // ເທົ່ານັ້ນທີ່ອະນຸມັດຄ່າໃຊ້ຈ່າຍເພີ່ມໄດ້ (ຢູ່ໃນ list ຂອງ customer ຂ້າງເທິງ).
-      allow update: if isAuth() && (
+      allow update: if isAuth() && isValidCompletionPayment() && (
         (resource.data.customerId == request.auth.uid &&
+          isValidCustomerChargesResponse() &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'reviewed', 'additionalChargesApproved', 'additionalCharges',
               'additionalChargesNote', 'paymentMethod', 'paymentStatus', 'slipUrl', 'sentTo',
               'updatedAt', 'cancelReason', 'cancelledBy', 'cancelFeeAmount', 'matchConfirmed'])) ||
-        (isProvider() &&
+        // 🔒 [AUDIT H3] ກ່ອນໜ້ານີ້ຮັບງານໃໝ່ (claim: status=='pending' &&
+        // ຂຽນ providerId ເປັນຕົນເອງ) ພຽງແຕ່ກວດ isProvider() (role=='provider'
+        // ເປົ່າໆ, ຈິງ/ບໍ່ຈິງກໍໄດ້ຖ້າຍັງບໍ່ຜ່ານ KYC) — ບໍ່ຄືກັນກັບ read rule ຂ້າງເທິງ
+        // (isVerifiedProvider()) ທີ່ຖືກແກ້ໄປແລ້ວ.
+        // 🔒 [follow-up] ຄໍາເຫັນເດີມທີ່ນີ້ອ້າງວ່າ "ສາຂາ providerId==uid ບໍ່ຈຳເປັນ
+        // ຕ້ອງກວດຄືນເພາະ isVerifiedProvider() ຕ້ອງຜ່ານແລ້ວຄັ້ງທຳອິດຕອນຮັບ" ຜິດ —
+        // ກໍລະນີລູກຄ້າຈອງຊ່າງສະເພາະຄົນໂດຍກົງ (booking_form_screen.dart ຮັບ
+        // providerId ຕອນສ້າງ booking, ບໍ່ແມ່ນຕອນຊ່າງ accept), providerId ຖືກ
+        // ລູກຄ້າ (ບໍ່ແມ່ນຊ່າງ) ຕັ້ງໄວ້ຕັ້ງແຕ່ຕົ້ນ — ຊ່າງທີ່ບໍ່ເຄີຍຜ່ານ KYC ຈຶ່ງ
+        // ຍັງ "providerId == ຕົນເອງ" ໄດ້ໂດຍບໍ່ເຄີຍຜ່ານ isVerifiedProvider() ເລີຍ.
+        // ຕອນນີ້ບັງຄັບ isVerifiedProvider() ໃນທັງສອງສາຂາ.
+        (isProvider() && isVerifiedProvider() &&
           (resource.data.providerId == request.auth.uid ||
             (resource.data.status == 'pending' &&
              request.resource.data.providerId == request.auth.uid)) &&
@@ -140,7 +223,19 @@ service cloud.firestore {
             .hasOnly(['status', 'providerId', 'providerName', 'acceptedAt',
               'completedAt', 'cancelReason', 'beforePhotoUrl', 'afterPhotoUrl',
               'additionalCharges', 'additionalChargesNote',
-              'paymentStatus', 'updatedAt']))
+              'paymentStatus', 'updatedAt'])) ||
+        // 🔒 [AUDIT H7] "ປະຕິເສດ" ວຽກທີ່ຍັງບໍ່ມີ providerId (ຢູ່ໃນ open job
+        // board — ບໍ່ໄດ້ຖືກມອບໝາຍໃຫ້ໃຜສະເພາະ) ບໍ່ຄວນປ່ຽນ status ເປັນ terminal
+        // 'rejected' ເລີຍ — ນັ້ນຈະເຮັດໃຫ້ provider ອື່ນທີ່ຍັງບໍ່ທັນເຫັນ/ຕັດສິນໃຈ
+        // ບໍ່ສາມາດຮັບງານໄດ້ອີກຕໍ່ໄປ ທັງໆທີ່ຍັງບໍ່ໝົດເວລາຄົ້ນຫາ. ອະນຸຍາດໃຫ້ provider
+        // ທີ່ຍັງບໍ່ຖືກມອບໝາຍ (ບໍ່ແມ່ນເຈົ້າຂອງ) ຂຽນສະເພາະ rejectedBy/updatedAt
+        // (ບັນທຶກວ່າຕົນເອງປະຕິເສດ) ໂດຍບໍ່ແຕະ status ເລີຍ — booking ຄົງເປັນ
+        // 'pending' ໃຫ້ provider ອື່ນຍັງເຫັນ/ຮັບໄດ້.
+        (isVerifiedProvider() &&
+          resource.data.status == 'pending' &&
+          resource.data.providerId != request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['rejectedBy', 'updatedAt']))
       );
       allow delete: if false;
     }
@@ -150,31 +245,79 @@ service cloud.firestore {
 
       // ສ້າງ doc ໃໝ່: ບໍ່ບັງຄັບ lat/lng (ບາງ flow ສ້າງ profile ກ່ອນເລີ່ມ Online)
       // ແຕ່ຖ້າມີ lat/lng ມາ ຕ້ອງຖືກຕ້ອງ
-      allow create: if isAuth() && isOwner(providerId) && isValidLatLngIfChanged();
+      // 🔒 [AUDIT H3/H6 follow-up] ກ່ອນໜ້ານີ້ create ບໍ່ຈຳກັດ kycStatus/rating/
+      // totalJobs/completionRate ເລີຍ (ມີແຕ່ update ຖືກລັອກ) — ບັນຊີ provider
+      // ໃໝ່ສາມາດ set({kycStatus:'verified', rating:5, totalJobs:500,
+      // completionRate:100}) ຕອນສ້າງ doc ຄັ້ງທຳອິດໄດ້ໂດຍກົງ, ຂ້າມ isVerifiedProvider()
+      // (H3) ແລະ ປອມຄະແນນ (H6/H9) ຜ່ານ path ນີ້ແທນ. ຕອນນີ້ບັງຄັບວ່າ field
+      // ເຫຼົ່ານີ້ ຖ້າມີມາ ຕ້ອງເປັນຄ່າເລີ່ມຕົ້ນທີ່ຖືກຕ້ອງເທົ່ານັ້ນ (ກົງກັບຄ່າທີ່
+      // technician_register_screen.dart / booking_repository.dart ຂຽນຈິງ).
+      // 🔒 [AUDIT KYC-1] kycDocUrl/kycIdUrl/kycSelfieUrl ຫ້າມຢູ່ໃນ doc ນີ້ເລີຍ —
+      // providers/{uid} ອ່ານໄດ້ໂດຍ user login ໃດກໍໄດ້ (line ຂ້າງເທິງ), ຖ້າ URL
+      // ຮູບບັດປະຈຳຕົວ/selfie ຢູ່ນີ້ຈະຮົ່ວອອກໄປໃຫ້ທຸກຄົນອ່ານໄດ້. ຮູບ KYC ຕ້ອງເກັບ
+      // ໄວ້ໃນ kyc/{uid} ເທົ່ານັ້ນ (ອ່ານໄດ້ສະເພາະເຈົ້າຂອງ/admin).
+      allow create: if isAuth() && isOwner(providerId) && isValidLatLngIfChanged() &&
+        !('kycDocUrl' in request.resource.data) &&
+        !('kycIdUrl' in request.resource.data) &&
+        !('kycSelfieUrl' in request.resource.data) &&
+        (!('kycStatus' in request.resource.data) ||
+          request.resource.data.kycStatus in ['none', 'pending']) &&
+        (!('isVerified' in request.resource.data) ||
+          request.resource.data.isVerified == false) &&
+        (!('rating' in request.resource.data) || request.resource.data.rating == 0) &&
+        (!('totalJobs' in request.resource.data) || request.resource.data.totalJobs == 0) &&
+        (!('completionRate' in request.resource.data) ||
+          request.resource.data.completionRate == 0);
 
       // ອັບເດດ: ເຈົ້າຂອງແກ້ໄຂ profile/location ຂອງຕົນເອງໄດ້
       // ກວດ lat/lng ໃຫ້ຖືກຕ້ອງສະເພາະເວລາມີການແກ້ໄຂ field ນັ້ນ
-      // + ອະນຸຍາດ customer ອັບເດດ rating/totalJobs/completionRate
-      //   ຫຼັງສົ່ງ review (review_screen.dart) — customer ບໍ່ແມ່ນ owner
       // ✅ kycStatus/isVerified/rejectReason/suspendReason ຫ້າມ owner ແກ້ໄຂ
       // ເອງເດັດຂາດ — field ເຫຼົ່ານີ້ຕ້ອງຖືກປ່ຽນຜ່ານ admin (LinTho Admin Panel)
       // ຜ່ານ admin bypass rule (line 58-60) ເທົ່ານັ້ນ ບໍ່ດັ່ງນັ້ນ provider ຈະ
       // ສາມາດ self-approve ຕົນເອງເປັນ verified ໄດ້
-      allow update: if isAuth() && (
-        (isOwner(providerId) && isValidLatLngIfChanged() &&
-          !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['kycStatus', 'isVerified', 'rejectReason', 'suspendReason'])) ||
-        (isCustomer() &&
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['rating', 'totalJobs', 'completionRate']))
-      );
+      // 🔒 [AUDIT H6] ກ່ອນໜ້ານີ້ customer ຄົນໃດກໍໄດ້ສາມາດຂຽນ rating/totalJobs/
+      // completionRate ຂອງ provider ຄົນໃດກໍໄດ້ໂດຍກົງ (ບໍ່ຕ້ອງມີ review/booking
+      // ຈິງເລີຍ) — ຕອນນີ້ 3 field ນີ້ຄິດໄລ່ຢູ່ Cloud Function ເທົ່ານັ້ນ
+      // (onReviewCreated/onBookingStatusChange, functions/index.js), ອອກຈາກ
+      // list ທີ່ client ຂຽນໄດ້ຫມົດ.
+      allow update: if isAuth() &&
+        isOwner(providerId) && isValidLatLngIfChanged() &&
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['kycStatus', 'isVerified', 'rejectReason', 'suspendReason',
+            'rating', 'totalJobs', 'completionRate',
+            'kycDocUrl', 'kycIdUrl', 'kycSelfieUrl']);
 
       allow delete: if false;
 
+      // 🔒 [AUDIT H6/H9] ກ່ອນໜ້ານີ້ `allow create: if isAuth();` ບໍ່ມີການກວດ
+      // ຫຍັງເລີຍ — customerId ບໍ່ຕ້ອງກົງກັບ auth.uid, rating ຂຽນຄ່າໃດກໍໄດ້
+      // (ລວມທັງຕິດລົບ/ເກີນ 5), ແລະ ບໍ່ຕ້ອງມີ booking ຈິງຢູ່ເບື້ອງຫຼັງເລີຍ — customer
+      // ຄົນໃດກໍໄດ້ສາມາດປອມ review ໃຫ້/ຕິ provider ຄົນໃດກໍໄດ້. ຕອນນີ້ບັງຄັບວ່າ
+      // ຕ້ອງ (1) customerId ເປັນຕົນເອງ, (2) rating ຢູ່ໃນຂອບເຂດ 1-5, (3) booking
+      // ທີ່ອ້າງອີງມີຈິງ, ເປັນຂອງລູກຄ້າ+ຊ່າງຄູ່ນີ້ແທ້, status=='completed' ແລ້ວ,
+      // ແລະ ຍັງບໍ່ເຄີຍຖືກ review (reviewed != true) — ປ້ອງກັນທັງ spoofed review
+      // ແລະ double-review. reviewed:true flag ຖືກຕັ້ງໂດຍ Cloud Function
+      // (onReviewCreated) ຫຼັງຈາກນີ້, ບໍ່ແມ່ນ client ຕັ້ງເອງ.
       match /reviews/{reviewId} {
         allow read: if isAuth();
-        allow create: if isAuth();
-        allow update, delete: if false;
+        allow create: if isAuth() &&
+          request.resource.data.customerId == request.auth.uid &&
+          request.resource.data.rating is number &&
+          request.resource.data.rating >= 1 && request.resource.data.rating <= 5 &&
+          exists(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)) &&
+          get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.customerId == request.auth.uid &&
+          get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.providerId == providerId &&
+          get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.status == 'completed' &&
+          get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.reviewed != true;
+        // ✅ [Bonus fix — found while working on H6/H9] ProfileRepository.
+        // replyToReview() (lib/booking_repository.dart) ຂຽນ providerReply ໃສ່
+        // path ນີ້ (providers/{uid}/reviews/{id}) ແຕ່ rule ນີ້ເຄີຍເປັນ
+        // `if false` ໝົດ — ໝາຍຄວາມວ່າ "ຕອບກັບຣີວິວ" feature ຖືກ deny ຕະຫຼອດ.
+        // ອະນຸຍາດສະເພາະຊ່າງເຈົ້າຂອງ review ນັ້ນແກ້ໄຂ field providerReply ດຽວ.
+        allow update: if isProvider() &&
+          resource.data.providerId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['providerReply']);
+        allow delete: if false;
       }
     }
 
@@ -242,11 +385,19 @@ service cloud.firestore {
     match /coupons/{couponId} {
       allow read: if true;
       // ✅ ລູກຄ້າ login ແລ້ວ increment usedCount ໄດ້ສະເພາະ field ນີ້ ຕອນຈອງ
-      // ສຳເລັດ (ໃນ WriteBatch ດຽວກັນກັບ booking creation) — ບໍ່ໃຫ້ແກ້ field ອື່ນ
+      // ສຳເລັດ (ໃນ transaction ດຽວກັນກັບ booking creation) — ບໍ່ໃຫ້ແກ້ field ອື່ນ
       // (code/value/status/validFrom/...) ເພື່ອບໍ່ໃຫ້ລູກຄ້າປ່ຽນແປງ coupon ເອງ.
+      // 🔒 [AUDIT H1] ກ່ອນໜ້ານີ້ບໍ່ໄດ້ກວດ usageLimit ຢູ່ນີ້ເລີຍ — ອາໄສແຕ່
+      // client-side validate() ຢ່າງດຽວ (ອາດຫ່າງຈາກ submit ຫຼາຍນາທີ) ເຮັດໃຫ້
+      // coupon ຖືກໃຊ້ເກີນ usageLimit ໄດ້ພາຍໃຕ້ concurrent redemption. ຕອນນີ້
+      // ບັງຄັບຢູ່ rules ນຳ (defense-in-depth ຄຽງຄູ່ກັບ booking_repository.dart
+      // ທີ່ re-validate ພາຍໃນ transaction ດຽວກັນແລ້ວ) — ອະນຸຍາດ increment
+      // ສະເພາະຖ້າຍັງບໍ່ທັນຮອດ usageLimit (ຫຼືບໍ່ມີ usageLimit = ບໍ່ຈຳກັດ).
       allow update: if isAuth() &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount']) &&
-        request.resource.data.usedCount == resource.data.usedCount + 1;
+        request.resource.data.usedCount == resource.data.usedCount + 1 &&
+        (!('usageLimit' in resource.data) || resource.data.usageLimit == null ||
+          resource.data.usedCount < resource.data.usageLimit);
       allow create, delete: if false;
     }
 

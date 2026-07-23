@@ -14,6 +14,7 @@ import 'Booking.dart';
 import 'booking_provider.dart';
 import 'booking_repository.dart';
 import 'fcm_service.dart';
+import 'widgets/app_icon_button.dart';
 import 'widgets/status_stepper.dart' as shared;
 
 // ── SINGLE BOOKING STREAM ────────────────────────────────────
@@ -59,6 +60,11 @@ class JobWorkflowScreen extends ConsumerWidget {
           _StatusStepper(status: b.status),
           const SizedBox(height: 16),
           _CustomerCard(booking: b),
+          // ✅ [FIX ME-5] ຮູບໜ້າວຽກທີ່ລູກຄ້າອັບໂຫລດຕອນຈອງ — ໃຫ້ຊ່າງເຫັນກ່ອນໄປເຮັດວຽກ
+          if (b.jobPhotoUrl != null && b.jobPhotoUrl!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _CustomerJobPhoto(url: b.jobPhotoUrl!),
+          ],
           const SizedBox(height: 12),
           if (b.status == JobStatus.arrived ||
               b.status == JobStatus.inProgress ||
@@ -362,14 +368,47 @@ class _CustomerCard extends StatelessWidget {
                         fontSize: 12, color: C.muted),
                     overflow: TextOverflow.ellipsis)),
               ]),
+              // ✅ [FIX ME-5] ຮ່ອມ/ຈຸດສັງເກດ ແລະ ໝາຍເຫດເຖິງຊ່າງ — ລູກຄ້າໃສ່ມາ
+              // ຕອນຈອງແຕ່ບໍ່ເຄີຍຖືກສະແດງໃຫ້ຊ່າງເຫັນມາກ່ອນ
+              if (b.landmark.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Row(children: [
+                  const Icon(Icons.signpost_outlined,
+                      size: 12, color: C.muted),
+                  const SizedBox(width: 4),
+                  Expanded(child: Text(b.landmark,
+                      style: const TextStyle(
+                          fontSize: 12, color: C.muted),
+                      overflow: TextOverflow.ellipsis)),
+                ]),
+              ],
+              if (b.specialInstructions.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Row(children: [
+                  const Icon(Icons.sticky_note_2_outlined,
+                      size: 12, color: C.orange),
+                  const SizedBox(width: 4),
+                  Expanded(child: Text(b.specialInstructions,
+                      style: const TextStyle(
+                          fontSize: 12, color: C.orange,
+                          fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis)),
+                ]),
+              ],
             ],
           )),
+          // ✅ [FIX H12] AppIconButton (lib/widgets/app_icon_button.dart) ຖືກ
+          // ສ້າງມາແທນ _QuickBtn ນີ້ໂດຍສະເພາະ (ຄຳເຫັນຫົວໄຟລ໌ຂອງມັນອ້າງເຖິງໄຟລ໌
+          // ນີ້ໂດຍກົງ) — ບັງຄັບ 44dp tap target ຂັ້ນຕ່ຳ ແລະ Semantics/tooltip,
+          // ຕ່າງຈາກ _QuickBtn ເກົ່າ (38×38px, ບໍ່ມີ label ໃດເລີຍ).
           Column(children: [
-            _QuickBtn(icon: Icons.phone, color: C.green,
+            AppIconButton(icon: Icons.phone, color: C.green,
+                label: tr('call_semantic'),
                 onTap: () => launchUrl(
                     Uri.parse('tel:${b.customerPhone}'))),
             const SizedBox(height: 8),
-            _QuickBtn(icon: Icons.navigation_rounded, color: C.blue,
+            AppIconButton(icon: Icons.navigation_rounded, color: C.blue,
+                label: tr('navigate_semantic'),
                 onTap: () => launchUrl(Uri.parse(
                     'https://www.google.com/maps/dir/?api=1'
                         '&destination=${b.location.latitude},'
@@ -382,8 +421,8 @@ class _CustomerCard extends StatelessWidget {
           decoration: BoxDecoration(
               color: C.bg, borderRadius: BorderRadius.circular(12)),
           child: Row(children: [
-            Text(b.serviceEmoji,
-                style: const TextStyle(fontSize: 22)),
+            // ✅ [FIX H11] Icon ຈາກ category ແທນ raw emoji ທີ່ເກັບໄວ້ໃນ doc
+            Icon(b.serviceIcon, size: 22, color: C.navy),
             const SizedBox(width: 10),
             Expanded(child: Text(b.serviceType,
                 style: const TextStyle(
@@ -399,33 +438,36 @@ class _CustomerCard extends StatelessWidget {
   }
 }
 
-// ✅ RULE: InkWell + Material ແທນ GestureDetector
-class _QuickBtn extends StatelessWidget {
-  final IconData     icon;
-  final Color        color;
-  final VoidCallback onTap;
-  const _QuickBtn(
-      {required this.icon, required this.color, required this.onTap});
+// ✅ [FIX ME-5] ຮູບໜ້າວຽກ (ທາງເລືອກ) ທີ່ລູກຄ້າອັບໂຫລດຕອນຈອງ
+class _CustomerJobPhoto extends StatelessWidget {
+  final String url;
+  const _CustomerJobPhoto({required this.url});
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          width: 38, height: 38,
-          decoration: BoxDecoration(
-            // ✅ RULE: withValues(alpha:) ແທນ withOpacity
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10)),
-          child: Icon(icon, color: color, size: 18),
-        ),
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8, offset: const Offset(0, 3))],
       ),
+      child: Row(children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.network(url, width: 56, height: 56, fit: BoxFit.cover),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Text(tr('customer_job_photo_label'),
+            style: const TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w700, color: C.text))),
+      ]),
     );
   }
 }
+
 
 // ════════════════════════════════════════════════════════════
 // BEFORE / AFTER PHOTOS
@@ -962,9 +1004,20 @@ class _ActionButton extends ConsumerWidget {
 
     final needsAfterPhoto = b.status == JobStatus.inProgress &&
         b.afterPhotoUrl == null;
+    // 🔒 [AUDIT CRIT-1] status == inProgress ບໍ່ໄດ້ໝາຍຄວາມວ່າພ້ອມປິດງານໄດ້ເລີຍ —
+    // updateStatus(completed) ຈະ throw ຖ້າ paymentStatus != 'paid' (booking_
+    // repository.dart). ກ່ອນໜ້ານີ້ບໍ່ມີ UI ໃດເອີ້ນ confirmPaymentReceived() ເລີຍ
+    // ເຮັດໃຫ້ "ສຳເລັດວຽກ" throw ຕະຫຼອດເວລາ. ຕອນນີ້ສະແດງ step "ຢືນຢັນຮັບເງິນ"
+    // ກ່ອນ ແລ້ວຈຶ່ງໃຫ້ "ສຳເລັດວຽກ" ປາກົດ.
+    final needsPaymentConfirm = b.status == JobStatus.inProgress &&
+        !needsAfterPhoto &&
+        b.paymentStatus != 'paid';
 
-    final (label, icon, color, nextStatus) = _getAction(b.status);
+    final (label, icon, color, nextStatus, isPaymentStep) =
+        _getAction(b.status, needsPaymentConfirm: needsPaymentConfirm);
     if (label == null) return const SizedBox.shrink();
+
+    final blocked = isLoading || needsAfterPhoto;
 
     return Column(children: [
       if (needsAfterPhoto)
@@ -993,9 +1046,11 @@ class _ActionButton extends ConsumerWidget {
       SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
-          onPressed: (isLoading || needsAfterPhoto)
+          onPressed: blocked
               ? null
-              : () => _onPressed(context, ref, nextStatus!),
+              : () => isPaymentStep
+                  ? _onConfirmPayment(context, ref)
+                  : _onPressed(context, ref, nextStatus!),
           // ✅ RULE: Skeleton loading ແທນ CircularProgressIndicator
           icon: isLoading
               ? const _BtnLoadingSkeleton()
@@ -1015,18 +1070,65 @@ class _ActionButton extends ConsumerWidget {
     ]);
   }
 
-  (String?, IconData?, Color?, JobStatus?) _getAction(JobStatus s) =>
-      switch (s) {
-        JobStatus.accepted   => (tr('action_start_travel'),
-        Icons.directions_car_outlined, C.blue,  JobStatus.onTheWay),
-        JobStatus.onTheWay   => (tr('action_arrived'),
-        Icons.place_outlined,          C.orange, JobStatus.arrived),
-        JobStatus.arrived    => (tr('action_start_work'),
-        Icons.build_outlined,          C.navy,   JobStatus.inProgress),
-        JobStatus.inProgress => (tr('action_complete_job'),
-        Icons.check_circle_outline,    C.green,  JobStatus.completed),
-        _                    => (null, null, null, null),
-      };
+  (String?, IconData?, Color?, JobStatus?, bool) _getAction(JobStatus s,
+      {required bool needsPaymentConfirm}) {
+    if (s == JobStatus.inProgress && needsPaymentConfirm) {
+      return (tr('action_confirm_payment'),
+          Icons.payments_outlined, C.teal, null, true);
+    }
+    return switch (s) {
+      JobStatus.accepted   => (tr('action_start_travel'),
+      Icons.directions_car_outlined, C.blue,  JobStatus.onTheWay, false),
+      JobStatus.onTheWay   => (tr('action_arrived'),
+      Icons.place_outlined,          C.orange, JobStatus.arrived, false),
+      JobStatus.arrived    => (tr('action_start_work'),
+      Icons.build_outlined,          C.navy,   JobStatus.inProgress, false),
+      JobStatus.inProgress => (tr('action_complete_job'),
+      Icons.check_circle_outline,    C.green,  JobStatus.completed, false),
+      _                    => (null, null, null, null, false),
+    };
+  }
+
+  // ✅ [FIX CRIT-1] ຢືນຢັນຮັບເງິນ — ຕ້ອງເອີ້ນກ່ອນ "ສຳເລັດວຽກ" ຈຶ່ງຈະຜ່ານໄດ້
+  Future<void> _onConfirmPayment(BuildContext context, WidgetRef ref) async {
+    final b = booking;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(tr('confirm_payment_title'),
+            style: const TextStyle(fontWeight: FontWeight.w800)),
+        content: Text(tr('confirm_payment_body')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(tr('back'),
+                  style: const TextStyle(color: C.muted))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: C.teal, elevation: 0),
+            child: Text(tr('confirm_check_emoji'),
+                style: const TextStyle(color: Colors.white,
+                    fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final ok = await ref
+        .read(bookingNotifierProvider.notifier)
+        .confirmPayment(b.id);
+
+    // ✅ RULE: mounted check ຫຼັງ async
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok ? tr('payment_confirmed_snackbar')
+                          : tr('error_try_again')),
+        backgroundColor: ok ? C.teal : C.red));
+  }
 
   Future<void> _onPressed(BuildContext context, WidgetRef ref,
       JobStatus nextStatus) async {

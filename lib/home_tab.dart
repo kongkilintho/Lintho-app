@@ -627,8 +627,9 @@ class JobCard extends ConsumerWidget {
                     color:        C.bg,
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Center(child: Text(booking.serviceEmoji,
-                      style: const TextStyle(fontSize: 26))),
+                  // ✅ [FIX H11] Icon ຈາກ category ແທນ raw emoji ທີ່ເກັບໄວ້ໃນ doc
+                  child: Center(child: Icon(booking.serviceIcon,
+                      size: 26, color: C.navy)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(child: Column(
