@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Claude Code harness runtime state — changes on every run, not project config
+.claude/scheduled_tasks.lock

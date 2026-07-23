@@ -30,6 +30,7 @@ import 'brand_mark_tile.dart';
 import 'cloudinary_service.dart';
 import 'lao_phone.dart';
 import 'main.dart' show LoginPage;
+import 'widgets/app_text_field.dart';
 
 class CustomerRegisterFlow extends StatefulWidget {
   const CustomerRegisterFlow({super.key});
@@ -843,36 +844,34 @@ class _TextField extends StatelessWidget {
     this.autofillHints,
   });
 
+  // ✅ [Consolidated] ຫຸ້ມ AppTextField (lib/widgets/app_text_field.dart) ດ້ວຍ
+  // style ຄົງທີ່ຂອງ flow ນີ້ — logic ຫຼັກ (border builder/decoration) ຢູ່ໃນ
+  // widget ຮ່ວມນັ້ນດຽວແລ້ວ (ບໍ່ຊ້ຳກັບ technician_register_screen.dart's
+  // _TextField ອີກຕໍ່ໄປ), ໜ້າຕາຄົງເກົ່າ 100%.
   @override
-  Widget build(BuildContext context) => TextField(
+  Widget build(BuildContext context) => AppTextField(
     controller:      controller,
+    hintText:        hint,
+    prefixIcon:      icon,
     keyboardType:    inputType,
     obscureText:     obscure,
+    suffixIcon:      suffixIcon,
     inputFormatters: inputFormatters,
     maxLength:       maxLength,
     textAlign:       textAlign,
     textCapitalization: textCapitalization,
     autofillHints:   autofillHints,
-    style: const TextStyle(fontSize: 15, color: C.text),
-    decoration: InputDecoration(
-      hintText:    hint,
-      hintStyle:   const TextStyle(color: C.muted),
-      prefixIcon:  Icon(icon, color: C.teal, size: 20),
-      suffixIcon:  suffixIcon,
-      counterText: maxLength != null ? '' : null,
-      filled:      true,
-      fillColor:   Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: C.border)),
-      enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: C.border)),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: C.teal, width: 2)),
-    ),
+    style:      const TextStyle(fontSize: 15, color: C.text),
+    hintStyle:  const TextStyle(color: C.muted),
+    iconColor:  C.teal,
+    iconSize:   20,
+    fillColor:  Colors.white,
+    borderRadius: 14,
+    borderColor: C.border,
+    focusedBorderColor: C.teal,
+    focusedBorderWidth: 2,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    hideCounter: maxLength != null,
   );
 }
 

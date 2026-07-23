@@ -23,6 +23,7 @@ import 'Booking.dart';
 import 'booking_provider.dart';
 import 'cloudinary_service.dart';
 import 'language_selector.dart';
+import 'widgets/stat_card.dart';
 
 // ════════════════════════════════════════════════════════════
 // PROFILE TAB
@@ -81,9 +82,9 @@ class _ProfileBody extends ConsumerWidget {
         _ProfileCard(profile: p, user: user),
         const SizedBox(height: 14),
         Row(children: [
-          _Stat('${p?.totalJobs ?? 0}',         tr('total_jobs'),  Icons.work_outline,        C.navy),
-          _Stat(p?.ratingLabel         ?? '0.0', tr('reviews'),     Icons.star_rounded,        C.yellow),
-          _Stat(p?.completionRateLabel ?? '0%',  tr('completed'),   Icons.check_circle_outline, C.green),
+          _profileStat('${p?.totalJobs ?? 0}',         tr('total_jobs'),  Icons.work_outline,        C.navy),
+          _profileStat(p?.ratingLabel         ?? '0.0', tr('reviews'),     Icons.star_rounded,        C.yellow),
+          _profileStat(p?.completionRateLabel ?? '0%',  tr('completed'),   Icons.check_circle_outline, C.green),
         ]),
         const SizedBox(height: 14),
         _MenuItem(
@@ -1141,38 +1142,36 @@ class _HelpTile extends StatelessWidget {
 // SHARED WIDGETS
 // ════════════════════════════════════════════════════════════
 
-class _Stat extends StatelessWidget {
-  final String   value;
-  final String   label;
-  final IconData icon;
-  final Color    iconColor;
-  const _Stat(this.value, this.label, this.icon, this.iconColor);
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(child: Container(
-      margin:  const EdgeInsets.symmetric(horizontal: 4),
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        color:        Colors.white,
-        borderRadius: BorderRadius.circular(14),
+// Same "icon + value + label" card shape as home_tab.dart's stat header —
+// via the shared StatCard (lib/widgets/stat_card.dart), with overrides to
+// keep this page's white-card-with-shadow look unchanged.
+Widget _profileStat(String value, String label, IconData icon, Color iconColor) =>
+    Expanded(child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: StatCard(
+        value: value,
+        label: label,
+        icon:  icon,
+        color: iconColor,
+        backgroundColor: Colors.white,
+        iconColor:  iconColor,
+        valueColor: C.navy,
+        labelColor: C.muted,
+        iconSize:      18,
+        valueFontSize: 18,
+        labelFontSize: 10,
+        valueFontWeight: FontWeight.w800,
+        padding:      const EdgeInsets.symmetric(vertical: 14),
+        borderRadius: 14,
         boxShadow: [BoxShadow(
           color:      Colors.black.withValues(alpha: 0.06),
           blurRadius: 8, offset: const Offset(0, 3),
         )],
+        crossAxisAlignment: CrossAxisAlignment.center,
+        iconSpacing: 4,
+        valueLabelSpacing: 0,
       ),
-      child: Column(children: [
-        Icon(icon, size: 18, color: iconColor),
-        const SizedBox(height: 4),
-        Text(value, style: const TextStyle(
-          fontSize: 18, fontWeight: FontWeight.w800, color: C.navy,
-        )),
-        Text(label, style: const TextStyle(
-            fontSize: 10, color: C.muted)),
-      ]),
     ));
-  }
-}
 
 class _MenuItem extends StatelessWidget {
   final IconData      icon;

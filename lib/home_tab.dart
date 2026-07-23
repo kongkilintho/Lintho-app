@@ -26,6 +26,7 @@ import 'theme/app_theme.dart';
 import 'widgets/empty_state_view.dart';
 import 'widgets/error_state_view.dart';
 import 'widgets/skeleton_box.dart';
+import 'widgets/stat_card.dart';
 
 // ════════════════════════════════════════════════════════════
 // HOME TAB
@@ -147,23 +148,23 @@ class _Header extends ConsumerWidget {
         ]),
         const SizedBox(height: 16),
         Row(children: [
-          _StatCard(
+          Expanded(child: _homeStatCard(
             value: wallet?.formattedBalance ?? '₭0',
             label: tr('earnings'),
             icon:  Icons.account_balance_wallet_outlined,
-          ),
+          )),
           const SizedBox(width: 10),
-          _StatCard(
+          Expanded(child: _homeStatCard(
             value: '${p?.ratingLabel ?? '0.0'}★',
             label: tr('reviews'),
             icon:  Icons.star_outline,
-          ),
+          )),
           const SizedBox(width: 10),
-          _StatCard(
+          Expanded(child: _homeStatCard(
             value: p?.completionRateLabel ?? '0%',
             label: tr('completed'),
             icon:  Icons.check_circle_outline,
-          ),
+          )),
         ]),
       ]),
     );
@@ -266,42 +267,34 @@ class _OnlineToggleState extends ConsumerState<_OnlineToggle> {
 }
 
 // ════════════════════════════════════════════════════════════
-// STAT CARD
+// STAT CARD — translucent-on-dark-header look, via the shared StatCard
+// (lib/widgets/stat_card.dart). Kept as a helper here (rather than inline
+// at each call site) so the 3 header stats stay visually identical.
 // ════════════════════════════════════════════════════════════
 
-class _StatCard extends StatelessWidget {
-  final String   value;
-  final String   label;
-  final IconData icon;
-  const _StatCard({
-    required this.value,
-    required this.label,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color:        Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(children: [
-          Icon(icon, color: Colors.white, size: 18),
-          const SizedBox(height: 4),
-          Text(value, style: const TextStyle(
-            color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800,
-          )),
-          Text(label, style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.7), fontSize: 10,
-          )),
-        ]),
-      ),
-    );
-  }
-}
+Widget _homeStatCard({
+  required String value,
+  required String label,
+  required IconData icon,
+}) => StatCard(
+  value: value,
+  label: label,
+  icon:  icon,
+  color: Colors.white,
+  backgroundColor: Colors.white.withValues(alpha: 0.15),
+  iconColor:  Colors.white,
+  valueColor: Colors.white,
+  labelColor: Colors.white.withValues(alpha: 0.7),
+  iconSize:      18,
+  valueFontSize: 14,
+  labelFontSize: 10,
+  valueFontWeight: FontWeight.w800,
+  padding:      const EdgeInsets.all(12),
+  borderRadius: 12,
+  crossAxisAlignment: CrossAxisAlignment.center,
+  iconSpacing: 4,
+  valueLabelSpacing: 0,
+);
 
 // ════════════════════════════════════════════════════════════
 // JOB LIST
