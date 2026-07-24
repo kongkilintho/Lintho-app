@@ -435,6 +435,7 @@ class _MatchScreenState extends State<MatchScreen>
               _state == _MatchState.searching)) {
         _searchTimer?.cancel();
         _retryTimer?.cancel();
+        _cancelSilently('ໝົດເວລາຄົ້ນຫາ (no_provider_timeout)');
         setState(() => _state = _MatchState.noProvider);
       }
     });
@@ -501,6 +502,19 @@ class _MatchScreenState extends State<MatchScreen>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('${tr("error")}: $e'),
           backgroundColor: C.red));
+    }
+  }
+
+  // 🔒 [FOLLOWUP-D] ກ່ອນໜ້ານີ້ເມື່ອຄົ້ນຫາໝົດເວລາ (45s) ຫຼືລູກຄ້າກົດ "ຍ້ອນກັບ" ຈາກ
+  // ໜ້າ "ບໍ່ພົບຊ່າງ", booking doc ບໍ່ເຄີຍຖືກຍົກເລີກເລີຍ — ຄົງເປັນ status:'pending'
+  // ຈົນກວ່າຈະໝົດອາຍຸເອງ (ເຖິງ 10 ນາທີ), ຊ່າງທີ່ຫາກໍ່ອອນລາຍໃນຊ່ວງນັ້ນຍັງສາມາດຮັບໄດ້
+  // ທັງໆທີ່ລູກຄ້າຄິດວ່າການຄົ້ນຫາລົ້ມເຫລວແລ້ວ. ໃຊ້ method ນີ້ (ບໍ່ໃຊ້ _cancelBooking()
+  // ໂດຍກົງ) ເພາະທາງນີ້ຕ້ອງ "ຄ້າງຢູ່ໜ້າຈໍ" ໃຫ້ເຫັນ noProvider state, ບໍ່ pop ອອກ.
+  Future<void> _cancelSilently(String reason) async {
+    try {
+      await _customerBookingRepo.cancelBooking(widget.bookingId, reason);
+    } catch (e) {
+      debugPrint('cancelSilently: $e');
     }
   }
 
@@ -586,6 +600,7 @@ class _MatchScreenState extends State<MatchScreen>
         provider:     _matchedProv!,
         serviceName:  _serviceName,
         serviceEmoji: _serviceEmoji,
+        serviceIcon:  _serviceIcon,
         address:      _address,
       ),
     ));
@@ -996,6 +1011,13 @@ class _MatchScreenState extends State<MatchScreen>
         ),
         const SizedBox(height: 12),
         TextButton(
+          // 🔒 [FOLLOWUP-D] `_buildNoProvider()` ສະແດງໄດ້ພຽງ 2 ທາງ: (1) timer
+          // ໝົດເວລາ — ຕອນນີ້ _cancelSilently() ຖືກເອີ້ນກ່ອນເຂົ້າ state ນີ້ (ເບິ່ງ
+          // _startSearchTimer ຂ້າງເທິງ), ຫຼື (2) _watchBooking() ເຫັນ booking ຖືກ
+          // cancelled/rejected ໄປແລ້ວ (ໂດຍຄົນອື່ນ/ອັດຕະໂນມັດ) — ທັງສອງທາງ booking
+          // ຖືກຍົກເລີກແລ້ວກ່ອນຮອດ state ນີ້ຢູ່ແລ້ວ, ຈຶ່ງພຽງແຕ່ pop ອອກໄດ້ເລີຍ
+          // (ບໍ່ຄວນເອີ້ນ cancelBooking() ຊ້ຳອີກ — ມັນ throw ຖ້າ status ຖືກຍົກເລີກ
+          // ໄປແລ້ວ, ຈະສະແດງ error toast ໃຫ້ຜູ້ໃຊ້ເຫັນຢ່າງບໍ່ຈຳເປັນ).
           onPressed: () => Navigator.pop(context),
           child: Text(tr('go_back'), style: TextStyle(
             color: Colors.white.withValues(alpha: 0.5), fontSize: 15,

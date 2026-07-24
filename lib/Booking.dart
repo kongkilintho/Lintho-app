@@ -104,6 +104,18 @@ class Booking {
   // providerId ຍັງວ່າງເປົ່າ) — ໃຊ້ຍົກເວັ້ນອອກຈາກ unassignedOpenJobsProvider
   // ຂອງ provider ຄົນນັ້ນ ບໍ່ໃຫ້ວຽກທີ່ຕົນເອງເຄີຍປະຕິເສດແລ້ວປາກົດຄືນອີກ
   final List<String> rejectedBy;
+  // 🔒 [FOLLOWUP-H] Top-3 provider ທີ່ match_screen.dart ສົ່ງຄຳຂໍໃຫ້ (ຂຽນຢູ່
+  // 'sentTo' ຕອນ _sendRequestToTop3()) — ກ່ອນໜ້ານີ້ model ນີ້ບໍ່ເຄີຍອ່ານ field
+  // ນີ້ກັບຄືນມາເລີຍ, ຈຶ່ງບໍ່ມີບ່ອນໃດໃຊ້ຈຳກັດການເບິ່ງເຫັນ open job ໃຫ້ຈຳກັດແຕ່ 3 ຄົນ
+  // ທີ່ຖືກເລືອກແທ້ (ເບິ່ງ isJobVisibleToProvider() ໃນ booking_provider.dart).
+  final List<String> sentTo;
+  // 🔒 [FOLLOWUP-K] ລູກຄ້າຢືນຢັນວ່າໄດ້ໂອນເງິນຜ່ານ BCEL ແລ້ວ (ຕັ້ງໂດຍ
+  // customer_confirm_payment ໃນ tracking_screen.dart) — ໃຊ້ເປັນ counter-
+  // signature ກ່ອນ confirmPaymentReceived() (booking_repository.dart) ຈະ
+  // ຍອມໃຫ້ຊ່າງປິດງານ ສຳລັບ paymentMethod != 'cash'. ຊ່າງບໍ່ສາມາດຢືນຢັນເອງຝ່າຍ
+  // ດຽວອີກຕໍ່ໄປສຳລັບການໂອນເງິນ (cash ຍັງເປັນ self-attested, ຍອມຮັບເປັນຂໍ້ຈຳກັດ
+  // ທີ່ຮູ້ຢູ່ແລ້ວເນື່ອງຈາກບໍ່ມີ payment gateway ແທ້).
+  final bool customerConfirmedPayment;
 
   const Booking({
     required this.id,
@@ -139,6 +151,8 @@ class Booking {
     this.cancelledBy,
     this.cancelFeeAmount,
     this.rejectedBy = const [],
+    this.sentTo = const [],
+    this.customerConfirmedPayment = false,
   });
 
   // 🔒 [AUDIT H10] ກ່ອນໜ້ານີ້ scheduledAt/createdAt/expiresAt (`as Timestamp`
@@ -192,6 +206,8 @@ class Booking {
       cancelledBy:               d['cancelledBy']                as String?,
       cancelFeeAmount:          (d['cancelFeeAmount'] as num?)?.toDouble(),
       rejectedBy:                List<String>.from(d['rejectedBy'] ?? const []),
+      sentTo:                    List<String>.from(d['sentTo'] ?? const []),
+      customerConfirmedPayment:  d['customerConfirmedPayment'] as bool? ?? false,
     );
   }
 
@@ -230,6 +246,8 @@ class Booking {
     'cancelledBy': cancelledBy,
     'cancelFeeAmount': cancelFeeAmount,
     'rejectedBy': rejectedBy,
+    'sentTo': sentTo,
+    'customerConfirmedPayment': customerConfirmedPayment,
   };
 
   Booking copyWith({
@@ -266,6 +284,8 @@ class Booking {
     cancelledBy: cancelledBy ?? this.cancelledBy,
     cancelFeeAmount: cancelFeeAmount ?? this.cancelFeeAmount,
     rejectedBy: rejectedBy,
+    sentTo: sentTo,
+    customerConfirmedPayment: customerConfirmedPayment,
   );
 
   bool   get isExpired       => status == JobStatus.pending && expiresAt.isBefore(DateTime.now());

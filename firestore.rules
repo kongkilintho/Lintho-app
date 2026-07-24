@@ -147,9 +147,14 @@ service cloud.firestore {
       // ✅ role ຫ້າມລູກຄ້າແກ້ໄຂເອງເດັດຂາດ — ບໍ່ດັ່ງນັ້ນຈະ self-promote ເປັນ
       // 'admin' ໄດ້ ແລະຜ່ານ admin bypass rule (line 58-60) ໄປແກ້ໄຂໄດ້ທຸກຢ່າງ
       // ໃນລະບົບ. ການປ່ຽນ role ຕ້ອງຜ່ານ Cloud Function/Admin SDK ເທົ່ານັ້ນ.
+      // 🔒 [FOLLOWUP-3] ກ່ອນໜ້ານີ້ 'status' ບໍ່ຢູ່ໃນລາຍການປ້ອງກັນ — provider ທີ່
+      // ຍັງບໍ່ຜ່ານ admin approve ສາມາດຂຽນ status='active' ໃສ່ຕົນເອງໂດຍກົງ ຂ້າມ
+      // PendingApprovalScreen client-side ໄດ້. 'status' ຕ້ອງຖືກປ່ຽນຜ່ານ admin
+      // ເທົ່ານັ້ນ (ຄືກັນກັບ providers/{uid}.kycStatus).
       allow update: if isAuth() && isOwner(uid) &&
         !('rewardPoints' in request.resource.data.diff(resource.data).affectedKeys()) &&
-        !('role' in request.resource.data.diff(resource.data).affectedKeys());
+        !('role' in request.resource.data.diff(resource.data).affectedKeys()) &&
+        !('status' in request.resource.data.diff(resource.data).affectedKeys());
       allow delete: if false;
 
       match /addresses/{addrId} {
@@ -198,12 +203,16 @@ service cloud.firestore {
       // ແລະ additionalChargesApproved ຖືກຍົກອອກຈາກ list ນີ້ — ມີແຕ່ customer
       // ເທົ່ານັ້ນທີ່ອະນຸມັດຄ່າໃຊ້ຈ່າຍເພີ່ມໄດ້ (ຢູ່ໃນ list ຂອງ customer ຂ້າງເທິງ).
       allow update: if isAuth() && isValidCompletionPayment() && (
+        // 🔒 [FOLLOWUP-K] ເພີ່ມ 'customerConfirmedPayment' — ລູກຄ້າຢືນຢັນວ່າໄດ້
+        // ໂອນເງິນຜ່ານ BCEL ແລ້ວ, ໃຊ້ເປັນ counter-signature ກ່ອນຊ່າງຈະຢືນຢັນຮັບເງິນ
+        // ຝ່າຍດຽວໄດ້ (ເບິ່ງ confirmPaymentReceived() booking_repository.dart).
         (resource.data.customerId == request.auth.uid &&
           isValidCustomerChargesResponse() &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'reviewed', 'additionalChargesApproved', 'additionalCharges',
               'additionalChargesNote', 'paymentMethod', 'paymentStatus', 'slipUrl', 'sentTo',
-              'updatedAt', 'cancelReason', 'cancelledBy', 'cancelFeeAmount', 'matchConfirmed'])) ||
+              'updatedAt', 'cancelReason', 'cancelledBy', 'cancelFeeAmount', 'matchConfirmed',
+              'customerConfirmedPayment'])) ||
         // 🔒 [AUDIT H3] ກ່ອນໜ້ານີ້ຮັບງານໃໝ່ (claim: status=='pending' &&
         // ຂຽນ providerId ເປັນຕົນເອງ) ພຽງແຕ່ກວດ isProvider() (role=='provider'
         // ເປົ່າໆ, ຈິງ/ບໍ່ຈິງກໍໄດ້ຖ້າຍັງບໍ່ຜ່ານ KYC) — ບໍ່ຄືກັນກັບ read rule ຂ້າງເທິງ
@@ -355,7 +364,10 @@ service cloud.firestore {
 
     match /transactions/{txId} {
       allow read: if isAuth() && (resource.data.providerId == request.auth.uid || resource.data.customerId == request.auth.uid);
-      allow create: if isAuth();
+      // 🔒 [FOLLOWUP-1] ກ່ອນໜ້ານີ້ `allow create: if isAuth();` — provider ຄົນໃດ
+      // ກໍໄດ້ສາມາດ inject ລາຍການ earning/bonus ປອມໃສ່ ledger ຂອງຕົນເອງໄດ້ໂດຍກົງ.
+      // ຜູ້ຂຽນທີ່ຖືກຕ້ອງມີແຕ່ onBookingStatusChange (Admin SDK) ເທົ່ານັ້ນ.
+      allow create: if false;
       allow update, delete: if false;
     }
 
@@ -393,11 +405,17 @@ service cloud.firestore {
       // ບັງຄັບຢູ່ rules ນຳ (defense-in-depth ຄຽງຄູ່ກັບ booking_repository.dart
       // ທີ່ re-validate ພາຍໃນ transaction ດຽວກັນແລ້ວ) — ອະນຸຍາດ increment
       // ສະເພາະຖ້າຍັງບໍ່ທັນຮອດ usageLimit (ຫຼືບໍ່ມີ usageLimit = ບໍ່ຈຳກັດ).
+      // 🔒 [FOLLOWUP-4] ຄູປອງທີ່ໄດ້ຈາກການແລກແຕ້ມສ່ວນຕົວ (ownerId ບໍ່ວ່າງ) ກ່ອນໜ້ານີ້
+      // ບໍ່ໄດ້ຖືກກວດຢູ່ນີ້ເລີຍ — ໃຜກໍໄດ້ທີ່ຮູ້ code (ຕົວຢ່າງ: screenshot ແບ່ງປັນ)
+      // ສາມາດ increment usedCount ຂອງຄູປອງຄົນອື່ນໄດ້ກ່ອນເຈົ້າຂອງແທ້. ຕອນນີ້ບັງຄັບ
+      // ວ່າຖ້າ ownerId ມີຄ່າ, ຕ້ອງເປັນຜູ້ໃຊ້ດຽວກັນນີ້ເທົ່ານັ້ນຈຶ່ງ increment ໄດ້.
       allow update: if isAuth() &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount']) &&
         request.resource.data.usedCount == resource.data.usedCount + 1 &&
         (!('usageLimit' in resource.data) || resource.data.usageLimit == null ||
-          resource.data.usedCount < resource.data.usageLimit);
+          resource.data.usedCount < resource.data.usageLimit) &&
+        (!('ownerId' in resource.data) || resource.data.ownerId == null ||
+          resource.data.ownerId == request.auth.uid);
       allow create, delete: if false;
     }
 
@@ -422,7 +440,13 @@ service cloud.firestore {
 
     match /notifications/{notifId} {
       allow read: if isAuth() && resource.data.toUid == request.auth.uid;
-      allow create: if isAuth();
+      // 🔒 [FOLLOWUP-2] ກ່ອນໜ້ານີ້ `allow create: if isAuth();` ບໍ່ໄດ້ກວດ toUid
+      // ເລີຍ — user ໃດກໍໄດ້ສາມາດຂຽນ notification ປອມໃສ່ feed ຄົນອື່ນ. Collection
+      // ນີ້ບໍ່ຖືກໃຊ້ໂດຍ client code ໃດເລີຍໃນປັດຈຸບັນ (ແອັບໃຊ້ fcm_queue ແທນ) —
+      // ຈຶ່ງປິດ create ໄວ້ທັງໝົດ ໃຫ້ຄືກັນກັບ rewardTransactions/vouchers
+      // (Admin SDK ເທົ່ານັ້ນ), ຖ້າມີ feature ໃນອະນາຄົດຕ້ອງການຂຽນ ໃຫ້ຜ່ານ
+      // Cloud Function ແທນ.
+      allow create: if false;
       allow update: if isAuth() && resource.data.toUid == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
       allow delete: if false;
@@ -432,13 +456,22 @@ service cloud.firestore {
       allow read, write: if isAuth() && isOwner(uid);
     }
 
-    match /reviews/{reviewId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update: if isProvider() &&
-        resource.data.providerId == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['providerReply']);
-      allow delete: if false;
+    // 🔒 [FOLLOWUP-6] top-level `reviews/{reviewId}` ຖືກລຶບອອກ — ນີ້ແມ່ນ block
+    // ທີ່ຄ້າງໄວ້ໂດຍບໍ່ມີການກວດຫຍັງເລີຍ (`allow create: if isAuth();`), ບໍ່ຖືກໃຊ້
+    // ໂດຍ client code ໃດເລີຍ (grep ຢືນຢັນແລ້ວ) — ຣີວິວຈິງທັງໝົດຢູ່ subcollection
+    // providers/{providerId}/reviews (ຂ້າງເທິງ, ຖືກ secure ຢ່າງຖືກຕ້ອງແລ້ວ).
+    // ລຶບອອກເພື່ອບໍ່ໃຫ້ feature ໃນອະນາຄົດຫຼົງໄປຂຽນໃສ່ path ທີ່ບໍ່ປອດໄພນີ້.
+
+    // 🔒 [FOLLOWUP-5] fcm_queue ບໍ່ເຄີຍມີ rule ມາກ່ອນເລີຍ — ຕົກໄປໃຊ້ default-deny,
+    // ເຮັດໃຫ້ push notification ທີ່ client ສົ່ງເອງ (ຣີວິວ/ແຊັດ/ຄ່າໃຊ້ຈ່າຍເພີ່ມ,
+    // ເບິ່ງ NotificationSender._send() ໃນ fcm_service.dart) ຖືກປະຕິເສດງຽບໆທຸກຄັ້ງ.
+    // ອະນຸຍາດໃຫ້ user login ແລ້ວສ້າງ entry ໄດ້ (ຕ້ອງມີ targetUserId ແລະ sent==false
+    // ສະເໝີ), ອ່ານ/ແກ້ໄຂ/ລຶບໄດ້ສະເພາະ Cloud Function (Admin SDK) ທີ່ processing queue.
+    match /fcm_queue/{queueId} {
+      allow create: if isAuth() &&
+        request.resource.data.sent == false &&
+        request.resource.data.targetUserId is string;
+      allow read, update, delete: if false;
     }
 
     // 🔒 [AUDIT M1] ບໍ່ມີ match block ນີ້ມາກ່ອນ — chat_screen.dart ອ່ານ/ຂຽນ

@@ -168,8 +168,13 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
           });
           _startResendCooldown(); // ✅ [FIX ME-AUTH-2]
         },
+        // 🔒 [FOLLOWUP-J4] ກ່ອນໜ້ານີ້ບໍ່ໄດ້ clear _loading ຢູ່ນີ້ເລີຍ — ຖ້າ
+        // Firebase ຍິງ timeout ນີ້ກ່ອນ codeSent (ເນັດຊ້າ), ປຸ່ມສົ່ງ OTP ຄ້າງ
+        // disabled/spinning ຈົນກວ່າ codeSent ຈະມາເຖິງ (ຫຼືບໍ່ມາເລີຍ).
         codeAutoRetrievalTimeout: (String verificationId) {
           _verificationId = verificationId;
+          if (!mounted) return;
+          setState(() => _loading = false);
         },
       );
     } catch (e) {

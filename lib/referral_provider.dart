@@ -59,6 +59,12 @@ String _randomSuffix() {
 /// ໃຊ້ໂຄ້ດໝູ່ — ບັນທຶກ referredBy ໃສ່ users/{uid}, Cloud Function ຈະອອກ voucher
 /// ໃຫ້ຕອນສ້າງ booking ທຳອິດ (ເບິ່ງ functions/index.js: onNewBooking).
 /// Return null = success, ບໍ່ດັ່ງນັ້ນ return error message.
+///
+/// 🔒 [FOLLOWUP-G] ກ່ອນໜ້ານີ້ check-then-act ນີ້ (get() referredBy ແລ້ວຄ່ອຍ set())
+/// ບໍ່ໄດ້ຢູ່ໃນ transaction — ສອງການເອີ້ນພ້ອມກັນ (double-tap) ອາດອ່ານ
+/// referredBy==null ພ້ອມກັນທັງສອງ ແລ້ວທັງສອງຂຽນທັບກັນໄດ້. ຕອນນີ້ໃຊ້
+/// runTransaction ຄືກັນກັບ _ensureReferralCode() ຂ້າງເທິງ, re-read referredBy
+/// ຢູ່ພາຍໃນ transaction ກ່ອນຂຽນ.
 Future<String?> redeemReferralCode(String inputCode) async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return 'ກະລຸນາ login ກ່ອນ';
@@ -71,9 +77,14 @@ Future<String?> redeemReferralCode(String inputCode) async {
   if (lookup.data()?['ownerUid'] == uid) return 'ບໍ່ສາມາດໃຊ້ໂຄ້ດຂອງຕົນເອງໄດ້';
 
   final userRef = db.collection('users').doc(uid);
-  final userDoc = await userRef.get();
-  if (userDoc.data()?['referredBy'] != null) return 'ທ່ານໃຊ້ໂຄ້ດແນະນຳໄປແລ້ວ';
-
-  await userRef.set({'referredBy': code}, SetOptions(merge: true));
-  return null;
+  String? error;
+  await db.runTransaction((tx) async {
+    final userDoc = await tx.get(userRef);
+    if (userDoc.data()?['referredBy'] != null) {
+      error = 'ທ່ານໃຊ້ໂຄ້ດແນະນຳໄປແລ້ວ';
+      return;
+    }
+    tx.set(userRef, {'referredBy': code}, SetOptions(merge: true));
+  });
+  return error;
 }

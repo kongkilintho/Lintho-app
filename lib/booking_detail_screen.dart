@@ -279,6 +279,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                             provider:     providerFromBooking(b),
                             serviceName:  bookingServiceName(b),
                             serviceEmoji: b['serviceEmoji'] as String? ?? '🔧',
+                            serviceIcon:  serviceIconForCategory(
+                                b['category'] as String? ?? ''),
                             address:      b['address'] as String? ?? '',
                           ))),
                       icon: const Icon(Icons.map_rounded, size: 16),
@@ -328,7 +330,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                           bookingId:    doc.id,
                           provider:     providerFromBooking(b),
                           serviceName:  bookingServiceName(b),
-                          serviceEmoji: b['serviceEmoji'] as String? ?? '🔧',
+                          serviceIcon:  serviceIconForCategory(
+                              b['category'] as String? ?? ''),
                         ))),
                     icon: const Icon(Icons.star_rounded, color: C.yellow),
                     label: Text(tr('rate'), style: const TextStyle(

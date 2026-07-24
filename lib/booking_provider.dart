@@ -7,6 +7,7 @@
 //      ເພື່ອ track loadingIds per booking (ບໍ່ disable ທຸກ card)
 // ============================================================
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'Booking.dart';
@@ -52,19 +53,30 @@ final openJobsProvider = StreamProvider<List<Booking>>((ref) {
 // contains() ບໍ່ເຄີຍກົງກັນ ແລະ ວຽກຈາກ Quick Booking ຫາຍໄປຈາກຄິວຂອງ provider
 // ທີ່ຕັ້ງກອງ serviceTypes ໄວ້. ໃຊ້ b.category (canonical key ສະເໝີ, ທັງສອງ flow
 // ຂຽນຄ່າດຽວກັນ) ແທນ.
+//
+// 🔒 [FOLLOWUP-H] ດຶງ predicate ອອກມາເປັນ top-level pure function ໃຫ້ unit
+// test ໄດ້ໂດຍກົງ (ບໍ່ຈຳເປັນຕ້ອງ mock Riverpod/FirebaseAuth) — ຍັງເພີ່ມການກອງ
+// sentTo ໃໝ່: match_screen.dart ຂຽນ sentTo (top-3 provider ທີ່ຖືກເລືອກ) ແຕ່
+// ບໍ່ເຄີຍຖືກອ່ານກັບຄືນມາໃຊ້ຢູ່ໃສເລີຍ — ວຽກຈຶ່ງເບິ່ງເຫັນໄດ້ໂດຍ provider ທຸກຄົນທີ່
+// serviceTypes ກົງ, ບໍ່ແມ່ນສະເພາະ 3 ຄົນທີ່ຖືກເລືອກແທ້ຄືທີ່ UI ບອກລູກຄ້າ.
+// sentTo ຫວ່າງເປົ່າ (ຍັງບໍ່ທັນຜ່ານ top-3 flow — ເຊັ່ນ booking ເກົ່າ/edge path)
+// ຍັງເບິ່ງເຫັນໄດ້ໂດຍທຸກຄົນຄືເກົ່າ.
+bool isJobVisibleToProvider(
+    Booking b, String? myUid, List<String> myTypes) {
+  if (b.providerId.isNotEmpty || b.isExpired) return false;
+  if (myUid != null && b.rejectedBy.contains(myUid)) return false;
+  if (myTypes.isNotEmpty && !myTypes.contains(b.category)) return false;
+  if (b.sentTo.isNotEmpty && (myUid == null || !b.sentTo.contains(myUid))) {
+    return false;
+  }
+  return true;
+}
+
 final unassignedOpenJobsProvider = Provider<List<Booking>>((ref) {
   final jobs = ref.watch(openJobsProvider).valueOrNull ?? [];
   final myTypes = ref.watch(profileStreamProvider).valueOrNull?.serviceTypes ?? [];
   final myUid = FirebaseAuth.instance.currentUser?.uid;
-  return jobs
-      .where((b) =>
-          b.providerId.isEmpty &&
-          !b.isExpired &&
-          // ✅ [FIX H7] ວຽກທີ່ຕົນເອງເຄີຍ reject ໄປແລ້ວ (ຍັງ status='pending'
-          // ໃຫ້ provider ອື່ນເຫັນ) ບໍ່ຄວນປາກົດຄືນໃນລາຍການຂອງຕົນເອງອີກ
-          (myUid == null || !b.rejectedBy.contains(myUid)) &&
-          (myTypes.isEmpty || myTypes.contains(b.category)))
-      .toList();
+  return jobs.where((b) => isJobVisibleToProvider(b, myUid, myTypes)).toList();
 });
 
 final ongoingJobProvider = Provider<Booking?>((ref) {
@@ -282,6 +294,20 @@ class CreateBookingNotifier extends AsyncNotifier<String?> {
 final createBookingNotifierProvider =
 AsyncNotifierProvider<CreateBookingNotifier, String?>(
     CreateBookingNotifier.new);
+
+// 🔒 [FOLLOWUP-I1] ກ່ອນໜ້ານີ້ໜ້າ Profile ສະແດງເລກ '5' ຄົງທີ່ຢູ່ໃນ source ໂດຍກົງ
+// (ບໍ່ແມ່ນ query ຈິງ) — ລູກຄ້າທຸກຄົນເຫັນຄ່າດຽວກັນບໍ່ວ່າຈະມີປະຫວັດຈອງຈິງເທົ່າໃດ.
+// ໃຊ້ aggregate count() ແທນ (ຖືກກວ່າການ download ທັງ list ພຽງແຕ່ນັບ).
+final customerBookingCountProvider = FutureProvider<int>((ref) async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return 0;
+  final agg = await FirebaseFirestore.instance
+      .collection('bookings')
+      .where('customerId', isEqualTo: uid)
+      .count()
+      .get();
+  return agg.count ?? 0;
+});
 
 // ── FILTER ───────────────────────────────────────────────────
 

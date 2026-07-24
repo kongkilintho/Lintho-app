@@ -98,14 +98,13 @@ class ChatListScreen extends StatelessWidget {
                   ? (chat['providerName']  as String? ?? 'ຊ່າງ')
                   : (chat['customerName'] as String? ?? 'ລູກຄ້າ');
               final lastMsg    = chat['lastMessage']          as String? ?? '';
-              final unread     = chat['unread_${user?.uid}'] as int?    ?? 0;
 
               return _ChatListTile(
                 chatId:      chatId,
                 otherName:   otherName,
                 serviceName: chat['serviceName'] as String? ?? '',
                 lastMsg:     lastMsg,
-                unread:      unread,
+                myUid:       user?.uid,
               );
             },
           );
@@ -131,17 +130,17 @@ class ChatListScreen extends StatelessWidget {
 // ── CHAT LIST TILE ───────────────────────────────────────────
 
 class _ChatListTile extends StatelessWidget {
-  final String chatId;
-  final String otherName;
-  final String serviceName;
-  final String lastMsg;
-  final int    unread;
+  final String  chatId;
+  final String  otherName;
+  final String  serviceName;
+  final String  lastMsg;
+  final String? myUid;
   const _ChatListTile({
     required this.chatId,
     required this.otherName,
     required this.serviceName,
     required this.lastMsg,
-    required this.unread,
+    required this.myUid,
   });
 
   @override
@@ -206,18 +205,32 @@ class _ChatListTile extends StatelessWidget {
                   ),
                 ],
               )),
-              if (unread > 0)
-                Container(
-                  width: 22, height: 22,
-                  decoration: const BoxDecoration(
-                    color: C.primary, shape: BoxShape.circle,
-                  ),
-                  child: Center(child: Text('$unread',
-                    style: const TextStyle(
-                      color: Colors.white, fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  )),
+              // 🔒 [FOLLOWUP-E] unread count ຕອນນີ້ຢູ່ Realtime Database
+              // (chats/$chatId/meta/unread_$myUid, ຂຽນໂດຍ _sendMessage())
+              // ບໍ່ແມ່ນ Firestore ອີກຕໍ່ໄປ — field Firestore ເກົ່າບໍ່ເຄີຍຖືກຂຽນ
+              // ໂດຍໃຜເລີຍ, badge ຈຶ່ງອ່ານໄດ້ 0 ຕະຫຼອດ.
+              if (myUid != null && myUid!.isNotEmpty)
+                StreamBuilder<DatabaseEvent>(
+                  stream: FirebaseDatabase.instance
+                      .ref('chats/$chatId/meta/unread_$myUid')
+                      .onValue,
+                  builder: (context, snap) {
+                    final unread =
+                        (snap.data?.snapshot.value as num?)?.toInt() ?? 0;
+                    if (unread <= 0) return const SizedBox.shrink();
+                    return Container(
+                      width: 22, height: 22,
+                      decoration: const BoxDecoration(
+                        color: C.primary, shape: BoxShape.circle,
+                      ),
+                      child: Center(child: Text('$unread',
+                        style: const TextStyle(
+                          color: Colors.white, fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      )),
+                    );
+                  },
                 ),
             ]),
           ),
@@ -350,6 +363,22 @@ class _ChatScreenState extends State<ChatScreen> {
         'lastMessage':   text,
         'lastMessageAt': now,
       }).timeout(const Duration(seconds: 15));
+
+      // 🔒 [FOLLOWUP-E] ກ່ອນໜ້ານີ້ບໍ່ມີບ່ອນໃດ increment unread counter ເລີຍ
+      // (_markAsRead() ຂ້າງເທິງພຽງແຕ່ reset ເປັນ 0) — badge "ບໍ່ອ່ານ" ຢູ່ໜ້າ
+      // ChatListScreen ຈຶ່ງອ່ານຄ່າ 0 ຕະຫຼອດໄປ. ຂຽນໃສ່ RTDB (ບໍ່ແມ່ນ Firestore —
+      // database.rules.json ອະນຸຍາດໃຫ້ member ຄົນໃດຄົນໜຶ່ງຂຽນ field ໃດກໍໄດ້ພາຍໃຕ້
+      // meta, ລວມທັງ counter ຂອງອີກຝ່າຍ) — best-effort, ບໍ່ຄວນເຮັດໃຫ້ຂໍ້ຄວາມທີ່
+      // ສົ່ງແລ້ວກາຍເປັນ "ລົ້ມເຫລວ" ຖ້າ increment ນີ້ລົ້ມເຫລວ.
+      if (widget.receiverId != null && widget.receiverId!.isNotEmpty) {
+        try {
+          await _chatMetaRef
+              .update({'unread_${widget.receiverId}': ServerValue.increment(1)})
+              .timeout(const Duration(seconds: 15));
+        } catch (e) {
+          debugPrint('ChatScreen: unread increment failed: $e');
+        }
+      }
 
       try {
         // 🔒 [AUDIT CRIT-5 follow-up] ບໍ່ເຄີຍມີ timeout ຢູ່ນີ້ — ຖ້າຄ້າງ,

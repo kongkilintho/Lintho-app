@@ -22,11 +22,19 @@
 //   ME-16 — a saved address's real GeoPoint is used when present
 //   ME-17 — _submit() has a method-level in-flight guard
 //   ME-18 — _submit() rejects a signed-out session before writing
+//   FOLLOWUP-4 — CouponRepository.validate() rejects a coupon owned by
+//                a different user (client-side half of the fix; the
+//                server-side half is in test/rules_fixes_test.dart)
 //
 // ໝາຍເຫດ: pattern ດຽວກັນກັບ critical_fixes_test.dart / high_severity_fixes_test.dart
 // — ບາງກຸ່ມທົດສອບພຶດຕິກຳຈິງ (fake_cloud_firestore / pure functions), ບາງກຸ່ມເປັນ
 // source-text regression guard ສະເພາະ UI logic ທີ່ຝັງຢູ່ໃນ State class ບໍ່ໄດ້ export
 // ອອກມາເປັນ function ແຍກ (ບໍ່ມີ test harness ໃຫ້ pump widget ໜັກແໜ້ນຢູ່ໃນ repo ນີ້).
+// CouponRepository ໃຊ້ FirebaseFirestore.instance/FirebaseAuth.instance ໂດຍກົງ
+// (ບໍ່ໄດ້ inject) ຄືກັນກັບ BookingRepository ໃນ critical_fixes_test.dart — ຈຶ່ງ
+// reproduce ພຽງແຕ່ branch ownerId ຂຶ້ນມາທົດສອບແທນ (ຖ້າແກ້ logic ໃນ
+// coupon_repository.dart, ຕ້ອງອັບເດດບ່ອນນີ້ນຳ), ບວກກັບ source-text check ວ່າ
+// check ຈິງຍັງຢູ່ໃນ source.
 // ============================================================
 
 import 'dart:io';
@@ -348,6 +356,78 @@ void main() {
       expect(block, contains('FirebaseAuth.instance.currentUser'));
       expect(block, contains('if (user == null)'));
       expect(block, contains("tr('please_login_first')"));
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════
+  // FOLLOWUP-4 — coupon ownerId scoping
+  // ══════════════════════════════════════════════════════════
+  group('FOLLOWUP-4: CouponRepository.validate() rejects a mismatched owner', () {
+    // ▸ ຄັດລອກ branch ownerId ຈາກ CouponRepository.validate()
+    //   (coupon_repository.dart) — ຖ້າແກ້ logic ໃນ source, ຕ້ອງອັບເດດບ່ອນນີ້ນຳ.
+    Future<Map<String, dynamic>?> validateOwnerBranch(
+        FakeFirebaseFirestore db, String code, String? currentUid) async {
+      final doc = await db.collection('coupons').doc(code).get();
+      if (!doc.exists || doc.data() == null) return null;
+      final d = doc.data()!;
+      final ownerId = d['ownerId'] as String?;
+      if (ownerId != null && ownerId != currentUid) return null;
+      return d;
+    }
+
+    test('a coupon owned by a different user is rejected', () async {
+      final db = FakeFirebaseFirestore();
+      await db.collection('coupons').doc('REWARD10').set({
+        'ownerId': 'user-A',
+        'status': 'active',
+        'type': 'fixed',
+        'value': 10000,
+      });
+
+      final result =
+          await validateOwnerBranch(db, 'REWARD10', 'user-B');
+      expect(result, isNull,
+          reason: 'a personal reward-redeemed coupon must not be usable by '
+              'anyone who merely obtained the code (e.g. a shared '
+              'screenshot) before the real owner');
+    });
+
+    test('the true owner can still validate their own coupon', () async {
+      final db = FakeFirebaseFirestore();
+      await db.collection('coupons').doc('REWARD10').set({
+        'ownerId': 'user-A',
+        'status': 'active',
+        'type': 'fixed',
+        'value': 10000,
+      });
+
+      final result =
+          await validateOwnerBranch(db, 'REWARD10', 'user-A');
+      expect(result, isNotNull);
+    });
+
+    test('a coupon with no ownerId (admin-issued) is usable by anyone', () async {
+      final db = FakeFirebaseFirestore();
+      await db.collection('coupons').doc('PROMO2026').set({
+        'status': 'active',
+        'type': 'fixed',
+        'value': 5000,
+      });
+
+      final result =
+          await validateOwnerBranch(db, 'PROMO2026', 'anyone-at-all');
+      expect(result, isNotNull);
+    });
+
+    test('coupon_repository.dart source still contains the ownerId check', () {
+      final source = _read('lib/coupon_repository.dart');
+      final start = source.indexOf('Future<CouponResult?> validate(');
+      final end = source.indexOf('final minOrderAmount', start);
+      expect(start, greaterThan(-1));
+      expect(end, greaterThan(start));
+      final block = source.substring(start, end);
+      expect(block, contains("d['ownerId'] as String?"));
+      expect(block, contains('ownerId != FirebaseAuth.instance.currentUser?.uid'));
     });
   });
 }

@@ -31,14 +31,18 @@ class ReviewScreen extends StatefulWidget {
   final String        bookingId;
   final ProviderModel provider;
   final String        serviceName;
-  final String        serviceEmoji;
+  // 🔒 [FOLLOWUP-J3] serviceEmoji (raw emoji character) ຖືກແທນທີ່ດ້ວຍ
+  // serviceIcon (Material icon, derive ຈາກ category) — ຄືກັນກັບ pattern ອື່ນໆ
+  // ທີ່ຖືກແກ້ໄປແລ້ວ (home_tab.dart/jobs_tab.dart/job_workflow_Screen.dart/
+  // match_screen.dart). ໜ້ານີ້ແມ່ນໜຶ່ງໃນສອງຈຸດສຸດທ້າຍທີ່ຍັງເຫຼືອ.
+  final IconData       serviceIcon;
 
   const ReviewScreen({
     super.key,
     required this.bookingId,
     required this.provider,
     required this.serviceName,
-    required this.serviceEmoji,
+    required this.serviceIcon,
   });
 
   @override
@@ -222,10 +226,16 @@ class _ReviewScreenState extends State<ReviewScreen>
                   ),
                 )),
                 const SizedBox(height: 4),
-                Center(child: Text(
-                  '${widget.serviceEmoji} ${widget.serviceName}',
-                  style: const TextStyle(
-                      fontSize: 13, color: C.textSecondary),
+                Center(child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(widget.serviceIcon, size: 14, color: C.textSecondary),
+                    const SizedBox(width: 5),
+                    Text(widget.serviceName,
+                      style: const TextStyle(
+                          fontSize: 13, color: C.textSecondary),
+                    ),
+                  ],
                 )),
                 const SizedBox(height: 8),
 

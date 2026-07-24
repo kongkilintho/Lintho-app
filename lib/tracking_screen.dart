@@ -91,9 +91,13 @@ class TrackingScreen extends StatefulWidget {
   final ProviderModel provider;
   final String        serviceName;
   final String        serviceEmoji;
-  final String        address;
-  final double?       customerLat;
-  final double?       customerLng;
+  // 🔒 [FOLLOWUP-J3] serviceEmoji ຍັງຄົງໄວ້ (ບໍ່ໄດ້ໃຊ້ສະແດງອີກຕໍ່ໄປ) ເພື່ອບໍ່ໃຫ້
+  // ຕ້ອງແກ້ constructor call ທຸກບ່ອນ — serviceIcon (Material icon, derive ຈາກ
+  // category) ຄືອັນທີ່ໃຊ້ສະແດງແທນ emoji ດິບໃນ _ProviderInfoRow ຂ້າງລຸ່ມ.
+  final IconData       serviceIcon;
+  final String         address;
+  final double?        customerLat;
+  final double?        customerLng;
 
   const TrackingScreen({
     super.key,
@@ -101,6 +105,7 @@ class TrackingScreen extends StatefulWidget {
     required this.provider,
     required this.serviceName,
     required this.serviceEmoji,
+    required this.serviceIcon,
     required this.address,
     this.customerLat,
     this.customerLng,
@@ -126,6 +131,11 @@ class _TrackingScreenState extends State<TrackingScreen>
   String?       _additionalChargesNote;
   bool          _additionalChargesApproved = false;
   bool          _respondingToCharges       = false;
+  // 🔒 [FOLLOWUP-K] ຕ້ອງຮູ້ paymentMethod/customerConfirmedPayment ຢູ່ນີ້
+  // ເພື່ອສະແດງປຸ່ມ "ຢືນຢັນວ່າໄດ້ໂອນເງິນແລ້ວ" (ສະເພາະ BCEL, ຍັງບໍ່ທັນຢືນຢັນ)
+  String        _paymentMethod             = 'cash';
+  bool          _customerConfirmedPayment  = false;
+  bool          _confirmingPayment         = false;
 
   // ── controllers ───────────────────────────────────────────
   late final MapController          _mapCtrl;
@@ -213,6 +223,8 @@ class _TrackingScreenState extends State<TrackingScreen>
         setState(() {
           _status    = BookingStatusX.fromString(status);
           _isLoading = false;
+          _paymentMethod            = d['paymentMethod'] as String? ?? 'cash';
+          _customerConfirmedPayment = d['customerConfirmedPayment'] as bool? ?? false;
         });
       } else {
         setState(() => _isLoading = false);
@@ -242,6 +254,8 @@ class _TrackingScreenState extends State<TrackingScreen>
         _additionalCharges         = (d['additionalCharges'] as num?)?.toDouble();
         _additionalChargesNote     = d['additionalChargesNote'] as String?;
         _additionalChargesApproved = d['additionalChargesApproved'] as bool? ?? false;
+        _paymentMethod             = d['paymentMethod'] as String? ?? 'cash';
+        _customerConfirmedPayment  = d['customerConfirmedPayment'] as bool? ?? false;
       });
 
       if (newStatus != _status) {
@@ -306,6 +320,23 @@ class _TrackingScreenState extends State<TrackingScreen>
     // <data android:scheme="tel"/></intent></queries>
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
+    }
+  }
+
+  // 🔒 [FOLLOWUP-K] ລູກຄ້າກົດຢືນຢັນວ່າໄດ້ໂອນເງິນຜ່ານ BCEL ແລ້ວ — counter-
+  // signature ກ່ອນຊ່າງຈະຢືນຢັນຮັບເງິນ/ປິດງານໄດ້ (confirmPaymentReceived()).
+  Future<void> _confirmPaymentSent() async {
+    if (_confirmingPayment) return;
+    setState(() => _confirmingPayment = true);
+    try {
+      await CustomerBookingRepository().confirmPaymentSent(widget.bookingId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('${tr("error")}: $e'), backgroundColor: C.red));
+      }
+    } finally {
+      if (mounted) setState(() => _confirmingPayment = false);
     }
   }
 
@@ -425,7 +456,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         bookingId:    widget.bookingId,
         provider:     widget.provider,
         serviceName:  widget.serviceName,
-        serviceEmoji: widget.serviceEmoji,
+        serviceIcon:  widget.serviceIcon,
       ),
     ));
   }
@@ -842,7 +873,7 @@ class _TrackingScreenState extends State<TrackingScreen>
               // ── Provider Info ─────────────────────────
               _ProviderInfoRow(
                 provider:     widget.provider,
-                serviceEmoji: widget.serviceEmoji,
+                serviceIcon:  widget.serviceIcon,
                 serviceName:  widget.serviceName,
                 onCall:       _callProvider,
               ),
@@ -851,6 +882,46 @@ class _TrackingScreenState extends State<TrackingScreen>
               // ── Status Steps ──────────────────────────
               _StatusSteps(currentStatus: _status),
               const SizedBox(height: 16),
+
+              // ── Confirm BCEL payment sent (FOLLOWUP-K) ─
+              if (_paymentMethod != 'cash' &&
+                  !_customerConfirmedPayment &&
+                  (_status == BookingStatus.onWay ||
+                      _status == BookingStatus.arrived ||
+                      _status == BookingStatus.working)) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: C.gold.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: C.gold.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('ໂອນເງິນຜ່ານ BCEL ແລ້ວບໍ?', style: TextStyle(
+                        fontWeight: FontWeight.w800, color: C.textPrimary, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    const Text('ກົດຢືນຢັນເມື່ອທ່ານໂອນເງິນຄ່າບໍລິການໃຫ້ຊ່າງແລ້ວ',
+                        style: TextStyle(color: C.muted, fontSize: 12)),
+                    const SizedBox(height: 10),
+                    SizedBox(width: double.infinity, child: ElevatedButton(
+                      onPressed: _confirmingPayment ? null : _confirmPaymentSent,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: C.gold, elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: _confirmingPayment
+                          ? const SizedBox(width: 16, height: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
+                          : const Text('ຢືນຢັນວ່າໄດ້ໂອນເງິນແລ້ວ', style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                    )),
+                  ]),
+                ),
+                const SizedBox(height: 16),
+              ],
 
               // ── Address ───────────────────────────────
               if (widget.address.isNotEmpty) ...[
@@ -954,13 +1025,13 @@ class _StatusSteps extends StatelessWidget {
 
 class _ProviderInfoRow extends StatelessWidget {
   final ProviderModel provider;
-  final String        serviceEmoji;
+  final IconData       serviceIcon;
   final String        serviceName;
   final VoidCallback  onCall;
 
   const _ProviderInfoRow({
     required this.provider,
-    required this.serviceEmoji,
+    required this.serviceIcon,
     required this.serviceName,
     required this.onCall,
   });
@@ -1000,7 +1071,13 @@ class _ProviderInfoRow extends StatelessWidget {
             fontSize: 12, fontWeight: FontWeight.w700,
             color: C.gold,
           )),
-          Text('  ·  $serviceEmoji $serviceName',
+          // 🔒 [FOLLOWUP-J3] ໃຊ້ Material icon (serviceIcon) ແທນ emoji ດິບ —
+          // ຄືກັນກັບ home_tab.dart/jobs_tab.dart/job_workflow_Screen.dart/
+          // match_screen.dart ທີ່ຖືກແກ້ໄປແລ້ວກ່ອນໜ້ານີ້.
+          const Text('  ·  ', style: TextStyle(fontSize: 11, color: C.muted)),
+          Icon(serviceIcon, size: 12, color: C.muted),
+          const SizedBox(width: 3),
+          Text(serviceName,
               style: const TextStyle(
                   fontSize: 11, color: C.muted)),
         ]),

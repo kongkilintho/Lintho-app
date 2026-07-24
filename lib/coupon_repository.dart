@@ -106,6 +106,16 @@ class CouponRepository {
       final usedCount = (d['usedCount'] as num?) ?? 0;
       if (usageLimit != null && usedCount >= usageLimit) return null;
 
+      // 🔒 [FOLLOWUP-4] ຄູປອງທີ່ໄດ້ຈາກການແລກແຕ້ມສ່ວນຕົວມີ ownerId ຕິດມາ
+      // (functions/index.js ຕັ້ງຄ່ານີ້ຕອນ redeem) ແຕ່ກ່ອນໜ້ານີ້ບໍ່ເຄີຍຖືກກວດ
+      // ຢູ່ນີ້ເລີຍ — ໃຜກໍໄດ້ທີ່ຮູ້ code (ຕົວຢ່າງ: screenshot ແບ່ງປັນ) ສາມາດໃຊ້
+      // ສ່ວນຫຼຸດຂອງຄົນອື່ນກ່ອນເຈົ້າຂອງແທ້ໄດ້. ຝັ່ງ server (firestore.rules)
+      // ຖືກແກ້ໄຂຮ່ວມກັນແລ້ວ — ນີ້ແມ່ນ client-side ອີກເຄິ່ງໜຶ່ງ.
+      final ownerId = d['ownerId'] as String?;
+      if (ownerId != null && ownerId != FirebaseAuth.instance.currentUser?.uid) {
+        return null;
+      }
+
       final minOrderAmount = d['minOrderAmount'] as num?;
       if (minOrderAmount != null && orderAmount < minOrderAmount) return null;
 

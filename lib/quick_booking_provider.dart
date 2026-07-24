@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'Booking.dart';
@@ -264,13 +265,23 @@ class QuickBookingNotifier extends Notifier<QuickBookingDraft> {
         'clientRequestId': clientRequestId,
       }, couponCode: state.couponCode);
 
+      // 🔒 [FOLLOWUP-F] ກ່ອນໜ້ານີ້ການບັນທຶກທີ່ຢູ່ (saveAsDefaultAddress, ບໍ່
+      // ກ່ຽວຂ້ອງກັບ booking ໂດຍກົງ) ຢູ່ໃນ try/catch ດຽວກັນກັບ createBooking() —
+      // ຖ້າການບັນທຶກທີ່ຢູ່ລົ້ມເຫລວ (ເຊັ່ນ offline ຊົ່ວຄາວ) catch block ຂ້າງລຸ່ມ
+      // ຈະລາຍງານວ່າ "ຈອງລົ້ມເຫລວ" ທັງໆທີ່ booking ຖືກສ້າງແລ້ວແທ້ (live ຢູ່ໃນ
+      // Firestore, ບໍ່ມີໃຜເບິ່ງແຍງ). ຕອນນີ້ແຍກ try/catch ຂອງຕົນເອງ — ລົ້ມເຫລວ
+      // ໄດ້ພຽງແຕ່ debugPrint, ບໍ່ກະທົບ booking ທີ່ສ້າງສຳເລັດແລ້ວ.
       if (state.saveAsDefaultAddress) {
-        await db.collection('users').doc(customerId).collection('addresses').add({
-          'label': state.addressLabel ?? 'ບ້ານ',
-          'address': state.address,
-          'location': state.location,
-          'createdAt': Timestamp.fromDate(DateTime.now()),
-        });
+        try {
+          await db.collection('users').doc(customerId).collection('addresses').add({
+            'label': state.addressLabel ?? 'ບ້ານ',
+            'address': state.address,
+            'location': state.location,
+            'createdAt': Timestamp.fromDate(DateTime.now()),
+          });
+        } catch (e) {
+          debugPrint('QuickBookingNotifier: saveAsDefaultAddress failed (booking already succeeded): $e');
+        }
       }
 
       state = const QuickBookingDraft();

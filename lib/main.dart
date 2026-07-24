@@ -17,6 +17,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'Booking.dart' show serviceIconForCategory;
@@ -32,8 +33,13 @@ import 'rewards_screen.dart';
 import 'coupon_list_screen.dart';
 import 'coupon_repository.dart';
 import 'language_selector.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:latlong2/latlong.dart';
 import 'booking_form_screen.dart';
 import 'booking_display_helpers.dart';
+import 'booking_provider.dart' show customerBookingCountProvider;
+import 'map_picker_screen.dart';
+import 'saved_address.dart';
 import 'booking_detail_screen.dart';
 import 'fcm_service.dart';
 import 'cloudinary_service.dart';
@@ -1176,15 +1182,16 @@ class HomeScreen extends StatelessWidget {
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 🔒 [FOLLOWUP-J2] ໂຕລະຄັງແຈ້ງເຕືອນ (bell) ບໍ່ເຄີຍມີ onTap ເລີຍ —
+                  // ກົດແລ້ວບໍ່ເຮັດຫຍັງ, ແລະ ບໍ່ມີໜ້າຈໍ notification-center ໃນແອັບ
+                  // ໃຫ້ navigate ໄປຫາ (ການສ້າງໜ້າຈໍນັ້ນເປັນ feature ໃໝ່, ບໍ່ແມ່ນ
+                  // bug fix). ລຶບອອກແທນທີ່ຈະປະໄວ້ໃຫ້ຫຼອກລວງວ່າກົດໄດ້.
                   Row(children: [
                     const Icon(Icons.location_on_outlined, color: C.text, size: 18),
                     const SizedBox(width: 6),
                     Text(user?.displayName ?? tr('default_user_name'),
                         style: const TextStyle(
                             color: C.text, fontSize: 13, fontWeight: FontWeight.w600)),
-                    const Spacer(),
-                    const Icon(Icons.notifications_none_rounded,
-                        color: Color(0xFF475569), size: 24),
                   ]),
                   const SizedBox(height: 6),
                   const _LocationSelector(),
@@ -1603,8 +1610,8 @@ class _BookingScreenState extends State<BookingScreen> {
                                   serviceName:  b['serviceName']  as String? ??
                                       b['serviceType']  as String? ??
                                       tr('service_generic'),
-                                  serviceEmoji: b['serviceEmoji'] as String? ??
-                                      '🔧',
+                                  serviceIcon:  serviceIconForCategory(
+                                      b['category'] as String? ?? ''),
                                 ))),
                             icon: const Icon(Icons.star_rounded,
                                 color: C.yellow, size: 16),
@@ -1955,11 +1962,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _stat(Icons.calendar_month_rounded, C.blue,
-                    '5', tr('bookings_count_label'),
-                    onTap: () => Navigator.push(context,
-                        MaterialPageRoute(
-                            builder: (_) => const BookingScreen()))),
+                // 🔒 [FOLLOWUP-I1] ນີ້ເຄີຍເປັນ literal '5' ຄົງທີ່ — ຕອນນີ້ນັບຈິງ
+                // ຈາກ bookings/{customerId==uid} ດ້ວຍ aggregate count().
+                Consumer(builder: (context, ref, _) {
+                  final count =
+                      ref.watch(customerBookingCountProvider).value ?? 0;
+                  return _stat(Icons.calendar_month_rounded, C.blue,
+                      '$count', tr('bookings_count_label'),
+                      onTap: () => Navigator.push(context,
+                          MaterialPageRoute(
+                              builder: (_) => const BookingScreen())));
+                }),
                 _vDiv(),
                 Consumer(builder: (context, ref, _) {
                   final points = ref.watch(rewardPointsProvider).value ?? 0;
@@ -2077,34 +2090,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // 🔒 [FOLLOWUP-I4] ປຸ່ມ "ຢືນຢັນ" ນີ້ເຄີຍພຽງແຕ່ Navigator.pop — ບໍ່ລຶບຫຍັງເລີຍ
+  // (ບໍ່ FirebaseAuth deletion, ບໍ່ Firestore cleanup). ຕອນນີ້ເອີ້ນ Cloud
+  // Function deleteOwnAccount (functions/index.js), ແລ້ວ sign out ໄປ
+  // WelcomeScreen ຕອນສຳເລັດ.
   void _confirmDeleteAccount(BuildContext context) {
+    bool deleting = false;
+    String? error;
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
-        title: const Text('ລຶບບັນຊີຜູ້ໃຊ້', style: TextStyle(
-            fontWeight: FontWeight.w800, color: C.text)),
-        content: const Text(
-            'ທ່ານຕ້ອງການລຶບບັນຊີຂອງທ່ານແມ່ນບໍ່? ການກະທຳນີ້ບໍ່ສາມາດກັບຄືນໄດ້.',
-            style: TextStyle(color: C.muted, fontSize: 14)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('ຍົກເລີກ',
-                style: TextStyle(color: C.muted)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: C.red, elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setS) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+          title: const Text('ລຶບບັນຊີຜູ້ໃຊ້', style: TextStyle(
+              fontWeight: FontWeight.w800, color: C.text)),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text(
+                'ທ່ານຕ້ອງການລຶບບັນຊີຂອງທ່ານແມ່ນບໍ່? ການກະທຳນີ້ບໍ່ສາມາດກັບຄືນໄດ້.',
+                style: TextStyle(color: C.muted, fontSize: 14)),
+            if (error != null) ...[
+              const SizedBox(height: 10),
+              Text(error!, style: const TextStyle(color: C.red, fontSize: 13)),
+            ],
+          ]),
+          actions: [
+            TextButton(
+              onPressed: deleting ? null : () => Navigator.pop(dialogCtx),
+              child: const Text('ຍົກເລີກ',
+                  style: TextStyle(color: C.muted)),
             ),
-            child: const Text('ຢືນຢັນ', style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700)),
-          ),
-        ],
+            ElevatedButton(
+              onPressed: deleting ? null : () async {
+                setS(() { deleting = true; error = null; });
+                try {
+                  await FirebaseFunctions.instance
+                      .httpsCallable('deleteOwnAccount')
+                      .call()
+                      .timeout(const Duration(seconds: 20));
+                  if (!dialogCtx.mounted) return;
+                  Navigator.pop(dialogCtx);
+                  await FirebaseAuth.instance.signOut();
+                  if (!context.mounted) return;
+                  Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+                      (route) => false);
+                } catch (e) {
+                  setS(() {
+                    deleting = false;
+                    error = 'ລຶບບັນຊີລົ້ມເຫລວ, ກະລຸນາລອງໃໝ່: $e';
+                  });
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: C.red, elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: deleting
+                  ? const SizedBox(width: 18, height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.2, color: Colors.white))
+                  : const Text('ຢືນຢັນ', style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2713,6 +2764,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ]);
 
+  // 🔒 [FOLLOWUP-I2] ນີ້ເຄີຍສະແດງທີ່ຢູ່ 2 ອັນຄົງທີ່ (hardcode) ບໍ່ໄດ້ອ່ານຈາກ
+  // Firestore ເລີຍ, "ເພີ່ມທີ່ຢູ່ໃໝ່" ພຽງແຕ່ Navigator.pop ໂດຍບໍ່ບັນທຶກຫຍັງ.
+  // savedAddressesProvider (saved_address.dart) ມີແລ້ວ, ພຽງແຕ່ບໍ່ເຄີຍຖືກໃຊ້ຢູ່
+  // ໜ້ານີ້ — ຕອນນີ້ອ່ານ/ລຶບຈິງຈາກ users/{uid}/addresses (rule ອະນຸຍາດ
+  // read/create/delete ໃຫ້ເຈົ້າຂອງແລ້ວ, ເບິ່ງ firestore.rules:161). ເພີ່ມທີ່ຢູ່
+  // ໃໝ່ໃຊ້ MapPickerScreen + reverse-geocode ດຽວກັນກັບ
+  // quick_booking_screen.dart._pickOnMap().
   void _showAddr(BuildContext context) {
     showModalBottomSheet(
       context: context, backgroundColor: Colors.white,
@@ -2724,22 +2782,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Text('ທີ່ຢູ່ຂອງຂ້ອຍ', style: TextStyle(
               fontSize: 18, fontWeight: FontWeight.w800, color: C.text)),
           const SizedBox(height: 16),
-          const ListTile(
-            leading: Icon(Icons.home_outlined, color: C.navy),
-            title: Text('ບ້ານ',
-                style: TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: Text('ບ້ານໂພນສິມ, ວຽງຈັນ'),
-            trailing: Icon(Icons.edit_outlined, color: C.muted, size: 18),
-          ),
-          const ListTile(
-            leading: Icon(Icons.work_outline, color: C.navy),
-            title: Text('ບ່ອນເຮັດວຽກ',
-                style: TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: Text('ດາວຄຳ, ວຽງຈັນ'),
-            trailing: Icon(Icons.edit_outlined, color: C.muted, size: 18),
-          ),
+          Consumer(builder: (context, ref, _) {
+            final addresses = ref.watch(savedAddressesProvider).value ?? [];
+            if (addresses.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text('ຍັງບໍ່ມີທີ່ຢູ່ທີ່ບັນທຶກໄວ້',
+                    style: TextStyle(color: C.muted, fontSize: 13)),
+              );
+            }
+            return Column(children: addresses.map((a) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.location_on_outlined, color: C.navy),
+              title: Text(a.label.isEmpty ? 'ທີ່ຢູ່' : a.label,
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text(a.address),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline, color: C.muted, size: 20),
+                onPressed: () async {
+                  final uid = FirebaseAuth.instance.currentUser?.uid;
+                  if (uid == null) return;
+                  await FirebaseFirestore.instance
+                      .collection('users').doc(uid)
+                      .collection('addresses').doc(a.id).delete();
+                },
+              ),
+            )).toList());
+          }),
+          const SizedBox(height: 8),
           SizedBox(width: double.infinity, child: OutlinedButton.icon(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () async {
+              final picked = await Navigator.push<LatLng>(ctx,
+                  MaterialPageRoute(builder: (_) => const MapPickerScreen()));
+              if (picked == null) return;
+              var addr = 'GPS: ${picked.latitude.toStringAsFixed(4)}, '
+                  '${picked.longitude.toStringAsFixed(4)}';
+              try {
+                final places = await placemarkFromCoordinates(
+                    picked.latitude, picked.longitude);
+                if (places.isNotEmpty) {
+                  final p = places.first;
+                  final joined = [p.street, p.subLocality, p.locality]
+                      .where((s) => s != null && s.isNotEmpty)
+                      .join(', ');
+                  if (joined.isNotEmpty) addr = joined;
+                }
+              } catch (_) {}
+              final uid = FirebaseAuth.instance.currentUser?.uid;
+              if (uid == null) return;
+              await FirebaseFirestore.instance
+                  .collection('users').doc(uid)
+                  .collection('addresses').add({
+                'label':     'ທີ່ຢູ່ໃໝ່',
+                'address':   addr,
+                'location':  GeoPoint(picked.latitude, picked.longitude),
+                'createdAt': Timestamp.fromDate(DateTime.now()),
+              });
+            },
             icon: const Icon(Icons.add_location_alt_outlined,
                 color: C.navy),
             label: const Text('ເພີ່ມທີ່ຢູ່ໃໝ່', style: TextStyle(
@@ -2756,7 +2855,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // 🔒 [FOLLOWUP-I3] ທຸກ Switch ນີ້ເຄີຍເປັນ onChanged:(_){} — ບໍ່ບັນທຶກຫຍັງເລີຍ,
+  // ຄ່າກັບຄືນເປັນ default ທຸກຄັ້ງທີ່ເປີດ sheet ຄືນໃໝ່. ບໍ່ມີ schema
+  // notifPrefs ຢູ່ໃສມາກ່ອນ (ຄົ້ນຫາທົ່ວ repo ບໍ່ພົບ) — ນີ້ແມ່ນ schema ໃໝ່,
+  // ບັນທຶກໃສ່ users/{uid}.notifPrefs.{key} (ບໍ່ຈຳເປັນຕ້ອງແກ້ firestore.rules
+  // ເພີ່ມ — field ໃໝ່ໃນ users/{uid} ຖືກອະນຸຍາດແກ້ໄຂເອງຢູ່ແລ້ວ ນອກຈາກ
+  // rewardPoints/role/status ທີ່ຖືກປ້ອງກັນໄວ້).
+  static const _notifPrefKeys = [
+    ('newBooking', 'ການຈອງໃໝ່', true),
+    ('status',     'ສະຖານະ',    true),
+    ('promo',      'ໂປໂມ',      false),
+    ('news',       'ຂ່າວ',      false),
+  ];
+
   void _showNotif(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
     showModalBottomSheet(
       context: context, backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
@@ -2767,18 +2880,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Text('ການແຈ້ງເຕືອນ', style: TextStyle(
               fontSize: 18, fontWeight: FontWeight.w800, color: C.text)),
           const SizedBox(height: 16),
-          ...[
-            ['ການຈອງໃໝ່', true],
-            ['ສະຖານະ', true],
-            ['ໂປໂມ', false],
-            ['ຂ່າວ', false],
-          ].map((i) => ListTile(
-              title: Text(i[0] as String,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-              trailing: Switch(
-                  value: i[1] as bool,
-                  onChanged: (_) {},
-                  activeColor: C.sky))),
+          if (uid == null)
+            const Text('ກະລຸນາເຂົ້າສູ່ລະບົບກ່ອນ', style: TextStyle(color: C.muted))
+          else
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+              builder: (context, snap) {
+                final prefs = (snap.data?.data() as Map<String, dynamic>?)
+                        ?['notifPrefs'] as Map<String, dynamic>? ??
+                    const {};
+                return Column(children: _notifPrefKeys.map((k) {
+                  final (key, label, defaultValue) = k;
+                  final value = prefs[key] as bool? ?? defaultValue;
+                  return ListTile(
+                      title: Text(label,
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      trailing: Switch(
+                          value: value,
+                          onChanged: (v) => FirebaseFirestore.instance
+                              .collection('users').doc(uid)
+                              .set({'notifPrefs': {key: v}}, SetOptions(merge: true)),
+                          activeColor: C.sky));
+                }).toList());
+              },
+            ),
         ]),
       ),
     );
@@ -3147,11 +3272,11 @@ class PaymentHistoryScreen extends StatelessWidget {
     return DateFormat('dd/MM/yyyy · HH:mm').format(ts.toDate());
   }
 
-  String _totalLabel(Map<String, dynamic> b) {
-    final total = b['grandTotal'] ?? b['priceDisplay'] ?? b['price'];
-    if (total is num) return '₭ ${NumberFormat('#,###').format(total)}';
-    return '₭ ${total ?? 0}';
-  }
+  // 🔒 [FOLLOWUP-J1] ນີ້ເຄີຍມີ logic ຂອງຕົນເອງແຍກອອກຈາກ bookingTotalLabel()
+  // (booking_display_helpers.dart) — ໃຫ້ priority grandTotal (ຍອດກ່ອນຫັກ
+  // coupon) ຊະນະ, ເຮັດໃຫ້ໜ້ານີ້ສະແດງລາຄາຜິດ (ບໍ່ຫັກສ່ວນຫຼຸດ) ທັງໆທີ່
+  // bookingTotalLabel() ຖືກແກ້ໄຂແລ້ວທຸກບ່ອນອື່ນ (ME-15). ໃຊ້ helper ດຽວກັນແທນ.
+  String _totalLabel(Map<String, dynamic> b) => bookingTotalLabel(b);
 
   String _serviceNameOf(Map<String, dynamic> b) =>
       (b['serviceName'] as String?) ??

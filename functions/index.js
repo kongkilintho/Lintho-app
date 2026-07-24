@@ -659,6 +659,29 @@ exports.deleteAdminUser = functions.https.onCall(async (data, context) => {
   return { uid };
 });
 
+// 🔒 [FOLLOWUP-I4] "ລຶບບັນຊີຜູ້ໃຊ້" ໃນ Profile ເຄີຍພຽງແຕ່ Navigator.pop —
+// ບໍ່ມີການລຶບຫຍັງເລີຍ, ຜູ້ໃຊ້ຄິດວ່າບັນຊີຖືກລຶບແລ້ວທັງໆທີ່ຍັງຢູ່ຄົບ. ຄັດລອກ pattern
+// ດຽວກັນກັບ deleteAdminUser() ຂ້າງເທິງ ແຕ່ອະນຸຍາດໃຫ້ user ລຶບບັນຊີຕົນເອງເທົ່ານັ້ນ
+// (ບໍ່ຕ້ອງການ admin role). ຂອບເຂດ: ລຶບ Auth user + users/{uid} + ຍ່ອຍ
+// addresses — ບໍ່ໄດ້ລຶບ providers/{uid}/wallets/bookings history (ອອກນອກ
+// scope ຂອງ bug fix ນີ້, ຕ້ອງການການອອກແບບແຍກຕ່າງຫາກສຳລັບຂໍ້ມູນທຸລະກຳ).
+exports.deleteOwnAccount = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'ຕ້ອງເຂົ້າສູ່ລະບົບກ່ອນ.');
+  }
+  const uid = context.auth.uid;
+
+  const addressesSnap = await db.collection('users').doc(uid).collection('addresses').get();
+  const batch = db.batch();
+  addressesSnap.forEach((doc) => batch.delete(doc.ref));
+  batch.delete(db.collection('users').doc(uid));
+  await batch.commit();
+
+  await admin.auth().deleteUser(uid);
+
+  return { uid };
+});
+
 // ════════════════════════════════════════════════════════════
 // CLOUDINARY — signed upload
 // ════════════════════════════════════════════════════════════
@@ -677,6 +700,12 @@ function _isOwnCloudinaryFolder(uid, folder) {
 }
 
 const _JOB_PHOTO_FOLDER_RE = /^bookings\/jobPhotos\/([A-Za-z0-9_-]{1,100})$/;
+// 🔒 [FOLLOWUP-B] ຮູບກ່ອນ/ຫຼັງວຽກ (uploadJobPhoto() ໃນ lib/cloudinary_service.dart)
+// ສົ່ງ folder ຮູບແບບ `jobs/$bookingId/before` ຫຼື `/after` — ບໍ່ກົງກັບ regex
+// ຂ້າງເທິງ (ຮູບແບບ KYC-photo). ກ່ອນໜ້ານີ້ບໍ່ມີ regex ຮອງຮັບ folder ນີ້ເລີຍ,
+// ທຸກ upload ຮູບກ່ອນ/ຫຼັງວຽກຈຶ່ງຖືກປະຕິເສດ permission-denied ຕະຫຼອດ.
+const _JOB_PHOTO_BEFORE_AFTER_RE =
+  /^jobs\/([A-Za-z0-9_-]{1,100})\/(before|after)$/;
 
 exports.getCloudinarySignature = functions
   .runWith({ secrets: [CLOUDINARY_API_SECRET, CLOUDINARY_API_KEY] })
@@ -690,7 +719,8 @@ exports.getCloudinarySignature = functions
       throw new functions.https.HttpsError('invalid-argument', 'ບໍ່ພົບ folder.');
     }
 
-    const jobPhotoMatch = folder.match(_JOB_PHOTO_FOLDER_RE);
+    const jobPhotoMatch = folder.match(_JOB_PHOTO_FOLDER_RE) ||
+      folder.match(_JOB_PHOTO_BEFORE_AFTER_RE);
     if (_isOwnCloudinaryFolder(uid, folder)) {
       // ✅ profile photo / KYC — ຢູ່ໃຕ້ uid ຂອງຕົນເອງເທົ່ານັ້ນ, ຜ່ານ
     } else if (jobPhotoMatch) {

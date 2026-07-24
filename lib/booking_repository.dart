@@ -190,6 +190,15 @@ class BookingRepository {
         throw Exception('ບໍ່ສາມາດຢືນຢັນໄດ້: ສະຖານະປ່ຽນໄປແລ້ວ');
       }
       if (b.paymentStatus == 'paid') return; // idempotent — already confirmed
+      // 🔒 [FOLLOWUP-K] ກ່ອນໜ້ານີ້ຊ່າງຢືນຢັນຝ່າຍດຽວໄດ້ໝົດ, ບໍ່ວ່າຈະ cash ຫຼື BCEL
+      // — ບໍ່ມີການກວດຄືນຈາກລູກຄ້າ. cash ຍັງຄົງ self-attested ຕໍ່ໄປ (ຍອມຮັບເປັນ
+      // ຂໍ້ຈຳກັດ, ບໍ່ມີ payment gateway ແທ້), ແຕ່ BCEL (ໂອນເງິນ) ຕອນນີ້ຕ້ອງການໃຫ້
+      // ລູກຄ້າກົດ "ຢືນຢັນວ່າໄດ້ໂອນເງິນແລ້ວ" (customerConfirmedPayment,
+      // tracking_screen.dart) ກ່ອນ — ປ້ອງກັນຊ່າງປອມການຢືນຢັນເພື່ອດຶງ wallet
+      // credit ຂອງຕົນເອງ.
+      if (b.paymentMethod != 'cash' && !b.customerConfirmedPayment) {
+        throw Exception('ລໍຖ້າລູກຄ້າຢືນຢັນການໂອນເງິນກ່ອນຈຶ່ງຈະປິດງານໄດ້');
+      }
       tx.update(ref, {'paymentStatus': 'paid'});
     }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
         'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
@@ -415,6 +424,16 @@ class CustomerBookingRepository {
         'additionalChargesNote':     null,
       });
     }
+  }
+
+  // ── ຢືນຢັນວ່າໄດ້ໂອນເງິນແລ້ວ (ຝັ່ງລູກຄ້າ, BCEL) ─────────────
+  // 🔒 [FOLLOWUP-K] counter-signature ກ່ອນຊ່າງຈະຢືນຢັນຮັບເງິນໄດ້
+  // (confirmPaymentReceived() ຂ້າງເທິງ, ຝັ່ງ BookingRepository).
+  Future<void> confirmPaymentSent(String bookingId) async {
+    final ref = _db.collection('bookings').doc(bookingId);
+    await ref.update({'customerConfirmedPayment': true})
+        .timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+            'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
   }
 }
 
