@@ -305,12 +305,19 @@ class _ProviderDetailsBody extends ConsumerWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _StatItem('⭐', provider.ratingLabel, tr('rating_label')),
+              // 🔒 [AUDIT M-10 / 2026-07-27] emoji glyphs → Material icons,
+              // ຄືກັນກັບການ migrate ທີ່ຖືກເຮັດແລ້ວທົ່ວແອັບ (ເບິ່ງ Booking.dart
+              // serviceIconForCategory ແລະ comment AUDIT H11)
+              _StatItem(Icons.star_rounded, C.orange,
+                  provider.ratingLabel, tr('rating_label')),
               // ✅ [FIX-1] provider.totalJobs ແທນ provider.totalReviews
-              _StatItem('✅', '${provider.totalJobs}', tr('total_jobs')),
-              _StatItem('🏆', '${provider.experienceYears} ${tr("years_unit")}', tr('experience_label')),
+              _StatItem(Icons.check_circle_rounded, C.green,
+                  '${provider.totalJobs}', tr('total_jobs')),
+              _StatItem(Icons.emoji_events_rounded, C.gold,
+                  '${provider.experienceYears} ${tr("years_unit")}', tr('experience_label')),
               _StatItem(
-                provider.isOnline ? '🟢' : '⚫',
+                Icons.circle,
+                provider.isOnline ? C.green : C.muted,
                 // ✅ [FIX-1] provider.isOnline ແທນ provider.isAvailable
                 provider.isOnline ? tr('online') : tr('offline'),
                 tr('status_label'),
@@ -372,12 +379,14 @@ class _ProviderDetailsBody extends ConsumerWidget {
 // ── Stat Item ─────────────────────────────────────────────────
 
 class _StatItem extends StatelessWidget {
-  final String emoji, value, label;
-  const _StatItem(this.emoji, this.value, this.label);
+  final IconData icon;
+  final Color iconColor;
+  final String value, label;
+  const _StatItem(this.icon, this.iconColor, this.value, this.label);
 
   @override
   Widget build(BuildContext context) => Column(children: [
-    Text(emoji, style: const TextStyle(fontSize: 22)),
+    Icon(icon, size: 22, color: iconColor),
     const SizedBox(height: 4),
     Text(value, style: const TextStyle(
         fontSize: 13, fontWeight: FontWeight.w800, color: C.textPrimary)),

@@ -22,7 +22,7 @@ class PendingApprovalScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('⏳', style: TextStyle(fontSize: 64)),
+              const Icon(Icons.hourglass_top_rounded, size: 64, color: C.navy),
               const SizedBox(height: 24),
               Text(tr('pending_approval_title'), textAlign: TextAlign.center,
                   style: const TextStyle(

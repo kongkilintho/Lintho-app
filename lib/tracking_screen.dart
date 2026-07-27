@@ -72,6 +72,19 @@ extension BookingStatusX on BookingStatus {
     BookingStatus.cancelled => '❌',
   };
 
+  // 🔒 [AUDIT M-10 / 2026-07-27] Material icon ແທນ emoji ຂ້າງເທິງ ສຳລັບ
+  // map-marker badge ແລະ status badge (ຄືກັນກັບການ migrate ອື່ນໆທົ່ວແອັບ) —
+  // `emoji` ຄົງໄວ້ເປັນ fallback ໃນກໍລະນີໃນອະນາຄົດຕ້ອງການ, ບໍ່ໄດ້ຖືກ render ໂດຍກົງ
+  // ອີກຕໍ່ໄປ.
+  IconData get icon => switch (this) {
+    BookingStatus.pending   => Icons.hourglass_empty_rounded,
+    BookingStatus.onWay     => Icons.directions_car_rounded,
+    BookingStatus.arrived   => Icons.location_on_rounded,
+    BookingStatus.working   => Icons.build_rounded,
+    BookingStatus.done      => Icons.check_circle_rounded,
+    BookingStatus.cancelled => Icons.cancel_rounded,
+  };
+
   int get stepIndex => switch (this) {
     BookingStatus.pending   => 0,
     BookingStatus.onWay     => 1,
@@ -659,9 +672,9 @@ class _TrackingScreenState extends State<TrackingScreen>
                     blurRadius: 10,
                   )],
                 ),
-                child: Center(child: Text(
-                  _status.emoji,
-                  style: const TextStyle(fontSize: 18),
+                child: Center(child: Icon(
+                  _status.icon,
+                  size: 18, color: Colors.white,
                 )),
               ),
             ],
@@ -769,8 +782,7 @@ class _TrackingScreenState extends State<TrackingScreen>
               )],
             ),
             child: Row(children: [
-              Text(_status.emoji,
-                  style: const TextStyle(fontSize: 18)),
+              Icon(_status.icon, size: 18, color: C.primary),
               const SizedBox(width: 8),
               Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
