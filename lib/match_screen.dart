@@ -30,6 +30,10 @@ import 'geohash_util.dart';
 import 'provider_model.dart';
 import 'tracking_screen.dart';
 
+// ✅ [Theme] LinTho brand wash — ແທນທີ່ navy/sky ເດີມດ້ວຍ gradient ຂຽວແບຣນ
+// (C.green) → ຂຽວທະເລເຂັ້ມ, ໃຫ້ໜ້າ "ກຳລັງຊອກຊ່າງ..." ເຂົ້າກັບເອກະລັກແບຣນ
+const Color _kDeepSeaGreen = Color(0xFF07332B);
+
 // ════════════════════════════════════════════════════════════
 // MATCH STATE
 // ════════════════════════════════════════════════════════════
@@ -110,6 +114,10 @@ class _MatchScreenState extends State<MatchScreen>
 
   final _db   = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
+
+  // 🔒 [AUDIT M-8 / 2026-07-27] cache — set once by _loadBookingMeta(),
+  // re-used by every _findAndSendTop3() retry instead of re-fetching.
+  String? _cachedCategory;
 
   // ════════════════════════════════════════════════════════
   // LIFECYCLE
@@ -196,6 +204,13 @@ class _MatchScreenState extends State<MatchScreen>
       debugPrint('loadBookingMeta: $e');
     }
 
+    // 🔒 [AUDIT M-8 / 2026-07-27] ບັນທຶກ category ໄວ້ໃນ instance field —
+    // _findAndSendTop3() ຂ້າງລຸ່ມນີ້ ເຄີຍ re-fetch booking doc ນີ້ຄືນທຸກຄັ້ງທີ່
+    // _scheduleRetry() ເອີ້ນມັນ (ທຸກ 4 ວິ, ສູງສຸດ ~11 ຄັ້ງພາຍໃນ 45 ວິ) ພຽງແຕ່
+    // ເພື່ອອ່ານ category ດຽວກັນທີ່ບໍ່ເຄີຍປ່ຽນ — ບໍ່ຈຳເປັນ, ເສຍ Firestore read
+    // ໂດຍບໍ່ມີປະໂຫຍດ.
+    _cachedCategory = category;
+
     if (!mounted) return;
     setState(() {
       _serviceName  = name;
@@ -212,17 +227,24 @@ class _MatchScreenState extends State<MatchScreen>
 
   Future<void> _findAndSendTop3({bool widen = false}) async {
     try {
-      // 1. ດຶງ category ຈາກ booking
-      String category = 'ac_clean';
-      try {
-        final bDoc = await _db
-            .collection('bookings')
-            .doc(widget.bookingId)
-            .get();
-        if (bDoc.exists) {
-          category = bDoc.data()?['category'] as String? ?? category;
-        }
-      } catch (_) {}
+      // 🔒 [AUDIT M-8 / 2026-07-27] ໃຊ້ _cachedCategory ທີ່ _loadBookingMeta()
+      // ຕັ້ງໄວ້ແລ້ວ ແທນການ re-fetch booking doc ນີ້ຄືນທຸກຄັ້ງທີ່ retry —
+      // category ບໍ່ເຄີຍປ່ຽນຫຼັງ booking ຖືກສ້າງ. Fallback ໄປ query ຄືນສະເພາະ
+      // ຖ້າຄ່າ cache ຍັງບໍ່ຖືກຕັ້ງ (ບໍ່ຄວນເກີດຂຶ້ນປົກກະຕິ — _init() await
+      // _loadBookingMeta() ກ່ອນ _findAndSendTop3() ສະເໝີ — ແຕ່ເປັນ safety net).
+      String category = _cachedCategory ?? 'ac_clean';
+      if (_cachedCategory == null) {
+        try {
+          final bDoc = await _db
+              .collection('bookings')
+              .doc(widget.bookingId)
+              .get();
+          if (bDoc.exists) {
+            category = bDoc.data()?['category'] as String? ?? category;
+          }
+        } catch (_) {}
+        _cachedCategory = category;
+      }
 
       // 2. Query providers ທີ່ online + ຮັບ service ນີ້
       // ✅ ຖ້າຮູ້ຈັກ lat/lng ລູກຄ້າ → ໃຊ້ geohash bounding-box query ກ່ອນ
@@ -300,9 +322,20 @@ class _MatchScreenState extends State<MatchScreen>
       _top3 = providers.take(3).toList();
 
       // 6. ຂຽນ sentTo + ສົ່ງ notification ໃຫ້ Top 3
-      await _sendRequestToTop3(_top3);
+      final sent = await _sendRequestToTop3(_top3);
 
       if (!mounted) return;
+      // 🔒 [AUDIT M-6 / 2026-07-27] ກ່ອນໜ້ານີ້ transition ໄປ 'waiting'
+      // ໂດຍບໍ່ສົນວ່າ write ຈິງສຳເລັດຫຼືບໍ່ — ຖ້າອິນເຕີເນັດຂາດຊົ່ວຄາວຕອນນີ້ພໍດີ,
+      // ລູກຄ້າຈະເຫັນ "ສົ່ງຄຳຂໍໃຫ້ 3 ຊ່າງແລ້ວ" ທັງໆທີ່ sentTo ບໍ່ເຄີຍຖືກຂຽນຈິງ.
+      // ຕອນນີ້ _sendRequestToTop3() ສົ່ງຄືນ bool (retry ພາຍໃນ 1 ຄັ້ງກ່ອນ) —
+      // ຖ້າຍັງລົ້ມເຫຼວ, ປະຕິບັດຄືກັບ "ຍັງບໍ່ພົບຊ່າງ" (ບໍ່ແມ່ນ hard failure —
+      // booking ຍັງເບິ່ງເຫັນໄດ້ຢູ່ໃນ job board ເພາະ sentTo ບໍ່ຖືກຈຳກັດ) ແລ້ວ
+      // retry ຕໍ່ຕາມກຳນົດເວລາເກົ່າ ແທນທີ່ຈະສະແດງ UI ທີ່ບໍ່ກົງກັບຄວາມຈິງ.
+      if (!sent) {
+        _scheduleRetry();
+        return;
+      }
       setState(() => _state = _MatchState.waiting);
 
     } catch (e) {
@@ -332,28 +365,40 @@ class _MatchScreenState extends State<MatchScreen>
 
   // ── ສົ່ງ request ──────────────────────────────────────────
 
-  Future<void> _sendRequestToTop3(List<ProviderModel> top3) async {
-    if (top3.isEmpty) return;
+  // 🔒 [AUDIT M-6 / 2026-07-27] ສົ່ງຄືນ bool ຄວາມສຳເລັດ (ແທນ void) ໃຫ້ caller
+  // ຮູ້ໄດ້ວ່າ write ນີ້ຈິງໆສຳເລັດ ຫຼື ບໍ່ — ກ່ອນໜ້ານີ້ error ຖືກ swallow ງຽບໆຢູ່
+  // ນີ້, caller ຈຶ່ງສະແດງ UI "ສົ່ງແລ້ວ" ໂດຍບໍ່ຮູ້ຕົວວ່າ write ລົ້ມເຫຼວ. retry
+  // ໜຶ່ງຄັ້ງເອງພາຍໃນ (transient ອິນເຕີເນັດຂາດຊົ່ວຄາວ) ກ່ອນຍອມແພ້.
+  Future<bool> _sendRequestToTop3(List<ProviderModel> top3) async {
+    if (top3.isEmpty) return false;
     final ids = top3.map((p) => p.uid).toList();
-    try {
-      // 🔒 [AUDIT CRIT-5] ບໍ່ເຄີຍມີ timeout — ຖ້າຄ້າງ, _findAndSendTop3() ຈະ
-      // ຄ້າງຢູ່ await ນີ້ໂດຍບໍ່ throw (state ບໍ່ປ່ຽນເປັນ waiting), ອາໄສແຕ່
-      // _searchTimer (45s) ເປັນ safety net ດຽວ. ຕອນນີ້ timeout ໄວກວ່ານັ້ນ
-      // ໃຫ້ catch block ດ້ານລຸ່ມ log ໄດ້ທັນທີ.
-      await _db
-          .collection('bookings')
-          .doc(widget.bookingId)
-          .update({
-        'sentTo':    ids,
-        'status':    'pending',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }).timeout(const Duration(seconds: 15));
-      // TODO: ສົ່ງ FCM push ຜ່ານ Cloud Function
-      // ຕອນນີ້ provider app ຈະ stream bookings
-      // ທີ່ sentTo contains uid ຂອງຕົນເອງ
-    } catch (e) {
-      debugPrint('sendRequestToTop3: $e');
+
+    Future<bool> attempt() async {
+      try {
+        // 🔒 [AUDIT CRIT-5] ບໍ່ເຄີຍມີ timeout — ຖ້າຄ້າງ, _findAndSendTop3() ຈະ
+        // ຄ້າງຢູ່ await ນີ້ໂດຍບໍ່ throw (state ບໍ່ປ່ຽນເປັນ waiting), ອາໄສແຕ່
+        // _searchTimer (45s) ເປັນ safety net ດຽວ. ຕອນນີ້ timeout ໄວກວ່ານັ້ນ
+        // ໃຫ້ catch block ດ້ານລຸ່ມ log ໄດ້ທັນທີ.
+        await _db
+            .collection('bookings')
+            .doc(widget.bookingId)
+            .update({
+          'sentTo':    ids,
+          'status':    'pending',
+          'updatedAt': FieldValue.serverTimestamp(),
+        }).timeout(const Duration(seconds: 15));
+        // TODO: ສົ່ງ FCM push ຜ່ານ Cloud Function
+        // ຕອນນີ້ provider app ຈະ stream bookings
+        // ທີ່ sentTo contains uid ຂອງຕົນເອງ
+        return true;
+      } catch (e) {
+        debugPrint('sendRequestToTop3: $e');
+        return false;
+      }
     }
+
+    if (await attempt()) return true;
+    return attempt(); // one retry before giving up
   }
 
   // ════════════════════════════════════════════════════════
@@ -525,7 +570,7 @@ class _MatchScreenState extends State<MatchScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: C.navy,
+        backgroundColor: _kDeepSeaGreen,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(tr('cancel_booking_question'), style: const TextStyle(
           color: Colors.white, fontWeight: FontWeight.w800,
@@ -645,7 +690,7 @@ class _MatchScreenState extends State<MatchScreen>
         }
       },
       child: Scaffold(
-        backgroundColor: C.navy,
+        backgroundColor: _kDeepSeaGreen,
         body: SafeArea(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 400),
@@ -725,19 +770,28 @@ class _MatchScreenState extends State<MatchScreen>
     key: const ValueKey('searching'),
     width: double.infinity,
     height: double.infinity,
-    // ✅ [Redesign] flat C.navy → gradient + radial glow ຢູ່ຫຼັງ radar,
-    // ໃຫ້ຄວາມເລິກ/ບັນຍາກາດແທນພື້ນສີດຽວທຽບ
+    // ✅ [Theme] gradient ຂຽວແບຣນ LinTho (C.green) ໄລ່ລົງຫາຂຽວທະເລເຂັ້ມ —
+    // ແທນທີ່ navy/sky ເດີມ, ໃຫ້ຄວາມເລິກ/ບັນຍາກາດເຂົ້າກັບເອກະລັກແບຣນຫຼາຍຂຶ້ນ
     decoration: BoxDecoration(
       gradient: RadialGradient(
         center: const Alignment(0, -0.35),
         radius: 1.15,
         colors: [
-          Color.lerp(C.navy, C.sky, 0.22)!,
-          C.navy,
+          Color.lerp(_kDeepSeaGreen, C.green, 0.4)!,
+          _kDeepSeaGreen,
         ],
       ),
     ),
-    child: Padding(
+    // 🔒 [AUDIT H-6 / 2026-07-27] ກ່ອນໜ້ານີ້ Column ນີ້ຢູ່ໃນ Padding ທຳມະດາ
+    // (ບໍ່ scroll ໄດ້) ພ້ອມ flexible-spacer widget — ບົນຈໍນ້ອຍ (iPhone SE-class),
+    // ຂໍ້ຄວາມທີ່ຍາວ (ຊື່ບໍລິການ 2 ແຖວ), ຫຼື font scale ໃຫຍ່ກວ່າ 1.0, ເນື້ອຫາເກີນ
+    // viewport ໄດ້ — ປຸ່ມ "cancel_search" (ທາງດຽວທີ່ຍົກເລີກໄດ້, PopScope ດັກ back
+    // gesture ໄວ້ຄືກັນ) ຖືກດັນອອກຈາກຈໍ, ລູກຄ້າອາດຄ້າງຢູ່ໜ້ານີ້ໂດຍບໍ່ມີທາງອອກ.
+    // ຕອນນີ້ຫຸ້ມດ້ວຍ SingleChildScrollView (ຄືກັນກັບ _buildMatched()/
+    // _ConfirmedView ທີ່ຖືກຕ້ອງຢູ່ແລ້ວ) — flexible-spacer ຖືກປ່ຽນເປັນ SizedBox
+    // ຄົງທີ່ ເພາະ Expanded/flexible-spacer ໃຊ້ໃນ
+    // Column ພາຍໃນ scroll view ບໍ່ໄດ້ (unbounded height constraint).
+    child: SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(children: [
         const SizedBox(height: 20),
@@ -770,7 +824,7 @@ class _MatchScreenState extends State<MatchScreen>
           const SizedBox(width: 10),
           Expanded(child: _GlassStat(Icons.bolt_outlined,   tr('info_chip_fast_eta'))),
         ]),
-        const Spacer(),
+        const SizedBox(height: 40),
         const SizedBox(height: 12),
         _SoftCancelButton(onPressed: _cancelBooking, label: tr('cancel_search')),
         const SizedBox(height: 16),
@@ -782,7 +836,10 @@ class _MatchScreenState extends State<MatchScreen>
   // WAITING VIEW — ສົ່ງໄປ Top 3 ແລ້ວ ລໍຖ້າ
   // ════════════════════════════════════════════════════════
 
-  Widget _buildWaiting() => Padding(
+  // 🔒 [AUDIT H-6 / 2026-07-27] ຄືກັນກັບ _buildSearching() — ຫຸ້ມ
+  // SingleChildScrollView ແທນ Padding ທຳມະດາ, flexible-spacer ປ່ຽນເປັນ SizedBox
+  // ຄົງທີ່ (ເບິ່ງເຫດຜົນເຕັມຢູ່ _buildSearching()).
+  Widget _buildWaiting() => SingleChildScrollView(
     key: const ValueKey('waiting'),
     padding: const EdgeInsets.all(24),
     child: Column(children: [
@@ -844,7 +901,7 @@ class _MatchScreenState extends State<MatchScreen>
       )),
       const SizedBox(height: 8),
       const _SearchingDots(),
-      const Spacer(),
+      const SizedBox(height: 40),
       const SizedBox(height: 12),
       SizedBox(
         width: double.infinity,
@@ -1762,12 +1819,17 @@ class _GlassStat extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft, end: Alignment.bottomRight,
             colors: [
-              Colors.white.withValues(alpha: 0.16),
+              Colors.white.withValues(alpha: 0.18),
               Colors.white.withValues(alpha: 0.06),
             ],
           ),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
+          boxShadow: [BoxShadow(
+            color:      Colors.black.withValues(alpha: 0.12),
+            blurRadius: 14,
+            offset:     const Offset(0, 6),
+          )],
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, color: C.gold, size: 18),
@@ -1785,8 +1847,9 @@ class _GlassStat extends StatelessWidget {
 }
 
 // ── soft cancel button (searching state) ───────────────────
-// ✅ [Redesign] ແທນທີ່ OutlinedButton ຂອບແດງແຂງ 1.4px ດ້ວຍ pill ໂປ່ງແສງສີແດງ
-// ອ່ອນໆ — ຍັງອ່ານອອກວ່າເປັນ destructive action ແຕ່ບໍ່ແຂງກະດ້າງເທົ່າຂອບແຂງ
+// ✅ [Theme] glass pill ສີແດງອ່ອນ (BackdropFilter blur ຄືກັນກັບ _GlassStat)
+// ແທນທີ່ pill ແດງທຶບເດີມ — ອ່ານອອກວ່າເປັນ destructive action ແຕ່ dễ ເຂົ້າກັບ
+// gradient ຂຽວແບຣນຫຼັງ, ຮູ້ສຶກເປັນສ່ວນໜຶ່ງຂອງ theme ໃໝ່ ບໍ່ແມ່ນປຸ່ມແປະຕ່າງຫາກ
 class _SoftCancelButton extends StatelessWidget {
   final VoidCallback onPressed;
   final String       label;
@@ -1795,22 +1858,30 @@ class _SoftCancelButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
     width: double.infinity,
-    child: Material(
-      color: C.dangerRed.withValues(alpha: 0.14),
+    child: ClipRRect(
       borderRadius: BorderRadius.circular(28),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(28),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.close_rounded, color: C.dangerRed.withValues(alpha: 0.9), size: 16),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(
-              color: C.dangerRed.withValues(alpha: 0.95),
-              fontSize: 14, fontWeight: FontWeight.w700,
-            )),
-          ]),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Material(
+          color: C.dangerRed.withValues(alpha: 0.16),
+          child: InkWell(
+            onTap: onPressed,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: C.dangerRed.withValues(alpha: 0.35)),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.close_rounded, color: C.dangerRed.withValues(alpha: 0.95), size: 16),
+                const SizedBox(width: 6),
+                Text(label, style: TextStyle(
+                  color: C.dangerRed.withValues(alpha: 0.95),
+                  fontSize: 14, fontWeight: FontWeight.w700,
+                )),
+              ]),
+            ),
+          ),
         ),
       ),
     ),

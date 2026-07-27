@@ -281,14 +281,19 @@ void main() {
       // entirely and replaced by CustomerBookingRepository.cancelBooking(),
       // which has its own .timeout() (see booking_repository.dart) — so it's
       // no longer expected to exist here as a separate method.
+      // ✅ [AUDIT M-6 / 2026-07-27] _sendRequestToTop3's return type changed
+      // from Future<void> to Future<bool> (the caller now needs to know
+      // whether the sentTo write actually succeeded before showing "waiting"
+      // UI) — signature updated here to match, still asserting a .timeout()
+      // exists inside it.
       for (final signature in [
-        'Future<void> _sendRequestToTop3',
+        'Future<bool> _sendRequestToTop3',
         'Future<void> _markMatchConfirmed',
       ]) {
         final start = source.indexOf(signature);
         expect(start, greaterThan(-1),
             reason: '$signature should still exist');
-        final body = source.substring(start, (start + 800).clamp(0, source.length));
+        final body = source.substring(start, (start + 1200).clamp(0, source.length));
         expect(body, contains('.timeout('),
             reason: '$signature should wrap its Firestore write with .timeout()');
       }
