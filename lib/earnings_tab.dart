@@ -187,20 +187,31 @@ class ProviderEarningsTab extends ConsumerWidget {
         ]),
         ),
       ),
-    );
+    ).whenComplete(ctrl.dispose); // 🔒 [AUDIT L-6 / 2026-07-27] dispose the
+    //                                controller once the sheet is fully closed
   }
 
+  // 🔒 [AUDIT M-5 / 2026-07-27] ກ່ອນໜ້ານີ້ບໍ່ມີ `submitting` guard ຄືກັນກັບ
+  // _showWithdrawalSheet() ຂ້າງເທິງ — double-tap ໄວໆ ຈະຍິງ updateBankInfo()
+  // 2 ຄັ້ງພ້ອມກັນ, ຄັ້ງທຳອິດທີ່ resolve ຈະ Navigator.pop() ປິດ sheet, ຄັ້ງທີສອງ
+  // ທີ່ resolve ຫຼັງຈາກນັ້ນຈະ Navigator.pop() ອີກຄັ້ງ — ປັອບ route ອື່ນທີ່ບໍ່ໄດ້
+  // ຕັ້ງໃຈ (ອອກຈາກ Earnings tab). ຕອນນີ້ໃຊ້ pattern ດຽວກັນກັບ withdrawal sheet.
+  // ✅ [AUDIT L-6] ຄວບຄູ່ກັນ — TextEditingController ທັງ 3 ຕົວບໍ່ເຄີຍ dispose()
+  // ມາກ່ອນ; ຕອນນີ້ dispose ຫຼັງ sheet ປິດ (ບໍ່ວ່າຈະ save ສຳເລັດ, error, ຫຼື
+  // ຜູ້ໃຊ້ປັດປິດເອງ).
   void _showBankSheet(BuildContext context, WidgetRef ref, Wallet wallet) {
     final nameCtrl    = TextEditingController(text: wallet.bankName    ?? '');
     final accountCtrl = TextEditingController(text: wallet.bankAccount ?? '');
     final holderCtrl  = TextEditingController(text: wallet.bankHolder  ?? '');
+    bool submitting = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => Padding(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Padding(
         padding: EdgeInsets.only(
             left: 20, right: 20, top: 20,
             bottom: MediaQuery.of(context).viewInsets.bottom + 24),
@@ -217,17 +228,27 @@ class ProviderEarningsTab extends ConsumerWidget {
           _BankField(holderCtrl,  tr('account_holder'), Icons.person_outline),
           const SizedBox(height: 20),
           SizedBox(width: double.infinity, child: ElevatedButton(
-            onPressed: () async {
-              await ref.read(earningsRepoProvider).updateBankInfo(
-                bankName:    nameCtrl.text.trim(),
-                bankAccount: accountCtrl.text.trim(),
-                bankHolder:  holderCtrl.text.trim(),
-              );
-              if (context.mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(tr('bank_saved')),
-                    backgroundColor: C.green));
+            onPressed: submitting ? null : () async {
+              setS(() => submitting = true);
+              try {
+                await ref.read(earningsRepoProvider).updateBankInfo(
+                  bankName:    nameCtrl.text.trim(),
+                  bankAccount: accountCtrl.text.trim(),
+                  bankHolder:  holderCtrl.text.trim(),
+                );
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(tr('bank_saved')),
+                      backgroundColor: C.green));
+                }
+              } catch (e) {
+                if (ctx.mounted) {
+                  setS(() => submitting = false);
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text('$e'),
+                          backgroundColor: C.red));
+                }
               }
             },
             style: ElevatedButton.styleFrom(
@@ -235,13 +256,23 @@ class ProviderEarningsTab extends ConsumerWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.symmetric(vertical: 16)),
-            child: Text(tr('save'), style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w800,
-                fontSize: 16)),
+            child: submitting
+                ? const SizedBox(
+                    width: 22, height: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.4, color: Colors.white))
+                : Text(tr('save'), style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w800,
+                    fontSize: 16)),
           )),
         ]),
+        ),
       ),
-    );
+    ).whenComplete(() {
+      nameCtrl.dispose();
+      accountCtrl.dispose();
+      holderCtrl.dispose();
+    });
   }
 }
 
