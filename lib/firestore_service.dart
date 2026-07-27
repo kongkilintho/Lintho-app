@@ -4,7 +4,10 @@
 //   ✅ [FIX-1] ລຶບ ProviderModel ເກົ່າອອກ — ໃຊ້ provider_model.dart ແທນ
 //   ✅ [FIX-2] ລຶບ BookingStatus ເກົ່າອອກ — ໃຊ້ອັນໃນ main.dart ແທນ
 //   ✅ [FIX-3] import provider_model.dart
-//   ✅ ຄົງ ReviewModel, FirestoreService ໄວ້ທັງໝົດ
+//   🔒 [AUDIT H-1 / L-1] ລຶບ dead legacy methods ອອກ (saveUser/getUser/
+//      getAllUsers/createBooking/getProviderJobs/getAllBookings/
+//      acceptBooking/getServices/getStats) — ບໍ່ມີ caller, ແລະ ໜຶ່ງໃນນັ້ນ
+//      (acceptBooking) ເປັນສາເຫດທີ່ເຮັດໃຫ້ H-1 bug ຖືກຫຼົງເບິ່ງຂ້າມ.
 // ============================================================
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -56,64 +59,19 @@ class ReviewModel {
 class FirestoreService {
   static final _db = FirebaseFirestore.instance;
 
-  // ── USERS ─────────────────────────────────────────────────
-
-  static Future<void> saveUser({
-    required String uid,
-    required String name,
-    required String email,
-    required String phone,
-    required String role,
-  }) async {
-    await _db.collection('users').doc(uid).set({
-      'uid':       uid,
-      'name':      name,
-      'email':     email,
-      'phone':     phone,
-      'role':      role,
-      'createdAt': FieldValue.serverTimestamp(),
-      'status':    'active',
-    });
-  }
-
-  static Future<Map<String, dynamic>?> getUser(String uid) async {
-    final doc = await _db.collection('users').doc(uid).get();
-    return doc.data();
-  }
-
-  static Stream<QuerySnapshot> getAllUsers() =>
-      _db.collection('users').snapshots();
-
   // ── BOOKINGS ──────────────────────────────────────────────
-
-  static Future<String> createBooking({
-    required String serviceName,
-    required String serviceEmoji,
-    required String price,
-    required String date,
-    required String time,
-    required String address,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final ref  = await _db.collection('bookings').add({
-      'customerId':    user?.uid,
-      'customerName':  user?.displayName,
-      'customerEmail': user?.email,
-      'serviceName':   serviceName,
-      'serviceEmoji':  serviceEmoji,
-      'price':         price,
-      'date':          date,
-      'time':          time,
-      'address':       address,
-      'status':        'pending',
-      'providerId':    null,
-      'providerName':  null,
-      'reviewed':      false,
-      'createdAt':     FieldValue.serverTimestamp(),
-    });
-    return ref.id;
-  }
-
+  //
+  // 🔒 [AUDIT H-1 / L-1 / 2026-07-27] ໜ້ານີ້ເຄີຍມີ saveUser()/getUser()/
+  // getAllUsers()/createBooking()/getProviderJobs()/getAllBookings()/
+  // acceptBooking()/getServices()/getStats() — ທັງໝົດເປັນ implementation ເກົ່າ
+  // ຈາກກ່ອນແອັບຖືກປັບໂຄງສ້າງໄປໃຊ້ BookingRepository/CustomerBookingRepository
+  // (booking_repository.dart) ແລະ ບໍ່ມີ caller ໃດເອີ້ນເລີຍ (ຢືນຢັນແລ້ວດ້ວຍ grep
+  // ທົ່ວ lib/). ອັນຕະລາຍທີ່ພົບ: acceptBooking() ຂ້າງລຸ່ມນີ້ (ລຶບອອກແລ້ວ) ຂຽນ
+  // providerName ຖືກຕ້ອງ — ໃນຂະນະທີ່ BookingRepository.acceptBooking() ຈິງ
+  // (ໜ້າຈໍທຸກໜ້າເອີ້ນ) ບໍ່ເຄີຍຂຽນເລີຍ (H-1 bug, ແກ້ໄຂແລ້ວ). ໂຄ້ດເກົ່ານີ້ເຮັດໃຫ້
+  // reviewer ຄົ້ນຫາ "acceptBooking ຂຽນ providerName ບໍ" ພົບ copy ນີ້ກ່ອນ ແລ້ວ
+  // ເຂົ້າໃຈຜິດວ່າ bug ບໍ່ມີ. ລຶບອອກທັງໝົດເພື່ອບໍ່ໃຫ້ເກີດຄວາມສັບສົນຊ້ຳອີກ.
+  //
   // 🔒 [AUDIT H13] ບໍ່ເຄີຍມີ .limit()/.orderBy() ຢູ່ນີ້ — listener ນີ້ຖືກ mount
   // ຕັ້ງແຕ່ເປີດແອັບ (BookingScreen ເປັນໜຶ່ງໃນ 3 tab ຂອງ IndexedStack ໃນ
   // MainShell, main.dart) ແລະ ຄ້າງໄວ້ຕະຫຼອດ session — ລູກຄ້າເກົ່າທີ່ຈອງມາຫຼາຍປີ
@@ -127,57 +85,6 @@ class FirestoreService {
         .orderBy('createdAt', descending: true)
         .limit(50)
         .snapshots();
-  }
-
-  static Stream<QuerySnapshot> getProviderJobs() {
-    return _db
-        .collection('bookings')
-        .where('status', whereIn: ['pending', 'accepted', 'inprogress'])
-        .snapshots();
-  }
-
-  static Stream<QuerySnapshot> getAllBookings() =>
-      _db.collection('bookings').snapshots();
-
-  static Future<void> acceptBooking(String bookingId) async {
-    final user = FirebaseAuth.instance.currentUser;
-    await _db.collection('bookings').doc(bookingId).update({
-      'status':       'accepted',
-      'providerId':   user?.uid,
-      'providerName': user?.displayName,
-    });
-  }
-
-  // ── SERVICES ──────────────────────────────────────────────
-
-  static Stream<QuerySnapshot> getServices() {
-    return _db
-        .collection('services')
-        .where('active', isEqualTo: true)
-        .snapshots();
-  }
-
-  // ── STATS ─────────────────────────────────────────────────
-
-  static Future<Map<String, int>> getStats() async {
-    final users = await _db.collection('users').count().get();
-    final bookings = await _db.collection('bookings').count().get();
-    final providers = await _db
-        .collection('users')
-        .where('role', isEqualTo: 'provider')
-        .count()
-        .get();
-    final pending = await _db
-        .collection('bookings')
-        .where('status', isEqualTo: 'pending')
-        .count()
-        .get();
-    return {
-      'users':     users.count     ?? 0,
-      'bookings':  bookings.count  ?? 0,
-      'providers': providers.count ?? 0,
-      'pending':   pending.count   ?? 0,
-    };
   }
 
   // ── PROVIDERS ─────────────────────────────────────────────

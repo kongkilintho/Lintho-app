@@ -65,6 +65,12 @@ class Booking {
   final String    customerId;
   final String    customerName;
   final String    customerPhone;
+  // ✅ [Phone-verified booking] ເບີໂທທີ່ໃຊ້ຕິດຕໍ່ຈິງສຳລັບ booking ນີ້ — ມາຈາກ
+  // ເບີໂທທີ່ຢືນຢັນແລ້ວຂອງບັນຊີ (FirebaseAuth.currentUser.phoneNumber) ຕອນຈອງ.
+  // fromFirestore() fallback ໄປ customerPhone ໃຫ້ booking ເກົ່າ (ກ່ອນ field ນີ້
+  // ຖືກເພີ່ມ) ຍັງໃຊ້ໄດ້ປົກກະຕິ — ຝັ່ງຊ່າງ (job_workflow_Screen.dart) ຄວນອ່ານ
+  // field ນີ້ແທນ customerPhone ໂດຍກົງ.
+  final String    contactPhone;
   final String?   customerPhotoUrl;
   final String    providerId;
   final String    serviceType;
@@ -116,12 +122,24 @@ class Booking {
   // ດຽວອີກຕໍ່ໄປສຳລັບການໂອນເງິນ (cash ຍັງເປັນ self-attested, ຍອມຮັບເປັນຂໍ້ຈຳກັດ
   // ທີ່ຮູ້ຢູ່ແລ້ວເນື່ອງຈາກບໍ່ມີ payment gateway ແທ້).
   final bool customerConfirmedPayment;
+  // 🔒 [AUDIT H-1 / 2026-07-27] ຊ່າງ (displayName/phone/rating/totalJobs/
+  // photoUrl ຈາກ providers/{uid}) ຖືກ denormalize ໃສ່ booking doc ໂດຍ
+  // acceptBooking() (booking_repository.dart) ຕອນຮັບງານ — ກ່ອນໜ້ານີ້ບໍ່ເຄີຍຖືກ
+  // ຂຽນເລີຍ, ເຮັດໃຫ້ Match/Tracking/Detail/Review screen (ອ່ານ field ເຫຼົ່ານີ້
+  // ໂດຍກົງຈາກ booking doc) ສະແດງຊື່/ຮູບ/ຄະແນນ/ເບີວ່າງເປົ່າ ແລະ ປຸ່ມ "ໂທຫາຊ່າງ"
+  // ບໍ່ເຮັດວຽກ (phone ຫວ່າງ). ນຳໃຊ້ field ຊື່ດຽວກັນກັບທີ່ 4 ໜ້າຈໍນັ້ນອ່ານຢູ່ແລ້ວ.
+  final String? providerName;
+  final String? providerPhone;
+  final double? providerRating;
+  final int?    providerJobs;
+  final String? providerPhoto;
 
   const Booking({
     required this.id,
     required this.customerId,
     required this.customerName,
     required this.customerPhone,
+    this.contactPhone = '',
     this.customerPhotoUrl,
     required this.providerId,
     required this.serviceType,
@@ -153,6 +171,11 @@ class Booking {
     this.rejectedBy = const [],
     this.sentTo = const [],
     this.customerConfirmedPayment = false,
+    this.providerName,
+    this.providerPhone,
+    this.providerRating,
+    this.providerJobs,
+    this.providerPhoto,
   });
 
   // 🔒 [AUDIT H10] ກ່ອນໜ້ານີ້ scheduledAt/createdAt/expiresAt (`as Timestamp`
@@ -163,26 +186,40 @@ class Booking {
   // exception ຈາກ doc ດຽວຈະກາຍເປັນ stream error ຂອງ "ທັງ list" ບໍ່ແມ່ນສະເພາະ
   // doc ນັ້ນ, ເຮັດໃຫ້ວຽກທັງໝົດຂອງ provider ຫາຍໄປຫລັງ error screen ຍ້ອນ doc
   // ດຽວ. ຕອນນີ້ທຸກ field ເຫຼົ່ານີ້ default ປອດໄພແທນ throw.
+  // 🔒 [AUDIT H-4 / 2026-07-27] `as String?` throws (does NOT coerce) if the
+  // underlying Firestore value is a non-null, non-String type (e.g. a number
+  // or map written by a modified client, a manual console edit, or a partial/
+  // corrupt write). Every String field below used to cast this way — one
+  // malformed document would throw inside Stream.map(Booking.fromFirestore)
+  // and take down the *entire* list (watchOpenJobs/watchActiveBookings/
+  // watchJobHistory), silently emptying every provider's job board. _str()/
+  // _strN() check the runtime type first and fall back instead of throwing.
+  static String _str(dynamic v, [String fallback = '']) =>
+      v is String ? v : fallback;
+  static String? _strN(dynamic v) => v is String ? v : null;
+
   factory Booking.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return Booking(
       id:                        doc.id,
-      customerId:                d['customerId']                as String? ?? '',
-      customerName:              d['customerName']              as String? ?? '',
-      customerPhone:             d['customerPhone']             as String? ?? '',
-      customerPhotoUrl:          d['customerPhotoUrl']          as String?,
+      customerId:                _str(d['customerId']),
+      customerName:              _str(d['customerName']),
+      customerPhone:             _str(d['customerPhone']),
+      // ✅ fallback ໄປ customerPhone ໃຫ້ booking ເກົ່າ (ກ່ອນ field ນີ້ຖືກເພີ່ມ)
+      contactPhone:              _str(d['contactPhone'], _str(d['customerPhone'])),
+      customerPhotoUrl:          _strN(d['customerPhotoUrl']),
       // ✅ Path A booking (booking_form_screen.dart) ບໍ່ຂຽນ providerId/
       // serviceType/serviceEmoji ຕອນສ້າງ booking (ມັນຖືກ backfill ພາຍຫຼັງ
       // ຕອນ matched) — cast ແບບ non-nullable ຈະ crash ໃສ່ booking ທີ່ຍັງບໍ່
       // ມີ provider ຈັບຄູ່. ໃຫ້ default ປອດໄພແທນ.
-      providerId:                d['providerId']                as String? ?? '',
-      serviceType:               d['serviceType']               as String? ?? (d['category'] as String? ?? ''),
-      category:                  d['category']                  as String? ?? '',
-      serviceEmoji:              d['serviceEmoji']               as String? ?? '🔧',
-      address:                   d['address']                   as String? ?? '',
-      landmark:                  d['landmark']                  as String? ?? '',
-      specialInstructions:       d['specialInstructions']       as String? ?? '',
-      jobPhotoUrl:               d['jobPhotoUrl']                as String?,
+      providerId:                _str(d['providerId']),
+      serviceType:               _str(d['serviceType'], _str(d['category'])),
+      category:                  _str(d['category']),
+      serviceEmoji:              _str(d['serviceEmoji'], '🔧'),
+      address:                   _str(d['address']),
+      landmark:                  _str(d['landmark']),
+      specialInstructions:       _str(d['specialInstructions']),
+      jobPhotoUrl:               _strN(d['jobPhotoUrl']),
       location:                  d['location']                  as GeoPoint? ?? const GeoPoint(0, 0),
       scheduledAt:              (d['scheduledAt']  as Timestamp?)?.toDate() ?? DateTime.now(),
       status:                    _parseStatus(d['status'] as String?),
@@ -191,23 +228,28 @@ class Booking {
       // ຕອນ rehydrate booking ເກົ່ານັ້ນ.
       price:                    (d['price'] as num?)?.toDouble() ?? 0,
       additionalCharges:        (d['additionalCharges'] as num?)?.toDouble(),
-      additionalChargesNote:     d['additionalChargesNote']     as String?,
+      additionalChargesNote:     _strN(d['additionalChargesNote']),
       additionalChargesApproved: d['additionalChargesApproved'] as bool? ?? false,
-      beforePhotoUrl:            d['beforePhotoUrl']            as String?,
-      afterPhotoUrl:             d['afterPhotoUrl']             as String?,
-      cancelReason:              d['cancelReason']              as String?,
+      beforePhotoUrl:            _strN(d['beforePhotoUrl']),
+      afterPhotoUrl:             _strN(d['afterPhotoUrl']),
+      cancelReason:              _strN(d['cancelReason']),
       createdAt:                (d['createdAt']  as Timestamp?)?.toDate() ?? DateTime.now(),
       acceptedAt:               (d['acceptedAt'] as Timestamp?)?.toDate(),
       completedAt:              (d['completedAt'] as Timestamp?)?.toDate(),
       expiresAt:                (d['expiresAt']  as Timestamp?)?.toDate() ?? DateTime.now(),
-      paymentMethod:             d['paymentMethod']             as String? ?? 'cash',
-      paymentStatus:             d['paymentStatus']             as String? ?? 'pending',
-      clientRequestId:           d['clientRequestId']           as String?,
-      cancelledBy:               d['cancelledBy']                as String?,
+      paymentMethod:             _str(d['paymentMethod'], 'cash'),
+      paymentStatus:             _str(d['paymentStatus'], 'pending'),
+      clientRequestId:           _strN(d['clientRequestId']),
+      cancelledBy:               _strN(d['cancelledBy']),
       cancelFeeAmount:          (d['cancelFeeAmount'] as num?)?.toDouble(),
       rejectedBy:                List<String>.from(d['rejectedBy'] ?? const []),
       sentTo:                    List<String>.from(d['sentTo'] ?? const []),
       customerConfirmedPayment:  d['customerConfirmedPayment'] as bool? ?? false,
+      providerName:              _strN(d['providerName']),
+      providerPhone:             _strN(d['providerPhone']),
+      providerRating:           (d['providerRating'] as num?)?.toDouble(),
+      providerJobs:              d['providerJobs'] as int?,
+      providerPhoto:             _strN(d['providerPhoto']),
     );
   }
 
@@ -224,7 +266,8 @@ class Booking {
 
   Map<String, dynamic> toMap() => {
     'customerId': customerId, 'customerName': customerName,
-    'customerPhone': customerPhone, 'customerPhotoUrl': customerPhotoUrl,
+    'customerPhone': customerPhone, 'contactPhone': contactPhone,
+    'customerPhotoUrl': customerPhotoUrl,
     'providerId': providerId, 'serviceType': serviceType,
     'category': category,
     'serviceEmoji': serviceEmoji, 'address': address,
@@ -248,6 +291,11 @@ class Booking {
     'rejectedBy': rejectedBy,
     'sentTo': sentTo,
     'customerConfirmedPayment': customerConfirmedPayment,
+    'providerName': providerName,
+    'providerPhone': providerPhone,
+    'providerRating': providerRating,
+    'providerJobs': providerJobs,
+    'providerPhoto': providerPhoto,
   };
 
   Booking copyWith({
@@ -258,7 +306,8 @@ class Booking {
     String? paymentStatus, String? cancelledBy, double? cancelFeeAmount,
   }) => Booking(
     id: id, customerId: customerId, customerName: customerName,
-    customerPhone: customerPhone, customerPhotoUrl: customerPhotoUrl,
+    customerPhone: customerPhone, contactPhone: contactPhone,
+    customerPhotoUrl: customerPhotoUrl,
     providerId: providerId, serviceType: serviceType,
     category: category,
     serviceEmoji: serviceEmoji, address: address,
@@ -286,6 +335,11 @@ class Booking {
     rejectedBy: rejectedBy,
     sentTo: sentTo,
     customerConfirmedPayment: customerConfirmedPayment,
+    providerName: providerName,
+    providerPhone: providerPhone,
+    providerRating: providerRating,
+    providerJobs: providerJobs,
+    providerPhoto: providerPhoto,
   );
 
   bool   get isExpired       => status == JobStatus.pending && expiresAt.isBefore(DateTime.now());

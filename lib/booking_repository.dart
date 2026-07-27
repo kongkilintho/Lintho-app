@@ -24,6 +24,24 @@ import 'cloudinary_service.dart';
 // .timeout() ອັນດຽວກັນ ໃຫ້ throw error ຊັດເຈນແທນ ຄ້າງຕະຫຼອດໄປ.
 const Duration kNetworkOpTimeout = Duration(seconds: 15);
 
+// 🔒 [AUDIT H-4 / 2026-07-27] Booking.fromFirestore() ຖືກ harden ໃຫ້ບໍ່ throw
+// ໃສ່ type ຜິດປົກກະຕິແລ້ວ (ເບິ່ງ _str()/_strN() ໃນ Booking.dart), ແຕ່ນີ້ເປັນ
+// defense-in-depth ຊັ້ນທີສອງ: ຖ້າ document ໃດຍັງ throw ຢູ່ (ເຫດຜົນອື່ນທີ່ຄາດ
+// ບໍ່ເຖິງ) ໃຫ້ຂ້າມ document ນັ້ນອັນດຽວ ແທນທີ່ຈະໃຫ້ exception ນັ້ນກາຍເປັນ stream
+// error ຂອງ "ທັງ list" — ກ່ອນໜ້ານີ້ doc ດຽວທີ່ parse ບໍ່ໄດ້ ຈະເຮັດໃຫ້ວຽກທັງໝົດ
+// ຂອງ provider ທຸກຄົນຫາຍໄປຈາກ job board ແບບງຽບໆ (ເບິ່ງ H-4 ໃນ audit report).
+List<Booking> _safeMapBookings(QuerySnapshot s) {
+  final out = <Booking>[];
+  for (final doc in s.docs) {
+    try {
+      out.add(Booking.fromFirestore(doc));
+    } catch (_) {
+      // ຂ້າມ document ນີ້ອັນດຽວ — ບໍ່ໃຫ້ affect ວຽກອື່ນໃນ list ດຽວກັນ
+    }
+  }
+  return out;
+}
+
 // ════════════════════════════════════════════════════════════
 // BOOKING REPOSITORY
 // ════════════════════════════════════════════════════════════
@@ -51,7 +69,7 @@ class BookingRepository {
         .orderBy('createdAt', descending: true)
         .limit(30)
         .snapshots()
-        .map((s) => s.docs.map(Booking.fromFirestore).toList());
+        .map(_safeMapBookings);
   }
 
   Stream<List<Booking>> watchJobHistory() {
@@ -66,7 +84,7 @@ class BookingRepository {
         .orderBy('createdAt', descending: true)
         .limit(50)
         .snapshots()
-        .map((s) => s.docs.map(Booking.fromFirestore).toList());
+        .map(_safeMapBookings);
   }
 
   // ✅ [FIX-3] ວຽກທີ່ຍັງບໍ່ຖືກມອບໝາຍ providerId (ບາງ flow ສ້າງ booking ໂດຍບໍ່
@@ -83,7 +101,7 @@ class BookingRepository {
         .orderBy('createdAt', descending: true)
         .limit(50)
         .snapshots()
-        .map((s) => s.docs.map(Booking.fromFirestore).toList());
+        .map(_safeMapBookings);
   }
 
   Stream<Booking> watchBooking(String bookingId) {
@@ -96,9 +114,22 @@ class BookingRepository {
 
   // ── ຮັບງານ ────────────────────────────────────────────────
 
+  // 🔒 [AUDIT H-1 / 2026-07-27] ກ່ອນໜ້ານີ້ transaction ນີ້ຂຽນແຕ່ status/
+  // acceptedAt/providerId — ບໍ່ເຄີຍ denormalize ຊື່/ເບີ/ຄະແນນ/ຮູບຊ່າງໃສ່ booking
+  // doc ເລີຍ. ແຕ່ match_screen.dart (_onMatched), tracking_screen.dart
+  // (_callProvider), booking_display_helpers.dart (providerFromBooking, ໃຊ້ໂດຍ
+  // booking_detail_screen.dart/review_screen.dart) ທັງໝົດອ່ານ providerName/
+  // providerPhone/providerRating/providerJobs/providerPhoto ໂດຍກົງຈາກ booking
+  // doc, ຄາດວ່າມີຄ່າຢູ່ແລ້ວ — ເຮັດໃຫ້ທຸກ booking ຈິງສະແດງຊື່ຊ່າງວ່າງເປົ່າ ແລະ ປຸ່ມ
+  // "ໂທຫາຊ່າງ" ບໍ່ເຮັດວຽກ (ເບີວ່າງ). ຕອນນີ້ອ່ານ providers/{uid} ຂອງຕົນເອງພາຍໃນ
+  // transaction ດຽວກັນ (Firestore ບັງຄັບ get() ທັງໝົດເກີດກ່ອນ update()/set()
+  // ຢູ່ແລ້ວ) ແລ້ວຂຽນ field ເຫຼົ່ານີ້ພ້ອມກັນ. firestore.rules whitelist ຖືກອັບເດດ
+  // ໃຫ້ກົງກັນແລ້ວ (ເບິ່ງ isValidSentToTargeting() ນຳ — H-2, ຮັບງານໄດ້ສະເພາະຖ້າ
+  // ບໍ່ໄດ້ຖືກຈຳກັດ sentTo ຫຼື ຕົນເອງຢູ່ໃນ sentTo).
   Future<void> acceptBooking(String bookingId) async {
     if (_uid.isEmpty) return; // ✅ [FIX-1] guard
     final ref = _db.collection('bookings').doc(bookingId);
+    final providerRef = _db.collection('providers').doc(_uid);
     late Booking b;
 
     await _db.runTransaction((tx) async {
@@ -107,10 +138,22 @@ class BookingRepository {
       if (b.status != JobStatus.pending) {
         throw Exception('ງານນີ້ມີຄົນຮັບໄປແລ້ວ');
       }
+      // 🔒 [AUDIT H-2] ກົງກັບ isValidSentToTargeting() ໃນ firestore.rules —
+      // ກວດຢູ່ client ນຳເພື່ອສະແດງ error ທີ່ເຂົ້າໃຈງ່າຍ ແທນ permission-denied ດິບ.
+      if (b.sentTo.isNotEmpty && !b.sentTo.contains(_uid)) {
+        throw Exception('ງານນີ້ບໍ່ໄດ້ຖືກສົ່ງໃຫ້ທ່ານ');
+      }
+      final providerSnap = await tx.get(providerRef);
+      final p = providerSnap.data() ?? const <String, dynamic>{};
       tx.update(ref, {
-        'status':     JobStatus.accepted.name,
-        'acceptedAt': FieldValue.serverTimestamp(),
-        'providerId': _uid,
+        'status':         JobStatus.accepted.name,
+        'acceptedAt':     FieldValue.serverTimestamp(),
+        'providerId':     _uid,
+        'providerName':   p['displayName'] as String? ?? '',
+        'providerPhone':  p['phone']       as String? ?? '',
+        'providerRating': (p['rating']     as num?)?.toDouble() ?? 0.0,
+        'providerJobs':   p['totalJobs']   as int?    ?? 0,
+        'providerPhoto':  p['photoUrl']    as String? ?? '',
       });
     }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
         'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
