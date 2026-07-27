@@ -7,6 +7,7 @@ import 'app_colors.dart';
 import 'app_locale.dart';
 import 'quick_booking_provider.dart' show formatKip;
 import 'referral_provider.dart';
+import 'widgets/error_state_view.dart';
 
 class ReferralScreen extends ConsumerStatefulWidget {
   const ReferralScreen({super.key});
@@ -40,7 +41,11 @@ class _ReferralScreenState extends ConsumerState<ReferralScreen> {
       ),
       body: infoAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('${tr("error")}: $e')),
+        // 🔒 [AUDIT M-9 / 2026-07-27] ກ່ອນໜ້ານີ້ສະແດງ error text ດິບ ໂດຍບໍ່ມີ
+        // ປຸ່ມ retry ໃດເລີຍ — ໃຊ້ ErrorStateView ມາດຕະຖານດຽວກັນກັບໜ້າຈໍອື່ນ.
+        error: (e, _) => ErrorStateView(
+          onRetry: () => ref.invalidate(referralInfoProvider),
+        ),
         data: (info) {
           if (info == null) return Center(child: Text(tr('fill_all')));
           return SingleChildScrollView(
@@ -49,11 +54,11 @@ class _ReferralScreenState extends ConsumerState<ReferralScreen> {
               _CodeCard(code: info.code),
               const SizedBox(height: 16),
               Row(children: [
-                _Stat('${info.referredCount}', 'ໝູ່ທີ່ໃຊ້ສຳເລັດ'),
-                _Stat(formatKip(info.totalEarnedFromReferrals), 'ໄດ້ຮັບລວມ'),
+                _Stat('${info.referredCount}', tr('referral_succeeded_count')),
+                _Stat(formatKip(info.totalEarnedFromReferrals), tr('referral_total_earned')),
               ]),
               const SizedBox(height: 24),
-              const Text('ໃສ່ໂຄ້ດໝູ່', style: TextStyle(
+              Text(tr('enter_friend_code'), style: const TextStyle(
                   fontSize: 14, fontWeight: FontWeight.w700, color: C.text)),
               const SizedBox(height: 8),
               Row(children: [
@@ -117,7 +122,7 @@ class _CodeCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('ໂຄ້ດແນະນຳຂອງທ່ານ', style: TextStyle(
+        Text(tr('your_referral_code'), style: const TextStyle(
             color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         Row(children: [

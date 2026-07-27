@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_colors.dart';
+import 'app_locale.dart';
 import 'coupon_repository.dart';
 import 'widgets/empty_state_view.dart';
 import 'widgets/error_state_view.dart';
@@ -24,7 +25,7 @@ class CouponListScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: C.bg,
       appBar: AppBar(
-        title: const Text('ຄູປອງສ່ວນຫຼຸດ'),
+        title: Text(tr('coupons_title')),
       ),
       body: couponsAsync.when(
         // ✅ [FIX — shared components] ເຄີຍ CircularProgressIndicator ດຽວ,
@@ -42,7 +43,7 @@ class CouponListScreen extends ConsumerWidget {
           if (coupons.isEmpty) {
             return EmptyStateView(
               icon: Icons.local_offer_outlined,
-              title: 'ຍັງບໍ່ມີຄູປອງສ່ວນຫຼຸດ',
+              title: tr('no_coupons'),
               accent: C.orange,
             );
           }

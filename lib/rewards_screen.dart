@@ -8,7 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_colors.dart';
+import 'app_locale.dart';
 import 'rewards_provider.dart';
+import 'widgets/empty_state_view.dart';
+import 'widgets/error_state_view.dart';
 
 class RewardsScreen extends ConsumerStatefulWidget {
   const RewardsScreen({super.key});
@@ -32,7 +35,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
-        title: const Text('ແຕ້ມສະສົມ', style: TextStyle(
+        title: Text(tr('rewards_title'), style: const TextStyle(
             color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),
       ),
       body: SingleChildScrollView(
@@ -40,7 +43,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           _BalanceCard(points: pointsAsync.value ?? 0),
           const SizedBox(height: 20),
-          const Text('ແລກແຕ້ມເປັນຄູປອງສ່ວນຫຼຸດ', style: TextStyle(
+          Text(tr('redeem_points_title'), style: const TextStyle(
               fontSize: 14, fontWeight: FontWeight.w700, color: C.text)),
           const SizedBox(height: 8),
           settingsAsync.when(
@@ -57,21 +60,33 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const Text('ປະຫວັດແຕ້ມ', style: TextStyle(
+          Text(tr('points_history_title'), style: const TextStyle(
               fontSize: 14, fontWeight: FontWeight.w700, color: C.text)),
           const SizedBox(height: 8),
           historyAsync.when(
             loading: () => const Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
                 child: Center(child: CircularProgressIndicator())),
-            error: (e, _) => Text('ໂຫລດປະຫວັດບໍ່ໄດ້: $e',
-                style: const TextStyle(color: C.red, fontSize: 12)),
+            // 🔒 [AUDIT M-9 / 2026-07-27] ກ່ອນໜ້ານີ້ສະແດງ error text ດິບ ໂດຍ
+            // ບໍ່ມີປຸ່ມ retry ໃດເລີຍ — ໃຊ້ ErrorStateView ມາດຕະຖານດຽວກັນກັບ
+            // ໜ້າຈໍອື່ນ (coupon_list_screen.dart ເປັນຕົ້ນ).
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: ErrorStateView(
+                compact: true,
+                message: tr('points_history_load_failed'),
+                onRetry: () => ref.invalidate(rewardHistoryProvider),
+              ),
+            ),
             data: (history) {
               if (history.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: Text('ຍັງບໍ່ມີປະຫວັດແຕ້ມ',
-                      style: TextStyle(color: C.muted, fontSize: 13))),
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: EmptyStateView(
+                    icon: Icons.history_rounded,
+                    title: tr('no_points_history'),
+                    accent: C.muted,
+                  ),
                 );
               }
               return Column(children: [

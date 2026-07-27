@@ -18,6 +18,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_colors.dart';
+import 'app_locale.dart';
 
 // ════════════════════════════════════════════════════════════
 // MODEL
@@ -69,7 +70,7 @@ class ChatListScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation:   0,
         centerTitle: true,
-        title: const Text('ຂໍ້ຄວາມ', style: TextStyle(
+        title: Text(tr('chat_title'), style: const TextStyle(
           color: C.primary, fontWeight: FontWeight.w800, fontSize: 18,
         )),
       ),
@@ -119,8 +120,8 @@ class ChatListScreen extends StatelessWidget {
   }
 
   void _showNewChatHint(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content:         Text('ຈອງບໍລິການກ່ອນ ຈາກນັ້ນ chat ຈະເປີດອັດຕະໂນມັດ'),
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content:         Text(tr('chat_book_first_hint')),
       backgroundColor: C.primary,
       behavior:        SnackBarBehavior.floating,
     ));
