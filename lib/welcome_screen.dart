@@ -13,9 +13,11 @@ import 'register_otp.dart';
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
-  static const _bg = Color(0xFFF8FAFC);
+  // ✅ [Brand color audit 2026-07-27 v2] #F8FAFC ເປັນຄ່າ drift ໃກ້ຄຽງ C.bg
+  // (#F8FAFF) ໂດຍບໍ່ຕັ້ງໃຈ — ລວມເປັນ token ດຽວ
+  static const _bg = C.bg;
   static const _primary = C.primary;
-  static const _mint = Color(0xFFB7F0D8);
+  static const _mint = Color(0xFFB7F0D8); // illustration-only pastel, ບໍ່ແມ່ນ brand token
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +38,7 @@ class WelcomeScreen extends StatelessWidget {
                 Align(
                   alignment: Alignment.topRight,
                   child: IconButton(
-                    icon: const Icon(Icons.language, color: Color(0xFF0F172A)),
+                    icon: const Icon(Icons.language, color: C.text),
                     tooltip: tr('change_language_semantic'), // ✅ [FIX ME-AUTH-5]
                     onPressed: () => LanguageSelector.show(context),
                   ),
@@ -100,7 +102,7 @@ class _WelcomeHeader extends StatelessWidget {
             fontSize: 30,
             fontWeight: FontWeight.w800,
             letterSpacing: 0.2,
-            color: Color(0xFF0F172A),
+            color: C.text,
           ),
         ),
         const SizedBox(height: 10),
@@ -111,7 +113,7 @@ class _WelcomeHeader extends StatelessWidget {
             fontSize: 15,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.2,
-            color: Color(0xFF475569),
+            color: C.muted,
           ),
         ),
       ],
@@ -242,7 +244,7 @@ class _WelcomeIllustration extends StatelessWidget {
               size: 34,
               icon: Icons.cleaning_services_rounded,
               bg: mint,
-              fg: const Color(0xFF0F172A),
+              fg: C.text,
             ),
           ),
           const Positioned(

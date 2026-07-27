@@ -44,7 +44,7 @@ class ProviderHomeTab extends ConsumerWidget {
     final openJobs       = ref.watch(unassignedOpenJobsProvider);
 
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       body: SafeArea(
         child: Column(children: [
           _Header(
@@ -322,12 +322,14 @@ class _JobListView extends ConsumerWidget {
         icon: Icons.inbox_outlined,
         title: tr('no_jobs'),
         subtitle: tr('wait_customer'),
-        accent: C.sky,
+        // ✅ [Brand color audit 2026-07-27] empty state = ສີກາງ, ບໍ່ແມ່ນສີແບຣນ
+        accent: C.muted,
       );
     }
 
     return RefreshIndicator(
-      color:     C.blue,
+      // ✅ [Brand color audit 2026-07-27] C.blue → C.primary
+      color:     C.primary,
       onRefresh: () async => ref.invalidate(activeBookingsProvider),
       child: ListView(
         padding: const EdgeInsets.all(16),
@@ -348,7 +350,9 @@ class _JobListView extends ConsumerWidget {
             _SectionHeader(
               title:      '${tr("open_jobs")} 📋',
               badge:      '${openJobs.length}',
-              badgeColor: C.blue,
+              // ✅ [Brand color audit 2026-07-27] "ວຽກເປີດ" = ຮັບໄດ້ເລີຍ →
+              // ສີຂຽວແບຣນ (ແທນສີຟ້າ), ແຍກຈາກ "ວຽກໃໝ່ລໍຖ້າຕອບ" ທີ່ຍັງເປັນສີແດງ
+              badgeColor: C.primary,
             ),
             const SizedBox(height: 8),
             ...openJobs.map((b) => JobCard(booking: b)),
@@ -382,11 +386,11 @@ class _SectionHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
           decoration: BoxDecoration(
-            color:        (badgeColor ?? C.blue).withValues(alpha: 0.1),
+            color:        (badgeColor ?? C.primary).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(badge!, style: TextStyle(
-            fontSize: 11, color: badgeColor ?? C.blue,
+            fontSize: 11, color: badgeColor ?? C.primary,
             fontWeight: FontWeight.w700,
           )),
         ),

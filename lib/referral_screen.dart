@@ -31,9 +31,8 @@ class _ReferralScreenState extends ConsumerState<ReferralScreen> {
     final infoAsync = ref.watch(referralInfoProvider);
 
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
         title: Text(tr('referral_title'), style: const TextStyle(
@@ -67,7 +66,7 @@ class _ReferralScreenState extends ConsumerState<ReferralScreen> {
                   textCapitalization: TextCapitalization.characters,
                   decoration: InputDecoration(
                     hintText: 'e.g. LINTHO123',
-                    filled: true, fillColor: Colors.white,
+                    filled: true, fillColor: C.white,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -102,7 +101,7 @@ class _ReferralScreenState extends ConsumerState<ReferralScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(error ?? 'ໃຊ້ໂຄ້ດສຳເລັດ! ສ່ວນຫຼຸດຈະໄດ້ຮັບໃນການຈອງຄັ້ງຕໍ່ໄປ'),
-      backgroundColor: error != null ? C.red : C.green,
+      backgroundColor: error != null ? C.red : C.success,
     ));
     if (error == null) _codeCtrl.clear();
   }

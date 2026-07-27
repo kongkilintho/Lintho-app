@@ -100,9 +100,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
+        elevation: 0,
         title: Text(tr('booking_detail_title'), style: const TextStyle(
             color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),
         centerTitle: true,
@@ -114,7 +114,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: C.navy));
+            // ✅ [Brand color audit 2026-07-27] ລົບ color: C.navy hardcode —
+            // ໃຫ້ໃຊ້ progressIndicatorTheme ກາງ (ສີຂຽວແບຣນ) ຄືກັບ spinner ອື່ນໆ
+            return const Center(child: CircularProgressIndicator());
           }
           // ✅ [FIX] ກ່ອນໜ້ານີ້ error ບໍ່ຖືກເຊັກ — Firestore permission/network
           // ຜິດພາດຈະຕົກລົງ "ບໍ່ພົບການຈອງ" ຄືກັນກັບ booking ຖືກລຶບ, ເຮັດໃຫ້ຜູ້ໃຊ້

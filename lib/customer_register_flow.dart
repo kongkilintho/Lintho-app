@@ -384,7 +384,7 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Debug bypass — flow ຈົບແລ້ວ (ບໍ່ໄດ້ບັນທຶກຂໍ້ມູນແທ້)'),
-        backgroundColor: Colors.orange,
+        backgroundColor: C.orange,
       ));
       Navigator.of(context).popUntil((route) => route.isFirst);
       return;
@@ -457,7 +457,7 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -614,11 +614,11 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
               child: OutlinedButton(
                 onPressed: _loading ? null : _debugBypassOtp,
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.orange),
+                  side: const BorderSide(color: C.orange),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 child: const Text('Bypass OTP (Debug Only)', style: TextStyle(
-                    color: Colors.orange, fontWeight: FontWeight.w700)),
+                    color: C.orange, fontWeight: FontWeight.w700)),
               ),
             ),
           ],

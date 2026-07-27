@@ -22,7 +22,10 @@ class EmptyStateView extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.action,
-    this.accent = AppColors.sky,
+    // ✅ [Brand color audit 2026-07-27] ຄ່າ default ປ່ຽນຈາກ AppColors.sky
+    // (ສີຟ້າ) ເປັນ AppColors.muted — empty state ບໍ່ແມ່ນ CTA, ຄວນເປັນສີກາງ
+    // ບໍ່ດຶງດູດສາຍຕາຄືສີແບຣນ/ສີແຈ້ງເຕືອນ
+    this.accent = AppColors.muted,
   });
 
   @override

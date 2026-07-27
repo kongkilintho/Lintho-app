@@ -51,9 +51,8 @@ class PhoneRequiredGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: C.primary, size: 20),
@@ -319,7 +318,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(tr('phone_verified_success')),
-        backgroundColor: C.green,
+        backgroundColor: C.success,
       ));
       Navigator.pop(context, true);
     } on FirebaseAuthException catch (e) {
@@ -337,9 +336,8 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
         elevation: 0,
         title: Text(tr('verify_phone_title'), style: const TextStyle(
             color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),

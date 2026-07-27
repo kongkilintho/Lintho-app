@@ -202,7 +202,7 @@ class _ReviewScreenState extends State<ReviewScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       body: SingleChildScrollView(
         child: Column(children: [
 
@@ -332,7 +332,7 @@ class _ReviewScreenState extends State<ReviewScreen>
                     hintStyle: const TextStyle(
                         color: C.muted, fontSize: 13),
                     filled:    true,
-                    fillColor: Colors.white,
+                    fillColor: C.white,
                     counterText:
                     '${_commentCtrl.text.length}/200',
                     counterStyle: const TextStyle(
@@ -507,9 +507,11 @@ class _GreenHeader extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width:   double.infinity,
     padding: const EdgeInsets.fromLTRB(24, 60, 24, 36),
+    // ✅ [Brand color audit 2026-07-27 v2] ໜ້າ "ສົ່ງລີວິວສຳເລັດ" = Success
+    // (#22C55E), ແຍກຈາກ Primary
     decoration: BoxDecoration(
       gradient: LinearGradient(
-        colors: [C.green, C.green.withValues(alpha: 0.8)],
+        colors: [C.success, C.success.withValues(alpha: 0.8)],
         begin:  Alignment.topLeft,
         end:    Alignment.bottomRight,
       ),
@@ -528,7 +530,7 @@ class _GreenHeader extends StatelessWidget {
               ),
               child: const Icon(
                 Icons.check_rounded,
-                color: C.green, size: 40,
+                color: C.success, size: 40,
               ),
             ),
           ),

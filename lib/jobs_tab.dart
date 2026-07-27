@@ -35,9 +35,8 @@ class ProviderJobsTab extends ConsumerWidget {
     final historyAsync = ref.watch(filteredHistoryProvider);
 
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
         elevation:       0,
         centerTitle:     true,
         title: Text(tr('all_jobs'), style: const TextStyle(
@@ -77,13 +76,16 @@ class ProviderJobsTab extends ConsumerWidget {
               onRetry: () => ref.invalidate(jobHistoryProvider),
             ),
             data: (jobs) => RefreshIndicator(
-              color:     C.blue,
+              // ✅ [Brand color audit 2026-07-27] C.blue → C.primary (ສີຂຽວແບຣນ)
+              color:     C.primary,
               onRefresh: () async => ref.invalidate(jobHistoryProvider),
               child: jobs.isEmpty
                   ? ListView(children: [EmptyStateView(
                       icon: Icons.receipt_long_outlined,
                       title: tr('no_job_history'),
-                      accent: C.sky,
+                      // ✅ [Brand color audit 2026-07-27] empty state ຄວນເປັນ
+                      // ສີກາງ (ບໍ່ແມ່ນສີແບຣນ) — ບໍ່ແມ່ນ CTA, ບໍ່ຄວນດຶງດູດສາຍຕາ
+                      accent: C.muted,
                     )])
                   : ListView.builder(
                 padding:     const EdgeInsets.all(16),
@@ -117,10 +119,12 @@ class _FilterChip extends StatelessWidget {
       child: AnimatedContainer(
         duration:     const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          color:        selected ? C.blue : C.bg,
+          // ✅ [Brand color audit 2026-07-27] filter chip ທີ່ເລືອກໃຊ້ສີຂຽວແບຣນ
+          // (ແທນ C.blue) — ໃຫ້ຕົງກັບ tab/chip ອື່ນໆທົ່ວແອັບ
+          color:        selected ? C.primary : C.bg,
           borderRadius: BorderRadius.circular(20),
           border:       Border.all(
-            color: selected ? C.blue : C.border, width: 1.5,
+            color: selected ? C.primary : C.border, width: 1.5,
           ),
         ),
         child: Material(

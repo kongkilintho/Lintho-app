@@ -62,7 +62,7 @@ class _MapPickerScreenState extends State<MapPickerScreen>
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content:         Text(tr('enable_gps_first')),
-          backgroundColor: Colors.red,
+          backgroundColor: C.red,
         ));
         return;
       }
@@ -74,7 +74,7 @@ class _MapPickerScreenState extends State<MapPickerScreen>
       if (perm == LocationPermission.deniedForever) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content:         Text(tr('gps_blocked')),
-          backgroundColor: Colors.red,
+          backgroundColor: C.red,
         ));
         return;
       }
@@ -94,7 +94,7 @@ class _MapPickerScreenState extends State<MapPickerScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content:         Text('${tr("gps_error")}: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: C.red,
         ));
       }
     } finally {
@@ -106,7 +106,6 @@ class _MapPickerScreenState extends State<MapPickerScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
         elevation:       0,
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios,
@@ -156,7 +155,6 @@ class _MapPickerScreenState extends State<MapPickerScreen>
           right: 16, bottom: 120,
           child: FloatingActionButton(
             mini:            true,
-            backgroundColor: Colors.white,
             onPressed:       _loading ? null : _goToMyLocation,
             child: _loading
                 ? AnimatedBuilder(

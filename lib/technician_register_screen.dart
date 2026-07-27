@@ -322,7 +322,6 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
   Future<ImageSource?> _chooseImageSource() {
     return showModalBottomSheet<ImageSource>(
       context: context,
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
@@ -453,7 +452,7 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Debug bypass — flow ຈົບແລ້ວ (ບໍ່ໄດ້ບັນທຶກຂໍ້ມູນແທ້)'),
-        backgroundColor: Colors.orange,
+        backgroundColor: C.orange,
       ));
       Navigator.of(context).popUntil((route) => route.isFirst);
       return;
@@ -561,7 +560,7 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -713,11 +712,11 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
               child: OutlinedButton(
                 onPressed: _loading ? null : _debugBypassOtp,
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.orange),
+                  side: const BorderSide(color: C.orange),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 child: const Text('Bypass OTP (Debug Only)', style: TextStyle(
-                    color: Colors.orange, fontWeight: FontWeight.w700)),
+                    color: C.orange, fontWeight: FontWeight.w700)),
               ),
             ),
           ],
@@ -1012,7 +1011,9 @@ class _UploadTile extends StatelessWidget {
                 Expanded(child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.check_circle, color: C.green, size: 18),
+                    // ✅ [Brand color audit 2026-07-27 v2] ຢືນຢັນວ່າອັບໂຫລດຮູບ
+                    // ສຳເລັດ = Success (#22C55E)
+                    Icon(Icons.check_circle, color: C.success, size: 18),
                     const SizedBox(height: 4),
                     Text(changeLabel,
                         style: const TextStyle(color: C.primary, fontWeight: FontWeight.w700, fontSize: 13)),

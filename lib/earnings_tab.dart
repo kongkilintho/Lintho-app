@@ -19,9 +19,9 @@ class ProviderEarningsTab extends ConsumerWidget {
     final txAsync     = ref.watch(transactionsProvider);
 
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0, centerTitle: true,
+        elevation: 0, centerTitle: true,
         title: Text(tr('earnings_wallet'), style: const TextStyle(
             color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),
         actions: [
@@ -34,7 +34,8 @@ class ProviderEarningsTab extends ConsumerWidget {
         ],
       ),
       body: RefreshIndicator(
-        color: C.blue,
+        // ✅ [Brand color audit 2026-07-27] C.blue → C.primary
+        color: C.primary,
         onRefresh: () async {
           ref.invalidate(walletProvider);
           ref.invalidate(transactionsProvider);
@@ -159,7 +160,7 @@ class ProviderEarningsTab extends ConsumerWidget {
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text(tr('withdraw_sent')),
-                      backgroundColor: C.green));
+                      backgroundColor: C.success));
                 }
               } catch (e) {
                 if (ctx.mounted) {
@@ -240,7 +241,7 @@ class ProviderEarningsTab extends ConsumerWidget {
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text(tr('bank_saved')),
-                      backgroundColor: C.green));
+                      backgroundColor: C.success));
                 }
               } catch (e) {
                 if (ctx.mounted) {

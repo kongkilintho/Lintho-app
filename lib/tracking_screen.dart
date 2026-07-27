@@ -502,7 +502,7 @@ class _TrackingScreenState extends State<TrackingScreen>
     if (_isLoading) return const _TrackingSkeleton();
 
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       body: Stack(children: [
 
         // ── MAP (full screen background) ──────────────────
@@ -564,7 +564,9 @@ class _TrackingScreenState extends State<TrackingScreen>
       decoration: BoxDecoration(
         color:        Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border:       Border.all(color: const Color(0xFFF97316), width: 1.5),
+        // ✅ [Brand color audit 2026-07-27 v2] ຄ່າໃຊ້ຈ່າຍເພີ່ມ = Warning ໂດຍ
+        // ຄວາມໝາຍ, ໃຊ້ C.orange (Warning token) ແທນ hex ດິບ
+        border:       Border.all(color: C.orange, width: 1.5),
         boxShadow: [BoxShadow(
           color:      Colors.black.withValues(alpha: 0.1),
           blurRadius: 12,
@@ -1193,7 +1195,7 @@ class _TrackingSkeletonState extends State<_TrackingSkeleton>
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: C.bg,
+    backgroundColor: C.background,
     body: FadeTransition(
       opacity: _fade,
       child: Stack(children: [

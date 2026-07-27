@@ -22,7 +22,6 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,10 +31,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
+import 'app_navigation_state.dart';
 import 'booking_provider.dart';
 import 'cloudinary_service.dart';
 import 'coupon_repository.dart';
 import 'match_screen.dart';
+import 'phone_verification.dart';
 import 'pricing_repository.dart';
 
 String _generateClientRequestId() {
@@ -522,6 +523,11 @@ class BookingOrder {
       'customerId':    userId,
       'customerName':  userName,
       'customerPhone': phone,
+      // ✅ [Phone-verified booking] 'contactPhone' — ເບີໂທຢືນຢັນແລ້ວຂອງບັນຊີ
+      // (ເບິ່ງ phone_verification.dart), ຄືເບີດຽວກັນກັບ customerPhone ຂ້າງເທິງ
+      // ຢູ່ໃນ path ນີ້ (customerPhone ຄົງໄວ້ເພື່ອ backward-compat ກັບ code
+      // ເກົ່າ/admin dashboard ທີ່ຍັງອ່ານ field ນັ້ນ) — ຝັ່ງຊ່າງອ່ານ contactPhone
+      'contactPhone':  phone,
       'category':      category.key,
       // ✅ [FIX CR-1] 'location' GeoPoint — Booking.fromFirestore ອ່ານ field ນີ້
       // ເທົ່ານັ້ນ (ບໍ່ອ່ານ lat/lng ແຍກ), ຂາດມັນເຮັດໃຫ້ຊ່າງນຳທາງໄປພິກັດ (0,0)
@@ -628,7 +634,6 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   final _landmarkCtrl  = TextEditingController();
   final _instructionsCtrl = TextEditingController();
   final _sqmCtrl       = TextEditingController();
-  final _phoneCtrl     = TextEditingController();
   final _maidNotesCtrl = TextEditingController();
 
   static List<String> get _stepLabels => [
@@ -636,40 +641,18 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
     tr('address'), tr('step_label_payment'),
   ];
 
-  // ✅ ຜູ້ໃຊ້ login ດ້ວຍ email/Google ບໍ່ມີເບີໂທຕິດມາ — ຕ້ອງໃຫ້ປ້ອນເອງ
-  bool get _needsPhoneInput =>
-      (FirebaseAuth.instance.currentUser?.phoneNumber ?? '').isEmpty;
-
-  String get _resolvedPhone {
-    final authPhone = FirebaseAuth.instance.currentUser?.phoneNumber;
-    if (authPhone != null && authPhone.isNotEmpty) return authPhone;
-    return _phoneCtrl.text.trim();
-  }
+  // ✅ [Phone-verified booking] ເບີໂທຢືນຢັນແລ້ວຂອງບັນຊີ — ອ່ານແຕ່ຄ່ານີ້, ບໍ່ຮັບ
+  // ການພິມມືອີກຕໍ່ໄປ (ເບິ່ງ phone_verification.dart). ໜ້ານີ້ຖືກຫຸ້ມດ້ວຍ
+  // PhoneRequiredGate ຢູ່ build() ຢູ່ແລ້ວ ດັ່ງນັ້ນຄ່ານີ້ຄວນບໍ່ວ່າງສະເໝີເມື່ອຮອດ
+  // ຈຸດນີ້ — getter ຄືນ '' ເປັນ defense-in-depth ເທົ່ານັ້ນ
+  String get _verifiedPhone => verifiedPhoneNumber() ?? '';
 
   @override
   void initState() {
     super.initState();
     _order = widget.initialOrder;
     _step  = widget.initialStep;
-    _prefillPhone();
     _loadLivePricing();
-  }
-
-  // ✅ Pre-fill phone from Firestore profile if Auth doesn't carry one —
-  // ลด tap ໜຶ່ງຈຸດໃນ Step 3 ສຳລັບຄົນທີ່ login ດ້ວຍ email/Google.
-  Future<void> _prefillPhone() async {
-    if (!_needsPhoneInput) return;
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      final phone = doc.data()?['phone'] as String?;
-      if (phone != null && phone.isNotEmpty && mounted) {
-        setState(() => _phoneCtrl.text = phone);
-      }
-    } catch (_) {
-      // best-effort prefill — silent fallback to manual entry
-    }
   }
 
   // ▸ [LIVE PRICING] ດຶງ TIERED pricing ຈາກ admin (Firestore) ມາທັບ
@@ -692,7 +675,6 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
     _landmarkCtrl.dispose();
     _instructionsCtrl.dispose();
     _sqmCtrl.dispose();
-    _phoneCtrl.dispose();
     _maidNotesCtrl.dispose();
     super.dispose();
   }
@@ -742,7 +724,9 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             !RegExp(r'\d').hasMatch(_order!.address)) {
           return false;
         }
-        if (_needsPhoneInput && _phoneCtrl.text.trim().length < 8) return false;
+        // ✅ [Phone-verified booking] defense-in-depth — ໜ້ານີ້ຖືກ
+        // PhoneRequiredGate ຫຸ້ມຢູ່ແລ້ວ, ຄ່ານີ້ຄວນບໍ່ວ່າງສະເໝີ
+        if (_verifiedPhone.isEmpty) return false;
         return true;
       // ✅ [FIX ME-12] ບໍ່ໃຫ້ submit ກ່ອນ live pricing fetch resolve — ກັນ
       // ກໍລະນີຜູ້ໃຊ້ໄວກົດຈົນຮອດ submit ກ່ອນລາຄາຫຼ້າສຸດຈາກ admin ຖືກໂຫລດ
@@ -769,13 +753,20 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           .showSnackBar(SnackBar(content: Text(tr('please_login_first'))));
       return;
     }
+    // ✅ [Phone-verified booking] defense-in-depth — ໜ້ານີ້ຖືກ
+    // PhoneRequiredGate ຫຸ້ມຢູ່ແລ້ວ ແຕ່ກວດຄືນກ່ອນ write ຈິງ
+    if (_verifiedPhone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr('phone_verification_required_title'))));
+      return;
+    }
 
     setState(() => _loading = true);
     try {
       final data = _order!.toFirestore(
         user.uid,
         user.displayName ?? tr('customer'),
-        _resolvedPhone,
+        _verifiedPhone,
       );
       if (widget.providerId != null) data['providerId'] = widget.providerId;
 
@@ -893,7 +884,6 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   Future<void> _pickJobPhoto(BookingOrder o) async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
@@ -952,10 +942,15 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ [Phone-verified booking] ບໍ່ອະນຸຍາດໃຫ້ຈອງຖ້າບັນຊີຍັງບໍ່ມີ/ຍັງບໍ່ໄດ້
+    // ຢືນຢັນເບີໂທ — ເບິ່ງ phone_verification.dart
+    if (_verifiedPhone.isEmpty) {
+      return PhoneRequiredGate(
+          onGoToProfile: () => goToProfileTab(context, ref));
+    }
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: C.primary, size: 20),
@@ -1033,14 +1028,14 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       Row(children: [
         Expanded(child: _QuickBookCard(
           icon: Icons.ac_unit_outlined, title: tr('quickbook_ac_title'), sub: '${tr("quickbook_ac_sub")} ${AppPricing.fmt(AppPricing.acStdPrice[AcBtuSize.small]!)} ${tr("kip_currency")}',
-          color: Colors.blue[50]!, accent: const Color(0xFF1D4ED8),
+          color: C.categoryAcBg, accent: C.categoryAcAccent,
           badge: tr('quickbook_ac_badge'),
           onTap: _quickBookAc,
         )),
         const SizedBox(width: 12),
         Expanded(child: _QuickBookCard(
           icon: Icons.cleaning_services_outlined, title: tr('svc_house_clean'), sub: '${tr("quickbook_cleaning_sub")} ${AppPricing.fmt(AppPricing.calcCleanHourly(2))} ${tr("kip_currency")}',
-          color: Colors.green[50]!, accent: const Color(0xFF15803D),
+          color: C.categoryCleanBg, accent: C.categoryCleanAccent,
           onTap: _quickBookCleaning,
         )),
       ]),
@@ -1051,7 +1046,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         icon: Icons.ac_unit_outlined, title: tr('svc_ac_clean'), sub: tr('cat_ac_sub'),
         note: tr('bigcat_ac_note'),
         bullets: [tr('ac_type_general_wash'), tr('bigcat_ac_bullet_deep'), tr('ac_type_refill')],
-        color: const Color(0xFFEFF6FF), accent: const Color(0xFF1D4ED8),
+        color: C.categoryAcBg, accent: C.categoryAcAccent,
         selected: _order?.category == ServiceCategory.acCleaning,
         onTap: () => setState(() {
           _order = BookingOrder(category: ServiceCategory.acCleaning);
@@ -1063,7 +1058,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         icon: Icons.cleaning_services_outlined, title: tr('svc_house_clean'), sub: tr('cat_house_sub'),
         note: tr('bigcat_house_note'),
         bullets: [tr('bigcat_house_bullet_general'), tr('bigcat_house_bullet_deep'), tr('bigcat_house_bullet_specialist')],
-        color: const Color(0xFFF0FDF4), accent: const Color(0xFF15803D),
+        color: C.categoryCleanBg, accent: C.categoryCleanAccent,
         selected: _order?.category == ServiceCategory.homeCleaning,
         onTap: () => setState(() {
           _order = BookingOrder(category: ServiceCategory.homeCleaning);
@@ -1138,7 +1133,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             onChanged: (v) => setState(() => o.acDraftQty = v)),
 
         const SizedBox(height: 14),
-        _PriceInfoBox(color: const Color(0xFFEFF6FF), lines: [
+        _PriceInfoBox(color: C.categoryAcBg, lines: [
           _PriceLine(
             '${AppPricing.fmt(AppPricing.acUnitPrice(o.acDraftType!, o.acDraftBtu))} ${tr("kip_currency")} × ${o.acDraftQty} ${tr("unit_device")}',
             '${AppPricing.fmt(o.acDraftPrice)} ${tr("kip_currency")}',
@@ -1254,7 +1249,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           _QtyRow(qty: o.hours, minQty: 2, maxQty: 12, label: tr('hours_unit'),
               onChanged: (v) => setState(() => o.hours = v)),
           const SizedBox(height: 14),
-          _PriceInfoBox(color: const Color(0xFFF0FDF4), lines: [
+          _PriceInfoBox(color: C.categoryCleanBg, lines: [
             _PriceLine('${o.hours} ${tr("hours_unit")} × ${AppPricing.fmt(AppPricing.cleanHourMin)} ${tr("kip_currency")}',
                 '${AppPricing.fmt(AppPricing.calcCleanHourly(o.hours))} ${tr("kip_currency")}', bold: true),
             _PriceLine(tr('price_line_estimate_note'), ''),
@@ -1308,7 +1303,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
               hintText:  tr('hint_maid_notes'),
               hintStyle: const TextStyle(color: C.muted, fontSize: 13),
               counterText: '',
-              filled: true, fillColor: Colors.white,
+              filled: true, fillColor: C.white,
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: const BorderSide(color: C.border)),
@@ -1399,7 +1394,6 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
     final result = await showModalBottomSheet<double>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
@@ -1435,7 +1429,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
                   hintText: tr('hint_pest_sqm'),
                   suffixText: tr('unit_sqm'),
                   errorText: hasError ? tr('pest_sqm_error_positive') : null,
-                  filled: true, fillColor: Colors.white,
+                  filled: true, fillColor: C.white,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
                       borderSide: const BorderSide(color: C.border)),
                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
@@ -1593,36 +1587,13 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   Widget _buildStep3() {
     final o = _order!;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      if (_needsPhoneInput) ...[
-        _Label(tr('label_contact_phone'), sub: tr('sub_let_tech_call')),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _phoneCtrl,
-          keyboardType: TextInputType.phone,
-          // ✅ [FIX ME-10] ຈຳກັດໃຫ້ພິມໄດ້ສະເພາະຕົວເລກ — ກ່ອນໜ້ານີ້ຮັບໄດ້ທຸກ
-          // ຕົວອັກສອນເຖິງວ່າຈະຕັ້ງ keyboardType ເປັນ phone ແລ້ວກໍຕາມ
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          // ✅ [FIX ME-11] ຈຳກັດຄວາມຍາວ
-          maxLength: 15,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            hintText:  tr('hint_phone_example'),
-            hintStyle: const TextStyle(color: C.muted, fontSize: 13),
-            counterText: '',
-            filled: true, fillColor: Colors.white,
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: C.border)),
-            enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: C.border)),
-            focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: C.primary, width: 1.5)),
-          ),
-        ),
-        const SizedBox(height: 20),
-      ],
+      _Label(tr('label_contact_phone')),
+      const SizedBox(height: 10),
+      VerifiedPhoneDisplay(
+        phone: _verifiedPhone,
+        onEditTap: () => goToProfileTab(context, ref),
+      ),
+      const SizedBox(height: 20),
       _Label(tr('label_service_address')),
       const SizedBox(height: 16),
       if (o.isGpsAddress)
@@ -1696,7 +1667,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           hintStyle: const TextStyle(color: C.muted, fontSize: 13),
           prefixIcon: const Icon(Icons.signpost_outlined, color: C.muted, size: 20),
           counterText: '',
-          filled: true, fillColor: Colors.white,
+          filled: true, fillColor: C.white,
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide: const BorderSide(color: C.border)),
@@ -1730,7 +1701,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           hintText:  tr('hint_manual_address'),
           hintStyle: const TextStyle(color: C.muted, fontSize: 13),
           counterText: '',
-          filled: true, fillColor: Colors.white,
+          filled: true, fillColor: C.white,
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide: const BorderSide(color: C.border)),
@@ -1759,7 +1730,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           hintText:  tr('hint_notes_to_tech'),
           hintStyle: const TextStyle(color: C.muted, fontSize: 13),
           counterText: '',
-          filled: true, fillColor: Colors.white,
+          filled: true, fillColor: C.white,
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide: const BorderSide(color: C.border)),
@@ -1869,7 +1840,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             const SizedBox(width: 8),
             Expanded(child: Text(
               tr('refill_price_notice'),
-              style: const TextStyle(fontSize: 11, color: Color(0xFF92400E)),
+              style: const TextStyle(fontSize: 11, color: C.noteWarningText),
             )),
           ]),
         ),
@@ -1904,7 +1875,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           const SizedBox(width: 8),
           Expanded(child: Text(
             tr('cancellation_policy_notice'),
-            style: const TextStyle(fontSize: 10, color: Color(0xFFB0B8C4)),
+            style: const TextStyle(fontSize: 10, color: C.mutedLight),
           )),
         ]),
       ),
@@ -1998,7 +1969,7 @@ class _AcCartSummary extends StatelessWidget {
       lines.add(_PriceLine(
           tr('refill_price_estimate_note'), ''));
     }
-    return _PriceInfoBox(color: const Color(0xFFEFF6FF), lines: lines);
+    return _PriceInfoBox(color: C.categoryAcBg, lines: lines);
   }
 }
 
@@ -2012,7 +1983,7 @@ class _DeepBreakdown extends StatelessWidget {
     final rateMax = order.isPostConstruct ? AppPricing.deepPostMax : AppPricing.deepResMax;
     final minT    = (order.sqm * rate).round();
     final maxT    = (order.sqm * rateMax).round();
-    return _PriceInfoBox(color: const Color(0xFFF0FDF4), lines: [
+    return _PriceInfoBox(color: C.categoryCleanBg, lines: [
       _PriceLine(
           '${order.sqm.toStringAsFixed(0)} ${tr("unit_sqm")} × '
               '${AppPricing.fmt(rate)}–${AppPricing.fmt(rateMax)} ${tr("kip_currency")}', ''),
@@ -2045,7 +2016,7 @@ class _SpecialistSummary extends StatelessWidget {
     }
     lines.add(_PriceLine(tr('total_price_label'),
         '${AppPricing.fmt(order.serviceTotal)} ${tr("kip_currency")}', bold: true));
-    return _PriceInfoBox(color: const Color(0xFFFDF4FF), lines: lines);
+    return _PriceInfoBox(color: C.categoryPestBg, lines: lines);
   }
 }
 
@@ -2143,10 +2114,11 @@ class _BillRow extends StatelessWidget {
           fontSize: bold ? 16 : 13,
           fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
           color: bold ? C.textPrimary : C.textSecondary)),
+      // ✅ [Brand color audit 2026-07-27 v2] green ຫຼຸດລາຄາ = Success (#22C55E)
       Text(value, style: TextStyle(
           fontSize: bold ? 20 : 13,
           fontWeight: FontWeight.w800,
-          color: orange ? C.orange : (green ? C.green : C.textPrimary))),
+          color: orange ? C.orange : (green ? C.success : C.textPrimary))),
     ],
   );
 }
@@ -2239,7 +2211,7 @@ class _CouponBoxState extends State<_CouponBox> {
           decoration: InputDecoration(
             hintText: tr('hint_discount_code'),
             errorText: _error,
-            filled: true, fillColor: Colors.white,
+            filled: true, fillColor: C.white,
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: const BorderSide(color: C.border)),
@@ -2535,15 +2507,15 @@ class _BcelQrBox extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
+        color: C.categoryAcBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: const Color(0xFF1D4ED8).withValues(alpha: 0.3)),
+            color: C.categoryAcAccent.withValues(alpha: 0.3)),
       ),
       child: Column(children: [
         Text(tr('bcel_qr_title'), style: const TextStyle(
             fontSize: 14, fontWeight: FontWeight.w800,
-            color: Color(0xFF1D4ED8))),
+            color: C.categoryAcAccent)),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(12),
@@ -2551,20 +2523,19 @@ class _BcelQrBox extends StatelessWidget {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-                color: const Color(0xFF1D4ED8).withValues(alpha: 0.2)),
+                color: C.categoryAcAccent.withValues(alpha: 0.2)),
           ),
           child: QrImageView(
             data:            order.bcelQrData,
             version:         QrVersions.auto,
             size:            160,
-            backgroundColor: Colors.white,
             eyeStyle: const QrEyeStyle(
               eyeShape: QrEyeShape.square,
-              color: Color(0xFF1D4ED8),
+              color: C.categoryAcAccent,
             ),
             dataModuleStyle: const QrDataModuleStyle(
               dataModuleShape: QrDataModuleShape.square,
-              color: Color(0xFF1D4ED8),
+              color: C.categoryAcAccent,
             ),
           ),
         ),
@@ -2575,7 +2546,7 @@ class _BcelQrBox extends StatelessWidget {
               : '${AppPricing.fmt(order.grandTotal)} ${tr("kip_currency")}',
           style: const TextStyle(
               fontSize: 13, fontWeight: FontWeight.w700,
-              color: Color(0xFF1D4ED8)),
+              color: C.categoryAcAccent),
         ),
         const SizedBox(height: 4),
         Text(tr('bcel_qr_scan_hint'),
@@ -2839,7 +2810,7 @@ class _AcTypeCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             fontSize: 14, fontWeight: FontWeight.w800,
-                            color: selected ? C.primary : const Color(0xFF1D4ED8)))),
+                            color: selected ? C.primary : C.categoryAcAccent))),
                     const SizedBox(width: 4),
                     Text(tr(d['priceNote'] as String), style: const TextStyle(
                         fontSize: 10, fontWeight: FontWeight.w400, color: C.muted)),
@@ -3080,7 +3051,7 @@ class _SqmInput extends StatelessWidget {
           hintStyle:  const TextStyle(color: C.muted, fontSize: 14),
           suffixText: tr('sqm_input_suffix'),
           suffixStyle: const TextStyle(color: C.muted, fontWeight: FontWeight.w600),
-          filled: true, fillColor: Colors.white,
+          filled: true, fillColor: C.white,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide(color: _hasError ? errColor : C.border)),
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
@@ -3526,10 +3497,10 @@ class _RelocateExtrasInfo extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: const Color(0xFFF5F3FF),
+      color: C.categoryAddonBg,
       borderRadius: BorderRadius.circular(14),
       border: Border.all(
-          color: const Color(0xFF7C3AED).withValues(alpha: 0.3)),
+          color: C.categoryAddonBorder.withValues(alpha: 0.3)),
     ),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
@@ -3537,28 +3508,28 @@ class _RelocateExtrasInfo extends StatelessWidget {
         const SizedBox(width: 6),
         Text(tr('relocate_extras_header'),
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800,
-                color: Color(0xFF5B21B6))),
+                color: C.categoryAddonValueText)),
       ]),
       const SizedBox(height: 10),
       const Divider(height: 1),
       const SizedBox(height: 10),
       Text(tr('relocate_package_price_header'),
           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-              color: Color(0xFF5B21B6))),
+              color: C.categoryAddonValueText)),
       const SizedBox(height: 6),
       _ExtrasRow(tr('relocate_wall_small_label'), '450,000–600,000 ${tr("kip_currency")}'),
       _ExtrasRow(tr('relocate_wall_large_label'), '650,000–850,000 ${tr("kip_currency")}'),
       _ExtrasRow(tr('relocate_cabinet_label'), '950,000–1,300,000+ ${tr("kip_currency")}'),
       const SizedBox(height: 10), const Divider(height: 1), const SizedBox(height: 10),
       Text(tr('relocate_labor_only_header'), style: const TextStyle(fontSize: 12,
-          fontWeight: FontWeight.w700, color: Color(0xFF5B21B6))),
+          fontWeight: FontWeight.w700, color: C.categoryAddonValueText)),
       const SizedBox(height: 6),
       _ExtrasRow(tr('install_small_label'), '300,000–400,000 ${tr("kip_currency")}'),
       _ExtrasRow(tr('install_large_label'), '450,000–550,000 ${tr("kip_currency")}'),
       _ExtrasRow(tr('remove_any_size_label'), '150,000–250,000 ${tr("kip_currency")}'),
       const SizedBox(height: 10), const Divider(height: 1), const SizedBox(height: 10),
       Text(tr('spare_parts_header'), style: const TextStyle(fontSize: 12,
-          fontWeight: FontWeight.w700, color: Color(0xFF5B21B6))),
+          fontWeight: FontWeight.w700, color: C.categoryAddonValueText)),
       const SizedBox(height: 6),
       _ExtrasRow(tr('copper_pipe_label'), '150,000–250,000 ${tr("kip_currency")}/${tr("unit_meter")}'),
       _ExtrasRow(tr('electric_wire_label'), '20,000–35,000 ${tr("kip_currency")}/${tr("unit_meter")}'),
@@ -3569,15 +3540,15 @@ class _RelocateExtrasInfo extends StatelessWidget {
       Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
+          color: C.categoryAddonBorder.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Icon(Icons.info_outline, size: 14, color: Color(0xFF5B21B6)),
+          const Icon(Icons.info_outline, size: 14, color: C.categoryAddonValueText),
           const SizedBox(width: 6),
           Expanded(child: Text(
             tr('relocate_pipe_included_note'),
-            style: const TextStyle(fontSize: 11, color: Color(0xFF5B21B6)),
+            style: const TextStyle(fontSize: 11, color: C.categoryAddonValueText),
           )),
         ]),
       ),
@@ -3596,10 +3567,10 @@ class _ExtrasRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: const TextStyle(
-            fontSize: 11, color: Color(0xFF6D28D9))),
+            fontSize: 11, color: C.categoryAddonLabelText)),
         Text(value, style: const TextStyle(
             fontSize: 11, fontWeight: FontWeight.w700,
-            color: Color(0xFF5B21B6))),
+            color: C.categoryAddonValueText)),
       ],
     ),
   );
@@ -3615,7 +3586,7 @@ class _RefillInfoCard extends StatelessWidget {
     return Container(
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: const Color(0xFFFFFBEB),
+      color: C.noteWarningBg,
       borderRadius: BorderRadius.circular(16),
       border: Border.all(color: C.orange.withValues(alpha: 0.4)),
     ),
@@ -3625,7 +3596,7 @@ class _RefillInfoCard extends StatelessWidget {
         const SizedBox(width: 8),
         Text(tr('refill_price_header'), style: const TextStyle(
             fontSize: 14, fontWeight: FontWeight.w800,
-            color: Color(0xFF92400E))),
+            color: C.noteWarningText)),
       ]),
       const SizedBox(height: 12),
       _RefillLine(tr('refill_minor_leak_label'), tr('free_check_label')),
@@ -3643,11 +3614,11 @@ class _RefillInfoCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(children: [
-          const Icon(Icons.info_outline, size: 14, color: Color(0xFF92400E)),
+          const Icon(Icons.info_outline, size: 14, color: C.noteWarningText),
           const SizedBox(width: 6),
           Expanded(child: Text(
             tr('refill_confirm_note'),
-            style: const TextStyle(fontSize: 11, color: Color(0xFF92400E)),
+            style: const TextStyle(fontSize: 11, color: C.noteWarningText),
           )),
         ]),
       ),
@@ -3665,11 +3636,11 @@ class _RefillLine extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Expanded(child: Text(label, style: const TextStyle(
-          fontSize: 12, color: Color(0xFF78350F)))),
+          fontSize: 12, color: C.noteWarningTextDark))),
       const SizedBox(width: 8),
       Text(value, style: const TextStyle(
           fontSize: 12, fontWeight: FontWeight.w700,
-          color: Color(0xFF92400E))),
+          color: C.noteWarningText)),
     ],
   );
 }
@@ -3701,14 +3672,16 @@ class _PriceLine extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
+      // ✅ [Brand color audit 2026-07-27 v2] green ຫຼຸດລາຄາ = Success
+      // (#22C55E), ແຍກຈາກ Primary
       Expanded(child: Text(label, style: TextStyle(
           fontSize: bold ? 14 : 12,
           fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
-          color: green ? C.green : (bold ? C.textPrimary : C.muted)))),
+          color: green ? C.success : (bold ? C.textPrimary : C.muted)))),
       Text(value, style: TextStyle(
           fontSize: bold ? 17 : 12,
           fontWeight: FontWeight.w800,
-          color: green ? C.green : C.textPrimary)),
+          color: green ? C.success : C.textPrimary)),
     ],
   );
 }

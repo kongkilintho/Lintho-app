@@ -41,9 +41,8 @@ class ProviderProfileTab extends ConsumerWidget {
         final user         = FirebaseAuth.instance.currentUser;
 
         return Scaffold(
-          backgroundColor: C.bg,
+          backgroundColor: C.background,
           appBar: AppBar(
-            backgroundColor: Colors.white,
             elevation:       0,
             centerTitle:     true,
             title: Text(tr('provider_profile'), style: const TextStyle(
@@ -371,7 +370,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content:         Text(tr('save_success')),
-        backgroundColor: C.green,
+        backgroundColor: C.success,
         behavior:        SnackBarBehavior.floating,
       ));
     } catch (e) {
@@ -389,9 +388,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Widget build(BuildContext context) {
     final p = widget.profile;
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
+        elevation: 0,
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios,
               color: C.text, size: 20),
@@ -529,7 +528,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   hintText:  tr('bio_hint'),
                   hintStyle: const TextStyle(
                       color: C.muted, fontSize: 13),
-                  filled: true, fillColor: Colors.white,
+                  filled: true, fillColor: C.white,
                   contentPadding: const EdgeInsets.all(14),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -697,9 +696,9 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
+        elevation: 0,
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios,
               color: C.text, size: 20),
@@ -779,9 +778,9 @@ class ScheduleScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final schedAsync = ref.watch(scheduleProvider);
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
+        elevation: 0,
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios,
               color: C.text, size: 20),
@@ -889,9 +888,9 @@ class ReviewsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final reviewsAsync = ref.watch(reviewsProvider);
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
+        elevation: 0,
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios,
               color: C.text, size: 20),
@@ -942,9 +941,9 @@ class _KycScreenState extends ConsumerState<KycScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
+        elevation: 0,
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios,
               color: C.text, size: 20),
@@ -1016,7 +1015,7 @@ class _KycScreenState extends ConsumerState<KycScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content:         Text(tr('kyc_sent')),
-                          backgroundColor: C.green,
+                          backgroundColor: C.success,
                         ),
                       );
                       Navigator.pop(context);
@@ -1071,9 +1070,9 @@ class HelpScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
+        elevation: 0,
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios,
               color: C.text, size: 20),
@@ -1161,7 +1160,6 @@ Widget _profileStat(String value, String label, IconData icon, Color iconColor) 
         label: label,
         icon:  icon,
         color: iconColor,
-        backgroundColor: Colors.white,
         iconColor:  iconColor,
         valueColor: C.navy,
         labelColor: C.muted,

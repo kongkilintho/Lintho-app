@@ -30,10 +30,6 @@ import 'geohash_util.dart';
 import 'provider_model.dart';
 import 'tracking_screen.dart';
 
-// ✅ [Theme] LinTho brand wash — ແທນທີ່ navy/sky ເດີມດ້ວຍ gradient ຂຽວແບຣນ
-// (C.green) → ຂຽວທະເລເຂັ້ມ, ໃຫ້ໜ້າ "ກຳລັງຊອກຊ່າງ..." ເຂົ້າກັບເອກະລັກແບຣນ
-const Color _kDeepSeaGreen = Color(0xFF07332B);
-
 // ════════════════════════════════════════════════════════════
 // MATCH STATE
 // ════════════════════════════════════════════════════════════
@@ -570,7 +566,7 @@ class _MatchScreenState extends State<MatchScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: _kDeepSeaGreen,
+        backgroundColor: C.primaryDeepWash,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(tr('cancel_booking_question'), style: const TextStyle(
           color: Colors.white, fontWeight: FontWeight.w800,
@@ -690,7 +686,7 @@ class _MatchScreenState extends State<MatchScreen>
         }
       },
       child: Scaffold(
-        backgroundColor: _kDeepSeaGreen,
+        backgroundColor: C.primaryDeepWash,
         body: SafeArea(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 400),
@@ -777,8 +773,8 @@ class _MatchScreenState extends State<MatchScreen>
         center: const Alignment(0, -0.35),
         radius: 1.15,
         colors: [
-          Color.lerp(_kDeepSeaGreen, C.green, 0.4)!,
-          _kDeepSeaGreen,
+          Color.lerp(C.primaryDeepWash, C.green, 0.4)!,
+          C.primaryDeepWash,
         ],
       ),
     ),

@@ -25,6 +25,42 @@ class C {
   static const gold   = AppColors.gold;
   static const brown  = AppColors.navy;      // ✅ ເຄີຍແຍກຊື່ ແຕ່ hex ດຽວກັນ — ລວມແລ້ວ
   static const dark   = AppColors.navy;
+  // ✅ [Brand color audit 2026-07-27 v2] Background/Surface/Success — token
+  // ໃໝ່ຕາມ Brand System, ເບິ່ງ AppColors ສຳລັບຄຳອະທິບາຍ
+  static const background = AppColors.background;
+  static const surface    = AppColors.surface;
+  static const success    = AppColors.success;
+
+  // ✅ [Brand color audit 2026-07-27 v2] category/decorative accents — ຍົກ
+  // ອອກຈາກ booking_form_screen.dart/main.dart/fcm_service.dart, ເບິ່ງ AppColors
+  static const categoryAcBg           = AppColors.categoryAcBg;
+  static const categoryAcAccent       = AppColors.categoryAcAccent;
+  static const categoryCleanBg        = AppColors.categoryCleanBg;
+  static const categoryCleanAccent    = AppColors.categoryCleanAccent;
+  static const categoryAddonBg        = AppColors.categoryAddonBg;
+  static const categoryAddonBorder    = AppColors.categoryAddonBorder;
+  static const categoryAddonLabelText = AppColors.categoryAddonLabelText;
+  static const categoryAddonValueText = AppColors.categoryAddonValueText;
+  static const categoryPestBg         = AppColors.categoryPestBg;
+  static const noteWarningBg          = AppColors.noteWarningBg;
+  static const noteWarningText        = AppColors.noteWarningText;
+  static const noteWarningTextDark    = AppColors.noteWarningTextDark;
+  static const mutedLight             = AppColors.mutedLight;
+  static const promoBannerBlue        = AppColors.promoBannerBlue;
+  static const promoBannerGreen       = AppColors.promoBannerGreen;
+  static const promoBannerOrange      = AppColors.promoBannerOrange;
+  static const homeCardAcTint         = AppColors.homeCardAcTint;
+  static const homeCardOtherTint      = AppColors.homeCardOtherTint;
+  static const splashGradientStart    = AppColors.splashGradientStart;
+  static const splashSubtext          = AppColors.splashSubtext;
+  static const vipDark                = AppColors.vipDark;
+  static const vipGold                = AppColors.vipGold;
+  static const primaryDeepWash        = AppColors.primaryDeepWash;
+  static const notifBooking           = AppColors.notifBooking;
+  static const notifPayment           = AppColors.notifPayment;
+  static const notifCharge            = AppColors.notifCharge;
+  static const notifChat              = AppColors.notifChat;
+  static const notifDefault           = AppColors.notifDefault;
 
   // ── Aliases ─────────────────────────────────────────────
   static const primary       = green;  // C.primary

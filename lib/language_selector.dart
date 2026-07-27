@@ -12,7 +12,6 @@ class LanguageSelector extends StatelessWidget {
   static void show(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => const LanguageSelector(),

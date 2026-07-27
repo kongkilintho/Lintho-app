@@ -52,7 +52,7 @@ class JobWorkflowScreen extends ConsumerWidget {
       BuildContext context, Booking b, WidgetRef ref,
       {bool isLoading = false}) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: _buildAppBar(context, b),
       body: isLoading
           ? const _WorkflowSkeleton()
@@ -345,7 +345,7 @@ class _CustomerCard extends ConsumerWidget {
     await Clipboard.setData(ClipboardData(text: phone));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(tr('phone_copied_msg')), backgroundColor: C.green));
+      content: Text(tr('phone_copied_msg')), backgroundColor: C.success));
   }
 
   @override
@@ -1244,7 +1244,7 @@ class _ActionButton extends ConsumerWidget {
     if (context.mounted && nextStatus == JobStatus.completed) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(tr('job_complete_earnings_added')),
-          backgroundColor: C.green,
+          backgroundColor: C.success,
           duration: const Duration(seconds: 3)));
       Navigator.pop(context);
     }

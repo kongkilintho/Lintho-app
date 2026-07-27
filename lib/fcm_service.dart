@@ -116,11 +116,11 @@ class FCMService {
 
     final ctx = nav.context;
     final color = switch (type) {
-      'new_booking'        => const Color(0xFF1565C0),
-      'payment'            => const Color(0xFF4A7C59),
-      'additional_charges' => const Color(0xFFF97316),
-      'chat'               => const Color(0xFF7C3AED),
-      _                    => const Color(0xFF0D1B4B),
+      'new_booking'        => C.notifBooking,
+      'payment'            => C.notifPayment,
+      'additional_charges' => C.notifCharge,
+      'chat'               => C.notifChat,
+      _                    => C.notifDefault,
     };
 
     ScaffoldMessenger.of(ctx).showSnackBar(

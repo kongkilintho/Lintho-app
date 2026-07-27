@@ -29,6 +29,7 @@ import 'pending_approval_screen.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
 import 'rewards_provider.dart';
+import 'legal_content_provider.dart';
 import 'rewards_screen.dart';
 import 'coupon_list_screen.dart';
 import 'coupon_repository.dart';
@@ -49,6 +50,8 @@ import 'package:intl/intl.dart';
 import 'lao_phone.dart';
 import 'widgets/pulsing_fade.dart';
 import 'theme/app_theme.dart';
+import 'app_navigation_state.dart';
+import 'phone_verification.dart';
 
 const firebaseOptions = FirebaseOptions(
   apiKey:            "AIzaSyD-bIErOqCC6vHqn45oHhtL52Cw54O8SMs",
@@ -155,7 +158,7 @@ class _SplashSkeletonState extends State<_SplashSkeleton>
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF0A2E6E), AppColors.navy],
+          colors: [C.splashGradientStart, AppColors.navy],
         ),
       ),
       child: FadeTransition(
@@ -179,7 +182,7 @@ class _SplashSkeletonState extends State<_SplashSkeleton>
           const SizedBox(height: 8),
           const Text(
             'ທຸກເລື່ອງຊ່າງ ຈົບງ່າຍໃນແອັບດຽວ',
-            style: TextStyle(color: Color(0xFFD6E4FF), fontSize: 15, fontWeight: FontWeight.w700),
+            style: TextStyle(color: C.splashSubtext, fontSize: 15, fontWeight: FontWeight.w700),
           ),
         ]),
       ),
@@ -216,7 +219,7 @@ class _RoleRouterState extends State<RoleRouter> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            backgroundColor: C.bg,
+            backgroundColor: C.background,
             body: _RoleRouterSkeleton(),
           );
         }
@@ -246,7 +249,7 @@ class _IncompleteRegistrationScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -584,7 +587,9 @@ class _LoginPageState extends State<LoginPage>
     return ListenableBuilder(
       listenable: AppLocale.instance,
       builder: (context, _) => Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        // ✅ [Brand color audit 2026-07-27 v2] #F8FAFC ເປັນຄ່າ drift ໃກ້ຄຽງ
+        // ໜ້າຈໍອື່ນ — ລວມເປັນ Background token ດຽວກັນ
+        backgroundColor: C.background,
         body: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
@@ -731,7 +736,6 @@ class _LoginPageState extends State<LoginPage>
                       child: OutlinedButton(
                         onPressed: _googleLoading ? null : _loginWithGoogle,
                         style: OutlinedButton.styleFrom(
-                          backgroundColor: Colors.white,
                           side: BorderSide(color: Colors.grey.shade300),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16)),
@@ -816,17 +820,20 @@ class _ButtonLoadingSkeletonState extends State<_ButtonLoadingSkeleton>
 // MAIN SHELL
 // ════════════════════════════════════════════════════════════
 
-class MainShell extends StatefulWidget {
+class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
   @override
-  State<MainShell> createState() => _MainShellState();
+  ConsumerState<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
-  int _idx = 0;
-
+class _MainShellState extends ConsumerState<MainShell> {
   @override
   Widget build(BuildContext context) {
+    // ✅ ດຶງ tab index ຈາກ mainShellTabIndexProvider (app_navigation_state.dart)
+    // ແທນ local state — ໃຫ້ໜ້າຈໍອື່ນ (ເຊັ່ນ booking_form_screen.dart ຕອນກົດ
+    // "ແກ້ໄຂ" ເບີໂທ) ສາມາດພາຜູ້ໃຊ້ໄປໜ້າ Profile ໄດ້ໂດຍ set provider ນີ້ ແລ້ວ
+    // pop ກັບຄືນ MainShell
+    final idx = ref.watch(mainShellTabIndexProvider);
     // ✅ ສ້າງ page widgets ໃໝ່ທຸກຄັ້ງທີ່ build() — ບໍ່ cache ເປັນ const list,
     // ບໍ່ດັ່ງນັ້ນ Flutter ຈະເບິ່ງເຫັນ widget instance ດຽວກັນແລ້ວບໍ່ rebuild
     // subtree ນັ້ນເມື່ອປ່ຽນພາສາ (AppLocale notify ຈາກ root ListenableBuilder).
@@ -839,7 +846,7 @@ class _MainShellState extends State<MainShell> {
       ProfileScreen(),
     ];
     return Scaffold(
-      body: IndexedStack(index: _idx, children: pages),
+      body: IndexedStack(index: idx, children: pages),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -851,32 +858,35 @@ class _MainShellState extends State<MainShell> {
         child: SafeArea(child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(children: [
-            _nav(0, Icons.home_rounded,           tr('home')),
-            _nav(1, Icons.receipt_long_outlined,  tr('booking')),
-            _nav(2, Icons.person_outline_rounded, tr('profile')),
+            _nav(idx, 0, Icons.home_rounded,           tr('home')),
+            _nav(idx, 1, Icons.receipt_long_outlined,  tr('booking')),
+            _nav(idx, 2, Icons.person_outline_rounded, tr('profile')),
           ]),
         )),
       ),
     );
   }
 
-  Widget _nav(int i, IconData icon, String label) {
-    final sel = _idx == i;
+  Widget _nav(int idx, int i, IconData icon, String label) {
+    final sel = idx == i;
     return Expanded(
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => setState(() => _idx = i),
+          onTap: () => ref.read(mainShellTabIndexProvider.notifier).state = i,
           borderRadius: BorderRadius.circular(14),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
-              color: sel ? C.navy.withValues(alpha: 0.06) : Colors.transparent,
+              // ✅ [Brand color audit 2026-07-27] ແທັບທີ່ເລືອກໃຊ້ສີຂຽວແບຣນ
+              // (ແທນ C.navy) — ໃຫ້ສອດຄ່ອງກັບ Grab/Foodpanda/Airbnb ທີ່ໃຊ້ສີ
+              // ແບຣນຫຼັກເປັນຕົວບົ່ງບອກແທັບທີ່ເລືອກຢູ່
+              color: sel ? C.primary.withValues(alpha: 0.10) : Colors.transparent,
               borderRadius: BorderRadius.circular(14),
             ),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, color: sel ? C.navy : C.muted, size: 24),
+              Icon(icon, color: sel ? C.primary : C.muted, size: 24),
               const SizedBox(height: 3),
               Text(label,
                 textAlign: TextAlign.center,
@@ -886,7 +896,7 @@ class _MainShellState extends State<MainShell> {
                   fontSize: 10,
                   height: 1.0,
                   fontWeight: FontWeight.w600,
-                  color: sel ? C.navy : C.muted,
+                  color: sel ? C.primary : C.muted,
                 ),
               ),
             ]),
@@ -1003,13 +1013,13 @@ class _PromoCarouselState extends State<_PromoCarousel> {
       'title': tr('promo2_title'),
       'sub': tr('promo2_sub'),
       'emoji': '❄️',
-      'colors': [Color(0xFF0EA5E9), Color(0xFF22C55E)],
+      'colors': [C.promoBannerBlue, C.promoBannerGreen],
     },
     {
       'title': tr('promo3_title'),
       'sub': tr('promo3_sub'),
       'emoji': '🎁',
-      'colors': [Color(0xFFF97316), Color(0xFFFBBF24)],
+      'colors': [C.promoBannerOrange, C.gold],
     },
   ];
 
@@ -1131,12 +1141,12 @@ class HomeScreen extends StatelessWidget {
   static List<Map<String, Object>> get _cats => [
     {
       'icon': Icons.ac_unit_rounded, 'label': tr('svc_ac_clean'), 'sub': tr('cat_ac_sub'),
-      'color': const Color(0xFFEFF6FF), 'accent': const Color(0xFF1D4ED8),
+      'color': C.categoryAcBg, 'accent': C.categoryAcAccent,
       'category': ServiceCategory.acCleaning,
     },
     {
       'icon': Icons.cleaning_services_rounded, 'label': tr('svc_house_clean'), 'sub': tr('cat_house_sub'),
-      'color': const Color(0xFFF0FDF4), 'accent': const Color(0xFF15803D),
+      'color': C.categoryCleanBg, 'accent': C.categoryCleanAccent,
       'category': ServiceCategory.homeCleaning,
     },
   ];
@@ -1146,14 +1156,14 @@ class HomeScreen extends StatelessWidget {
       'icon': Icons.ac_unit_rounded, 'name': tr('svc_ac_general_full'),
       'price': '${tr('starting_from')} 300,000', 'rating': 4.9,
       'time': '45–60 ${tr('minutes_unit')}',
-      'color': const Color(0xFFEFF6FF), 'accent': const Color(0xFF1D4ED8),
+      'color': C.categoryAcBg, 'accent': C.categoryAcAccent,
       'category': ServiceCategory.acCleaning,
     },
     {
       'icon': Icons.cleaning_services_rounded, 'name': tr('svc_house_general_full'),
       'price': '${tr('starting_from')} 180,000', 'rating': 4.8,
       'time': '1–3 ${tr('hours_unit')}',
-      'color': const Color(0xFFF0FDF4), 'accent': const Color(0xFF15803D),
+      'color': C.categoryCleanBg, 'accent': C.categoryCleanAccent,
       'category': ServiceCategory.homeCleaning,
     },
   ];
@@ -1174,7 +1184,6 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     return Scaffold(
-      backgroundColor: Colors.white,
       body: CustomScrollView(slivers: [
         SliverToBoxAdapter(
           child: Padding(
@@ -1269,8 +1278,8 @@ class HomeScreen extends StatelessWidget {
                               gradient: LinearGradient(
                                 colors: [
                                   cat['category'] == ServiceCategory.acCleaning
-                                      ? const Color(0xFFE3F2FD)
-                                      : const Color(0xFFFFF3E0),
+                                      ? C.homeCardAcTint
+                                      : C.homeCardOtherTint,
                                   Colors.white,
                                 ],
                                 begin: Alignment.topLeft,
@@ -1440,9 +1449,9 @@ class _BookingScreenState extends State<BookingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
+        elevation: 0,
         title: Text(tr('booking'), style: const TextStyle(
             color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),
         centerTitle: true,
@@ -1819,7 +1828,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('ປ່ຽນຮູບໂປຣໄຟລ໌ສຳເລັດ'),
-        backgroundColor: C.green,
+        backgroundColor: C.success,
       ));
     } catch (e) {
       if (!context.mounted) return;
@@ -1832,12 +1841,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  // ✅ [Phone-verified booking] ເບີໂທ "ຢືນຢັນແລ້ວ" ອິງໃສ່ FirebaseAuth
+  // currentUser.phoneNumber ໂດຍກົງ (ເບິ່ງ phone_verification.dart) — ບໍ່ແມ່ນ
+  // field 'phone' ໃນ Firestore users/{uid} ອີກຕໍ່ໄປ (field ນັ້ນເປັນ contact
+  // info ທົ່ວໄປທີ່ຜູ້ໃຊ້ແກ້ໄຂເອງໄດ້ ບໍ່ຜ່ານການຢືນຢັນ). ໜ້ານີ້ຄືຈຸດດຽວທີ່ຢືນຢັນ/
+  // ປ່ຽນເບີໄດ້ — booking_form_screen.dart/quick_booking_screen.dart ອ່ານແຕ່
+  // ຄ່ານີ້ ແລະ ພາຜູ້ໃຊ້ກັບມາໜ້ານີ້ຖ້າຍັງບໍ່ໄດ້ຢືນຢັນ.
+  Future<void> _openPhoneVerification(BuildContext context) async {
+    final result = await Navigator.push<bool>(context, MaterialPageRoute(
+        builder: (_) => const PhoneVerificationScreen()));
+    if (result == true && mounted) setState(() {});
+  }
+
+  Widget _phoneStatusRow(BuildContext context) {
+    final phone = verifiedPhoneNumber();
+    if (phone != null) {
+      return Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(phone, style: const TextStyle(
+            color: Colors.black54, fontSize: 13)),
+        const SizedBox(width: 6),
+        Text(tr('verified_badge'), style: const TextStyle(
+            color: C.green, fontSize: 11, fontWeight: FontWeight.w700)),
+      ]);
+    }
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => _openPhoneVerification(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.error_outline, size: 14, color: C.orange),
+            const SizedBox(width: 4),
+            Text(tr('phone_not_verified_badge'), style: const TextStyle(
+                color: C.orange, fontSize: 12, fontWeight: FontWeight.w700)),
+            const SizedBox(width: 6),
+            Text(tr('verify_phone_title'), style: const TextStyle(
+                color: C.navy, fontSize: 12, fontWeight: FontWeight.w800,
+                decoration: TextDecoration.underline)),
+          ]),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     final topPad = MediaQuery.of(context).padding.top;
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       body: CustomScrollView(slivers: [
         SliverToBoxAdapter(child: Container(
           width: double.infinity,
@@ -1930,12 +1984,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Text(user?.email ?? '',
                 style: const TextStyle(
                     color: Colors.black54, fontSize: 13)),
-            if ((user?.phoneNumber ?? '').isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(user!.phoneNumber!,
-                  style: const TextStyle(
-                      color: Colors.black54, fontSize: 13)),
-            ],
+            const SizedBox(height: 4),
+            _phoneStatusRow(context),
             const SizedBox(height: 8),
             Material(
               color: Colors.transparent,
@@ -2169,7 +2219,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => Padding(
@@ -2266,7 +2315,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                     content: Text('ບັນທຶກສຳເລັດ'),
-                    backgroundColor: C.green,
+                    backgroundColor: C.success,
                     behavior: SnackBarBehavior.floating));
               } catch (e) {
                 if (!ctx.mounted) return;
@@ -2380,7 +2429,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
@@ -2464,7 +2512,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => Padding(
@@ -2530,7 +2577,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                     content: Text('ປ່ຽນລະຫັດຜ່ານສຳເລັດ'),
-                    backgroundColor: C.green,
+                    backgroundColor: C.success,
                     behavior: SnackBarBehavior.floating));
               } catch (e) {
                 if (!ctx.mounted) return;
@@ -2563,8 +2610,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final data = userDoc.data() ?? <String, dynamic>{};
 
     final nameCtrl  = TextEditingController(text: user.displayName ?? '');
-    final phoneCtrl = TextEditingController(
-        text: data['phone'] as String? ?? user.phoneNumber ?? '');
     final ageCtrl   = TextEditingController(text: data['age'] as String? ?? '');
     final addrCtrl  = TextEditingController(text: data['address'] as String? ?? '');
     String gender   = data['gender'] as String? ?? 'ຊາຍ';
@@ -2573,7 +2618,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!context.mounted) return;
     await showModalBottomSheet(
       context: context, isScrollControlled: true,
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
@@ -2597,8 +2641,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 20),
               _ef(nameCtrl, 'ຊື່-ນາມສະກຸນ', Icons.person_outline),
               const SizedBox(height: 12),
-              _ef(phoneCtrl, 'ເບີໂທ', Icons.phone_outlined,
-                  keyboard: TextInputType.phone),
+              // ✅ [Phone-verified booking] ເບີໂທບໍ່ໃຫ້ແກ້ໄຂໂດຍກົງທີ່ນີ້ອີກຕໍ່ໄປ —
+              // ຕ້ອງຜ່ານການຢືນຢັນ OTP (PhoneVerificationScreen) ເທົ່ານັ້ນ, ບໍ່ດັ່ງນັ້ນ
+              // booking.contactPhone ຈະບໍ່ກົງກັບເບີທີ່ຜູ້ໃຊ້ພິມໄວ້ໃນນີ້
+              const Text('ເບີໂທ', style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700, color: C.text)),
+              const SizedBox(height: 6),
+              Material(
+                color: C.bg,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openPhoneVerification(context);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 14),
+                    child: Row(children: [
+                      const Icon(Icons.phone_outlined,
+                          color: C.muted, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(
+                          verifiedPhoneNumber() ?? tr('phone_not_verified_badge'),
+                          style: const TextStyle(
+                              fontSize: 13.5, color: C.text))),
+                      Text(tr('verify_phone_title'), style: const TextStyle(
+                          fontSize: 12.5, fontWeight: FontWeight.w700,
+                          color: C.navy)),
+                    ]),
+                  ),
+                ),
+              ),
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(child: _ef(ageCtrl, 'ອາຍຸ', Icons.cake_outlined,
@@ -2666,25 +2741,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: ElevatedButton(
                   // ✅ [FIX] ກັນກົດຊ້ຳຂະນະກຳລັງບັນທຶກ (loading-state guard)
                   onPressed: saving ? null : () async {
-                    final phone = phoneCtrl.text.trim();
-                    // ✅ [FIX] ກວດເບີໂທດ້ວຍ regex ເບີລາວແທ້ (isValidLaoPhone) —
-                    // ບໍ່ດັ່ງນັ້ນເບີບໍ່ຖືກຕ້ອງຈະຖືກບັນທຶກລົງຖານຂໍ້ມູນໄດ້
-                    if (phone.isNotEmpty && !isValidLaoPhone(phone)) {
-                      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                          content: Text('ເບີໂທບໍ່ຖືກຕ້ອງ'),
-                          backgroundColor: C.red));
-                      return;
-                    }
                     setS(() => saving = true);
-                    // ✅ [FIX] ບັນທຶກ phone/age/gender/address ລົງ Firestore ແທ້ໆ —
+                    // ✅ [FIX] ບັນທຶກ name/age/gender/address ລົງ Firestore ແທ້ໆ —
                     // ກ່ອນໜ້ານີ້ມີແຕ່ updateDisplayName() ເຮັດໃຫ້ຂໍ້ມູນທີ່ພິມໃສ່
                     // ຫາຍໄປທັງໆທີ່ໜ້າຈໍສະແດງ "✅ ບັນທຶກແລ້ວ!"
+                    // ✅ [Phone-verified booking] 'phone' ບໍ່ຢູ່ໃນ update ນີ້ອີກຕໍ່
+                    // ໄປ — ຖືກຈັດການແຍກຕ່າງຫາກຜ່ານ PhoneVerificationScreen ເທົ່ານັ້ນ
                     try {
                       await user.updateDisplayName(nameCtrl.text.trim());
                       await FirebaseFirestore.instance
                           .collection('users').doc(user.uid).update({
                         'displayName': nameCtrl.text.trim(),
-                        'phone':       phone,
                         'age':         ageCtrl.text.trim(),
                         'gender':      gender,
                         'address':     addrCtrl.text.trim(),
@@ -2695,7 +2762,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                               content: Text('✅ ບັນທຶກແລ້ວ!'),
-                              backgroundColor: C.green));
+                              backgroundColor: C.success));
                       setState(() {});
                     } catch (e) {
                       // ✅ [FIX] ບໍ່ມີ error handling ມາກ່ອນ — ຖ້າອອບໄລນ໌/ຂຽນລົ້ມເຫລວ
@@ -2732,7 +2799,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // controllers ຈະຖືກລ້າງທຸກກໍລະນີທີ່ sheet ຖືກປິດ (swipe/back/tap-outside)
       // ບໍ່ພຽງແຕ່ຕອນກົດ Save ເທົ່ານັ້ນ (ກັນ memory leak)
       nameCtrl.dispose();
-      phoneCtrl.dispose();
       ageCtrl.dispose();
       addrCtrl.dispose();
     });
@@ -2775,7 +2841,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // quick_booking_screen.dart._pickOnMap().
   void _showAddr(BuildContext context) {
     showModalBottomSheet(
-      context: context, backgroundColor: Colors.white,
+      context: context,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => Padding(
@@ -2906,7 +2972,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showNotif(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     showModalBottomSheet(
-      context: context, backgroundColor: Colors.white,
+      context: context,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => Padding(
@@ -2930,12 +2996,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   return ListTile(
                       title: Text(label,
                           style: const TextStyle(fontWeight: FontWeight.w600)),
+                      // ✅ [Brand color audit 2026-07-27] ລົບ activeColor: C.sky
+                      // (ສີຟ້າ) hardcode — ໃຫ້ Switch ໃຊ້ switchTheme ກາງ
+                      // (ສີຂຽວແບຣນ) ຈາກ theme/app_theme.dart ແທນ
                       trailing: Switch(
                           value: value,
                           onChanged: (v) => FirebaseFirestore.instance
                               .collection('users').doc(uid)
-                              .set({'notifPrefs': {key: v}}, SetOptions(merge: true)),
-                          activeColor: C.sky));
+                              .set({'notifPrefs': {key: v}}, SetOptions(merge: true))));
                 }).toList());
               },
             ),
@@ -2946,7 +3014,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _showHelp(BuildContext context) {
     showModalBottomSheet(
-      context: context, backgroundColor: Colors.white,
+      context: context,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => Padding(
@@ -2979,7 +3047,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showTermsPrivacy(BuildContext context) {
     showModalBottomSheet(
       context: context, isScrollControlled: true,
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => DraggableScrollableSheet(
@@ -2996,11 +3063,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Text(tr('terms_privacy'), style: const TextStyle(
                 fontSize: 18, fontWeight: FontWeight.w900, color: C.text)),
             const SizedBox(height: 20),
-            _legalSection(Icons.description, tr('terms_conditions'),
-                tr('terms_content')),
-            const SizedBox(height: 14),
-            _legalSection(Icons.privacy_tip_outlined, tr('privacy_policy'),
-                tr('privacy_content')),
+            Consumer(builder: (context, ref, _) {
+              final legal = ref.watch(legalContentProvider).value;
+              final terms = (legal != null && legal.terms.isNotEmpty)
+                  ? legal.terms : tr('terms_content');
+              final privacy = (legal != null && legal.privacy.isNotEmpty)
+                  ? legal.privacy : tr('privacy_content');
+              return Column(children: [
+                _legalSection(Icons.description, tr('terms_conditions'), terms),
+                const SizedBox(height: 14),
+                _legalSection(Icons.privacy_tip_outlined, tr('privacy_policy'), privacy),
+              ]);
+            }),
             const SizedBox(height: 8),
           ],
         ),
@@ -3108,7 +3182,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showPointsSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => SafeArea(child: Padding(
@@ -3263,9 +3336,9 @@ class FavoriteProvidersScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
+        elevation: 0,
         title: const Text('ຊ່າງຖືກໃຈ', style: TextStyle(
             color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),
         centerTitle: true,
@@ -3321,9 +3394,9 @@ class PaymentHistoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: C.text, size: 20),
           onPressed: () => Navigator.pop(context),
@@ -3428,7 +3501,7 @@ class _AdminRedirectScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1D23),
+      backgroundColor: C.vipDark,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -3436,7 +3509,7 @@ class _AdminRedirectScreen extends StatelessWidget {
             Container(
               width: 90, height: 90,
               decoration: BoxDecoration(
-                color: const Color(0xFFC9A84C).withValues(alpha: 0.2),
+                color: C.vipGold.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(28),
               ),
               child: const Center(
@@ -3455,14 +3528,14 @@ class _AdminRedirectScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(
                   horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFFC9A84C).withValues(alpha: 0.15),
+                color: C.vipGold.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                    color: const Color(0xFFC9A84C).withValues(alpha: 0.4)),
+                    color: C.vipGold.withValues(alpha: 0.4)),
               ),
               child: const Text('lintho-admin.vercel.app',
                   style: TextStyle(
-                      color: Color(0xFFC9A84C), fontSize: 14,
+                      color: C.vipGold, fontSize: 14,
                       fontWeight: FontWeight.w700)),
             ),
             const SizedBox(height: 32),

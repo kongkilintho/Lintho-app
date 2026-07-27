@@ -25,10 +25,19 @@ class AppColors {
 
   // ── ແບຣນ (primary palette) ──────────────────────────────────
   static const navy  = Color(0xFF001B4B);
-  static const green = Color(0xFF22C55E); // primary action
+  static const green = Color(0xFF14B87A); // ✅ [Brand color audit 2026-07-27] ອັດເດດເປັນສີຂຽວແບຣນທາງການ (ແທນ #22C55E)
   static const gold  = Color(0xFFFBBF24); // ✅ ລວມ C.yellow/C.gold (hex ດຽວກັນ, 2 ຊື່) ເປັນຊື່ດຽວ
-  static const ink   = Color(0xFF0F172A); // primary text
+  // ✅ [Brand color audit 2026-07-27 v2] ink #0F172A → #1F2937 ຕາມ Brand
+  // System ໃໝ່ (Primary Text) — contrast ເທິງພື້ນຂາວ ~12.6:1, ຍັງຜ່ານ WCAG AAA
+  static const ink   = Color(0xFF1F2937); // primary text
   static const bg    = Color(0xFFF8FAFF); // ✅ ລວມ C.bg/C.cream (hex ດຽວກັນ, 2 ຊື່)
+
+  // ✅ [Brand color audit 2026-07-27 v2] Background/Surface — token ໃໝ່ຕາມ
+  // Brand System (Background=ໜ້າຈໍ, Surface=Card/AppBar/Dialog/BottomSheet).
+  // ບົດບາດສະຫຼັບກັບ `bg`/`white` ເກົ່າ: ດຽວນີ້ໜ້າຈໍເປັນຂາວແທ້, surface ເປັນ
+  // ສີແຕ້ມອ່ອນໆ — ເບິ່ງ AppTheme.light ສຳລັບບ່ອນທີ່ໃຊ້ແທນ `bg`/`white` ເກົ່າ.
+  static const background = Color(0xFFFFFFFF);
+  static const surface    = Color(0xFFF8FAF8);
 
   // ── ຂະຫຍາຍ (ຍັງໃຊ້ຢູ່ທົ່ວແອັບ, ຄົງໄວ້ບໍ່ປ່ຽນ hex) ──────────────
   static const blue      = Color(0xFF1E40AF);
@@ -37,15 +46,84 @@ class AppColors {
   static const mint      = Color(0xFFECFDF5);
   static const red       = Color(0xFFEF4444);
   static const dangerRed = Color(0xFFFF6B6B);
-  static const orange    = Color(0xFFF97316);
+  // ✅ [Brand color audit 2026-07-27 v2] orange #F97316 → #F59E0B ຕາມ Brand
+  // System ໃໝ່ (Warning)
+  static const orange    = Color(0xFFF59E0B);
   static const white     = Colors.white;
-  static const border    = Color(0xFFE2E8F0);
+  // ✅ [Brand color audit 2026-07-27 v2] border #E2E8F0 → #E5E7EB ຕາມ Brand
+  // System ໃໝ່
+  static const border    = Color(0xFFE5E7EB);
+
+  // ✅ [Brand color audit 2026-07-27 v2] success ແຍກຈາກ green (Primary) ຕາມ
+  // Brand System ໃໝ່ — Primary (#14B87A) = ປຸ່ມ/ແທັບ/ການກະທຳຫຼັກ, Success
+  // (#22C55E) = feedback ວ່າ "ສຳເລັດ" (SnackBar/checkmark/status completed)
+  static const success = Color(0xFF22C55E);
 
   // ✅ [FIX] #94A3B8 ເທິງພື້ນຂາວ/bg ແມ່ນ contrast ~2.8:1 — ບໍ່ຜ່ານ WCAG AA
   // (4.5:1) ສຳລັບ caption/hint/timestamp ທີ່ token ນີ້ຂັບເຄື່ອນເກືອບທຸກໜ້າຈໍ.
-  // #5D6572 ໃຫ້ contrast ~4.6:1 ເທິງພື້ນຂາວ, ຜ່ານເກນ, ຍັງອ່ານອອກວ່າເປັນ
-  // "ສີເທົາຮອງ" ບໍ່ແມ່ນ primary text.
-  static const muted = Color(0xFF5D6572);
+  // ✅ [Brand color audit 2026-07-27 v2] muted #5D6572 → #6B7280 ຕາມ Brand
+  // System ໃໝ່ (Secondary Text) — contrast ~4.8:1 ເທິງພື້ນຂາວ, ຍັງຜ່ານ WCAG AA
+  static const muted = Color(0xFF6B7280);
+
+  // ════════════════════════════════════════════════════════════
+  // ✅ [Brand color audit 2026-07-27 v2] Category/decorative accents — hex
+  // ຍົກອອກຈາກ booking_form_screen.dart/main.dart/fcm_service.dart (ເຄີຍ
+  // hardcode ຢູ່ widget ໂດຍກົງ). ຄ່າ hex ບໍ່ປ່ຽນ (ບໍ່ມີຜົນສາຍຕາ) — ນີ້ຄື
+  // ລະບົບແຍກສີຕາມໝວດບໍລິການ/ເນື້ອຫາ (ບໍ່ແມ່ນ 9-token core brand), ຈົງໃຈ
+  // ບໍ່ແມ່ນສີຂຽວ (ເບິ່ງລາຍງານກວດ Brand §4 "ບ່ອນທີ່ບໍ່ຄວນໃຊ້ສີຂຽວ")
+  // ════════════════════════════════════════════════════════════
+
+  // ── ໝວດ "ແອ" (Booking Form/Home quick-book) ─────────────────
+  static const categoryAcBg     = Color(0xFFEFF6FF);
+  static const categoryAcAccent = Color(0xFF1D4ED8);
+
+  // ── ໝວດ "ທຳຄວາມສະອາດ" ────────────────────────────────────────
+  static const categoryCleanBg     = Color(0xFFF0FDF4);
+  static const categoryCleanAccent = Color(0xFF15803D);
+
+  // ── ໝວດ "ບໍລິການເສີມ/Deep-clean" (ມ່ວງ) ──────────────────────
+  static const categoryAddonBg        = Color(0xFFF5F3FF);
+  static const categoryAddonBorder    = Color(0xFF7C3AED);
+  static const categoryAddonLabelText = Color(0xFF6D28D9);
+  static const categoryAddonValueText = Color(0xFF5B21B6);
+
+  // ── ໝວດ "ກຳຈັດແມງໄມ້" (Pest control) ─────────────────────────
+  static const categoryPestBg = Color(0xFFFDF4FF);
+
+  // ── ໝາຍເຫດ/ຄຳເຕືອນ (ມັດຈຳ/deposit — ອຳພັນ) ───────────────────
+  static const noteWarningBg       = Color(0xFFFFFBEB);
+  static const noteWarningText     = Color(0xFF92400E);
+  static const noteWarningTextDark = Color(0xFF78350F);
+
+  static const mutedLight = Color(0xFFB0B8C4);
+
+  // ── Home promo banner carousel (ບໍ່ກ່ຽວກັບໝວດບໍລິການ) ─────────
+  static const promoBannerBlue   = Color(0xFF0EA5E9);
+  static const promoBannerGreen  = Color(0xFF22C55E); // ✅ ຄ່າກົງກັບ `success` ໂດຍບັງເອີນ — ຄົງແຍກ token ເພື່ອບໍ່ໃຫ້ banner ຜູກກັບຄວາມໝາຍ "ສຳເລັດ"
+  static const promoBannerOrange = Color(0xFFF97316);
+
+  // ── Home quick-action card tint (AC vs ອື່ນໆ) ─────────────────
+  static const homeCardAcTint    = Color(0xFFE3F2FD);
+  static const homeCardOtherTint = Color(0xFFFFF3E0);
+
+  // ── Splash screen ─────────────────────────────────────────────
+  static const splashGradientStart = Color(0xFF0A2E6E);
+  static const splashSubtext       = Color(0xFFD6E4FF);
+
+  // ── VIP/referral card (dark+gold, ພິເສດແຍກຈາກ theme ຫຼັກ) ─────
+  static const vipDark = Color(0xFF1A1D23);
+  static const vipGold = Color(0xFFC9A84C);
+
+  // ── Match screen "ກຳລັງຊອກຊ່າງ..." dark brand wash (derive ຈາກ green) ──
+  static const primaryDeepWash = Color(0xFF07332B);
+
+  // ── fcm_service.dart notification-channel colors (Android tint
+  //    ເທົ່ານັ້ນ, ບໍ່ມີຜົນສາຍຕາໃນແອັບໂດຍກົງ) ────────────────────────
+  static const notifBooking = Color(0xFF1565C0);
+  static const notifPayment = Color(0xFF4A7C59);
+  static const notifCharge  = Color(0xFFF97316);
+  static const notifChat    = Color(0xFF7C3AED);
+  static const notifDefault = Color(0xFF0D1B4B);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -67,7 +145,9 @@ class AppStatus {
         JobStatus.onTheWay   => AppColors.teal,
         JobStatus.arrived    => AppColors.teal,
         JobStatus.inProgress => AppColors.teal,
-        JobStatus.completed  => AppColors.green,
+        // ✅ [Brand color audit 2026-07-27 v2] completed = Success (#22C55E),
+        // ແຍກຈາກ Primary (#14B87A)
+        JobStatus.completed  => AppColors.success,
         JobStatus.cancelled  => AppColors.muted,
         JobStatus.rejected   => AppColors.red,
       };
@@ -172,7 +252,10 @@ class AppTheme {
       secondary: AppColors.teal,
       tertiary:  AppColors.gold,
       error:     AppColors.red,
-      surface:   AppColors.white,
+      // ✅ [Brand color audit 2026-07-27 v2] surface ຕອນນີ້ແມ່ນ AppColors.surface
+      // (#F8FAF8, ບໍ່ແມ່ນ AppColors.white ອີກຕໍ່ໄປ) — ເບິ່ງ Background/Surface
+      // role swap ໃນ AppColors
+      surface:   AppColors.surface,
     );
 
     final outlineInput = OutlineInputBorder(
@@ -184,7 +267,10 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       primaryColor: AppColors.green,
-      scaffoldBackgroundColor: AppColors.bg,
+      // ✅ [Brand color audit 2026-07-27 v2] Background/Surface role swap ຕາມ
+      // Brand System ໃໝ່ — ໜ້າຈໍ (scaffold) ດຽວນີ້ຂາວແທ້ (background), Card/
+      // AppBar/Dialog/BottomSheet ໃຊ້ surface (ສີແຕ້ມອ່ອນ) ແທນ
+      scaffoldBackgroundColor: AppColors.background,
       fontFamily: null, // system font — see design review §3 for the case to add a custom pairing later
 
       textTheme: const TextTheme(
@@ -197,7 +283,7 @@ class AppTheme {
       ),
 
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.white,
+        backgroundColor: AppColors.surface,
         foregroundColor: AppColors.ink,
         elevation: 0,
         centerTitle: true,
@@ -206,7 +292,7 @@ class AppTheme {
       ),
 
       cardTheme: CardThemeData(
-        color: AppColors.white,
+        color: AppColors.surface,
         elevation: 0,
         shadowColor: Colors.black.withValues(alpha: 0.06),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.cardShape),
@@ -240,7 +326,9 @@ class AppTheme {
 
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.bg,
+        // ✅ [Brand color audit 2026-07-27 v2] ໃຊ້ surface (ບໍ່ແມ່ນ bg ເກົ່າ) —
+        // ຮັກສາ intent ເດີມ (fill ຕ່າງຈາກພື້ນຫຼັງໜ້ອຍໜຶ່ງ) ພາຍໃຕ້ token ໃໝ່
+        fillColor: AppColors.surface,
         hintStyle: const TextStyle(color: AppColors.muted, fontSize: 14),
         contentPadding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg, vertical: AppSpacing.lg),
@@ -253,20 +341,20 @@ class AppTheme {
       ),
 
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: AppColors.white,
+        backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
         showDragHandle: false, // ໃຊ້ _Handle ວັດເຈດຂອງແອັບເອງ (ດູ AppBottomSheet)
       ),
 
       dialogTheme: DialogThemeData(
-        backgroundColor: AppColors.white,
+        backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: AppRadius.cardShape),
         titleTextStyle: AppTypography.title.copyWith(fontSize: 18, fontWeight: FontWeight.w800),
         contentTextStyle: AppTypography.body.copyWith(color: AppColors.muted),
       ),
 
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: AppColors.white,
+        backgroundColor: AppColors.surface,
         indicatorColor: AppColors.navy.withValues(alpha: 0.08),
         labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
             fontSize: 10, fontWeight: FontWeight.w600,
@@ -276,6 +364,53 @@ class AppTheme {
       ),
 
       dividerTheme: const DividerThemeData(color: AppColors.border, thickness: 1, space: 1),
+
+      // ✅ [Brand color audit 2026-07-27] Switch/Checkbox/Radio/FAB/Progress/Chip
+      // ບໍ່ເຄີຍມີ theme ກາງ ມາກ່ອນ — ແຕ່ລະໜ້າຈໍທີ່ບໍ່ໄດ້ຕັ້ງ color ເອງ ຈະໄດ້ຮັບ
+      // brand green ອັດຕະໂນມັດຈາກນີ້ (M3 default ອີງໃສ່ colorScheme.primary ຢູ່
+      // ແລ້ວ, ແຕ່ປະກາດຢູ່ນີ້ໃຫ້ຊັດເຈນ ບໍ່ໃຫ້ໜ້າຈໍໃໝ່ hardcode ສີເອງອີກ).
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected) ? AppColors.green : AppColors.white),
+        trackColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected)
+                ? AppColors.green
+                : AppColors.border),
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      ),
+
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected) ? AppColors.green : Colors.transparent),
+        checkColor: const WidgetStatePropertyAll(AppColors.white),
+        side: const BorderSide(color: AppColors.border, width: 1.5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      ),
+
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected) ? AppColors.green : AppColors.muted),
+      ),
+
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: AppColors.green,
+        foregroundColor: AppColors.white,
+        elevation: 0,
+      ),
+
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: AppColors.green,
+      ),
+
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.surface,
+        selectedColor: AppColors.green,
+        labelStyle: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w600),
+        secondaryLabelStyle: const TextStyle(color: AppColors.white, fontWeight: FontWeight.w700),
+        side: const BorderSide(color: AppColors.border),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.chipShape),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      ),
     );
   }
 }

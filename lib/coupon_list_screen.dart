@@ -23,7 +23,7 @@ class CouponListScreen extends ConsumerWidget {
     final couponsAsync = ref.watch(myCouponsProvider);
 
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
         title: Text(tr('coupons_title')),
       ),

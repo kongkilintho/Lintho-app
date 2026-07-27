@@ -30,9 +30,8 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
     final historyAsync = ref.watch(rewardHistoryProvider);
 
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
         title: Text(tr('rewards_title'), style: const TextStyle(

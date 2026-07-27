@@ -55,7 +55,7 @@ class ProviderDetailsScreen extends ConsumerWidget {
     final provAsync = ref.watch(providerDetailProvider(providerId));
 
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       body: Stack(children: [
         provAsync.when(
           loading: () => const _ProviderDetailSkeleton(),
@@ -538,7 +538,7 @@ class _ProfileHeader extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.star, color: Colors.amber, size: 18),
+                const Icon(Icons.star, color: C.gold, size: 18),
                 const SizedBox(width: 4),
                 Text(provider.ratingLabel, style: const TextStyle(
                     color: Colors.white, fontWeight: FontWeight.bold)),
@@ -685,7 +685,7 @@ class _ReviewTile extends StatelessWidget {
                     i < review.rating.round()
                         ? Icons.star
                         : Icons.star_border,
-                    color: Colors.amber, size: 14,
+                    color: C.gold, size: 14,
                   )),
                 ),
               ],

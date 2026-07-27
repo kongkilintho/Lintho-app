@@ -67,7 +67,6 @@ class ChatListScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: C.cream,
       appBar: AppBar(
-        backgroundColor: Colors.white,
         elevation:   0,
         centerTitle: true,
         title: Text(tr('chat_title'), style: const TextStyle(
@@ -432,7 +431,6 @@ class _ChatScreenState extends State<ChatScreen> {
     return Scaffold(
       backgroundColor: C.cream,
       appBar: AppBar(
-        backgroundColor: Colors.white,
         elevation:   0,
         centerTitle: true,
         leading: IconButton(
