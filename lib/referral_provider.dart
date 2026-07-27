@@ -15,19 +15,29 @@ class ReferralInfo {
   });
 }
 
+// 🔒 [AUDIT M-15 / 2026-07-27] ກ່ອນໜ້ານີ້ provider ນີ້ listen
+// users/{uid}.snapshots() ແລ້ວ re-query vouchers sub-collection ທຸກຄັ້ງທີ່
+// doc ນັ້ນປ່ຽນ — ບໍ່ວ່າຈະປ່ຽນຍ້ອນເຫດຜົນຫຍັງກໍຕາມ (ຕົວຢ່າງ: rewardPoints
+// ອັບເດດຈາກ booking ອື່ນທີ່ບໍ່ກ່ຽວກັບ referral ເລີຍ). ຕອນນີ້ listen
+// vouchers sub-collection ໂດຍກົງແທນ (ຍິງສະເພາະຕອນມີ referral voucher ໃໝ່
+// ຈິງໆ), ແລ້ວອ່ານ referralCode ຄັ້ງດຽວຕໍ່ event ນັ້ນ (ບໍ່ແມ່ນ live-listen
+// users/{uid} ອີກຕໍ່ໄປ) — ໄດ້ຜົນດີກວ່າເກົ່ານຳ: ຍອດຮວມຈະອັບເດດແທ້ຕອນມີ
+// voucher ໃໝ່ (ບໍ່ແມ່ນອາໄສ side-effect ບັງເອີນຂອງ user-doc write ຄືເກົ່າ).
 final referralInfoProvider = StreamProvider<ReferralInfo?>((ref) {
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return Stream.value(null);
   final db = FirebaseFirestore.instance;
 
-  return db.collection('users').doc(uid).snapshots().asyncMap((snap) async {
-    var code = snap.data()?['referralCode'] as String?;
+  return db
+      .collection('wallets').doc(uid).collection('vouchers')
+      .where('reason', isEqualTo: 'referral_reward')
+      .limit(500)
+      .snapshots()
+      .asyncMap((vouchers) async {
+    final userDoc = await db.collection('users').doc(uid).get();
+    var code = userDoc.data()?['referralCode'] as String?;
     code ??= await _ensureReferralCode(uid);
 
-    final vouchers = await db
-        .collection('wallets').doc(uid).collection('vouchers')
-        .where('reason', isEqualTo: 'referral_reward')
-        .get();
     final total = vouchers.docs.fold<double>(
         0, (acc, d) => acc + (d.data()['amount'] as num).toDouble());
 
