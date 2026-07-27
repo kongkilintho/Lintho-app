@@ -84,7 +84,19 @@ class _MapPickerScreenState extends State<MapPickerScreen>
       setState(() => _picked = loc);
       _mapController.move(loc, 16);
     } catch (e) {
+      // 🔒 [AUDIT M-7 / 2026-07-27] ກ່ອນໜ້ານີ້ catch-all ນີ້ log ຢູ່ debug console
+      // ເທົ່ານັ້ນ — GPS timeout (ພົບເລື້ອຍພາຍໃນຕຶກ/underground) ຫຼືຄວາມຜິດພາດອື່ນ
+      // ນອກ 2 ກໍລະນີຂ້າງເທິງ (service disabled/permission denied forever) ຈະເຮັດ
+      // ໃຫ້ spinner ວິ່ງແປບໜຶ່ງແລ້ວກັບຄືນເປັນປົກກະຕິ ໂດຍບໍ່ມີ feedback ຫຍັງ ໃຫ້
+      // ຜູ້ໃຊ້ເລີຍ — ຄືກັນກັບ pattern ທີ່ໃຊ້ຢູ່ແລ້ວໃນ booking_form_screen.dart
+      // _useGps()'s catch-all.
       debugPrint('goToMyLocation: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:         Text('${tr("gps_error")}: $e'),
+          backgroundColor: Colors.red,
+        ));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
