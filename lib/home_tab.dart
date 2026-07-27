@@ -111,8 +111,11 @@ class _Header extends ConsumerWidget {
           CircleAvatar(
             radius:          24,
             backgroundColor: Colors.white.withValues(alpha: 0.2),
+            // 🔒 [AUDIT H-5 / 2026-07-27] ResizeImage — avatar 24px radius
+            // (48px diameter), ບໍ່ຈຳເປັນຕ້ອງ decode ຮູບເຕັມຄວາມລະອຽດ
             foregroundImage: p?.photoUrl != null
-                ? NetworkImage(p!.photoUrl!) : null,
+                ? ResizeImage(NetworkImage(p!.photoUrl!), width: 96, height: 96)
+                : null,
             onForegroundImageError: p?.photoUrl != null
                 ? (_, __) {} : null,
             child: Text(

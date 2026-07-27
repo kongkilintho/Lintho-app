@@ -4,7 +4,9 @@
 // ============================================================
 
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -13,7 +15,7 @@ import 'app_locale.dart';
 import 'Booking.dart';
 import 'booking_provider.dart';
 import 'booking_repository.dart';
-import 'fcm_service.dart';
+import 'chat_screen.dart';
 import 'widgets/app_icon_button.dart';
 import 'widgets/status_stepper.dart' as shared;
 
@@ -117,7 +119,7 @@ class JobWorkflowScreen extends ConsumerWidget {
           icon: const Icon(Icons.phone_outlined,
               color: Colors.white, size: 22),
           onPressed: () =>
-              launchUrl(Uri.parse('tel:${b.customerPhone}')),
+              launchUrl(Uri.parse('tel:${b.contactPhone}')),
         ),
         IconButton(
           icon: const Icon(Icons.navigation_outlined,
@@ -311,12 +313,43 @@ class _StatusStepper extends StatelessWidget {
 // CUSTOMER CARD
 // ════════════════════════════════════════════════════════════
 
-class _CustomerCard extends StatelessWidget {
+class _CustomerCard extends ConsumerWidget {
   final Booking booking;
   const _CustomerCard({required this.booking});
 
+  Future<void> _openChat(BuildContext context, WidgetRef ref, Booking b) async {
+    final provider = FirebaseAuth.instance.currentUser;
+    if (provider == null) return;
+    final providerName =
+        ref.read(profileStreamProvider).valueOrNull?.displayName ??
+            provider.displayName ?? '';
+    final chatId = await ChatService.createOrGetChat(
+      bookingId:    b.id,
+      customerId:   b.customerId,
+      customerName: b.customerName,
+      providerId:   provider.uid,
+      providerName: providerName,
+      serviceName:  b.serviceType,
+    );
+    if (!context.mounted) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(
+      chatId:         chatId,
+      otherName:      b.customerName,
+      bookingService: b.serviceType,
+      receiverId:     b.customerId,
+      receiverName:   b.customerName,
+    )));
+  }
+
+  Future<void> _copyPhone(BuildContext context, String phone) async {
+    await Clipboard.setData(ClipboardData(text: phone));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(tr('phone_copied_msg')), backgroundColor: C.green));
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final b = booking;
     return Container(
       padding: const EdgeInsets.all(14),
@@ -355,7 +388,7 @@ class _CustomerCard extends StatelessWidget {
                 const Icon(Icons.phone_outlined,
                     size: 12, color: C.muted),
                 const SizedBox(width: 4),
-                Text(b.customerPhone, style: const TextStyle(
+                Text(b.contactPhone, style: const TextStyle(
                     fontSize: 12, color: C.muted)),
               ]),
               const SizedBox(height: 2),
@@ -405,7 +438,7 @@ class _CustomerCard extends StatelessWidget {
             AppIconButton(icon: Icons.phone, color: C.green,
                 label: tr('call_semantic'),
                 onTap: () => launchUrl(
-                    Uri.parse('tel:${b.customerPhone}'))),
+                    Uri.parse('tel:${b.contactPhone}'))),
             const SizedBox(height: 8),
             AppIconButton(icon: Icons.navigation_rounded, color: C.blue,
                 label: tr('navigate_semantic'),
@@ -414,6 +447,38 @@ class _CustomerCard extends StatelessWidget {
                         '&destination=${b.location.latitude},'
                         '${b.location.longitude}'))),
           ]),
+        ]),
+        const SizedBox(height: 10),
+        // ✅ [Phone-verified booking] ສົນທະນາ + ຄັດລອກເບີ — ໂທຫາລູກຄ້າ (Call)
+        // ຢູ່ Column ຂ້າງເທິງແລ້ວ (ໃກ້ avatar, ໃຊ້ຫຼາຍທີ່ສຸດ)
+        Row(children: [
+          Expanded(child: OutlinedButton.icon(
+            onPressed: () => _openChat(context, ref, b),
+            icon: const Icon(Icons.chat_bubble_outline, size: 16),
+            label: Text(tr('chat_customer_semantic'), style: const TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w700)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: C.navy,
+              side: const BorderSide(color: C.border),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+          )),
+          const SizedBox(width: 8),
+          Expanded(child: OutlinedButton.icon(
+            onPressed: () => _copyPhone(context, b.contactPhone),
+            icon: const Icon(Icons.copy_outlined, size: 16),
+            label: Text(tr('copy_phone_semantic'), style: const TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w700)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: C.navy,
+              side: const BorderSide(color: C.border),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+          )),
         ]),
         const SizedBox(height: 12),
         Container(
@@ -457,7 +522,9 @@ class _CustomerJobPhoto extends StatelessWidget {
       child: Row(children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(10),
-          child: Image.network(url, width: 56, height: 56, fit: BoxFit.cover),
+          // 🔒 [AUDIT H-5 / 2026-07-27] cacheWidth/Height — thumbnail 56x56
+          child: Image.network(url, width: 56, height: 56, fit: BoxFit.cover,
+              cacheWidth: 112, cacheHeight: 112),
         ),
         const SizedBox(width: 10),
         Expanded(child: Text(tr('customer_job_photo_label'),
@@ -487,8 +554,14 @@ class _PhotoSectionState extends ConsumerState<_PhotoSection> {
 
   Future<void> _pickPhoto({required bool isBefore}) async {
     try {
+      // 🔒 [AUDIT H-5 / 2026-07-27] ກ່ອນໜ້ານີ້ບໍ່ມີ maxWidth/maxHeight — ຮູບ
+      // ກ່ອນ/ຫຼັງວຽກຈາກກ້ອງຖືກອັບໂຫລດເຕັມຄວາມລະອຽດ ທັງໆທີ່ສະແດງເປັນ thumbnail
+      // ນ້ອຍ (56x56) ໃນ job workflow — ຈຳກັດ 1600px ຄືກັນກັບ jobPhotoUrl ໃນ
+      // booking_form_screen.dart (ພຽງພໍສຳລັບ before/after photo, ຫຼຸດຂະໜາດ
+      // ອັບໂຫລດ/ຄວາມສ່ຽງ OOM ຕອນ decode ຢ່າງຫຼວງຫຼາຍ).
       final picked = await ImagePicker().pickImage(
-          source: ImageSource.camera, imageQuality: 80);
+          source: ImageSource.camera, imageQuality: 80,
+          maxWidth: 1600, maxHeight: 1600);
       // ✅ RULE: mounted check ຫຼັງ async
       if (picked == null || !mounted) return;
 
@@ -554,7 +627,7 @@ class _PhotoSectionState extends ConsumerState<_PhotoSection> {
             const SizedBox(height: 12),
             Row(children: [
               Expanded(child: _PhotoSlot(
-                label: tr('photo_before'), emoji: '📷',
+                label: tr('photo_before'), icon: Icons.camera_alt_outlined,
                 imageUrl: b.beforePhotoUrl,
                 uploading: _uploadingBefore,
                 onTap: b.status != JobStatus.completed
@@ -562,7 +635,7 @@ class _PhotoSectionState extends ConsumerState<_PhotoSection> {
               )),
               const SizedBox(width: 12),
               Expanded(child: _PhotoSlot(
-                label: tr('photo_after'), emoji: '✨',
+                label: tr('photo_after'), icon: Icons.auto_awesome_outlined,
                 imageUrl: b.afterPhotoUrl,
                 uploading: _uploadingAfter,
                 onTap: (b.status == JobStatus.inProgress ||
@@ -587,13 +660,13 @@ class _PhotoSectionState extends ConsumerState<_PhotoSection> {
 
 class _PhotoSlot extends StatelessWidget {
   final String        label;
-  final String        emoji;
+  final IconData       icon;
   final String?       imageUrl;
   final bool          uploading;
   final VoidCallback? onTap;
 
   const _PhotoSlot({
-    required this.label, required this.emoji,
+    required this.label, required this.icon,
     this.imageUrl, required this.uploading, this.onTap,
   });
 
@@ -627,8 +700,7 @@ class _PhotoSlot extends StatelessWidget {
               ? Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(emoji,
-                    style: const TextStyle(fontSize: 28)),
+                Icon(icon, size: 28, color: C.muted),
                 const SizedBox(height: 6),
                 Text(label, style: const TextStyle(
                     fontSize: 12, fontWeight: FontWeight.w700,
@@ -863,19 +935,15 @@ class _AdditionalChargesSection extends ConsumerWidget {
                 final amt = double.tryParse(
                     amountCtrl.text.replaceAll(',', ''));
                 if (amt == null || amt <= 0) return;
+                // 🔒 [AUDIT M-1 / 2026-07-27] ລຶບການເອີ້ນສົ່ງ additional-charges
+                // notification ອອກຈາກໜ້ານີ້ — BookingRepository.requestAdditionalCharges()
+                // (booking_repository.dart) ສົ່ງ notification ນີ້ຢູ່ແລ້ວພາຍໃນຕົວ
+                // ມັນເອງ, ການເອີ້ນຊ້ຳຢູ່ນີ້ເຮັດໃຫ້ລູກຄ້າໄດ້ຮັບ push ຊ້ຳສອງເທື່ອຕໍ່ 1
+                // ຄຳຮ້ອງຂໍ.
                 final ok = await ref
                     .read(bookingNotifierProvider.notifier)
                     .requestAdditionalCharges(
                     booking.id, amt, noteCtrl.text.trim());
-
-                if (ok) {
-                  await NotificationSender.additionalCharges(
-                    customerId: booking.customerId,
-                    bookingId:  booking.id,
-                    amount:     amt,
-                    note:       noteCtrl.text.trim(),
-                  );
-                }
 
                 // ✅ RULE: mounted check ຫຼັງ async
                 if (!context.mounted) return;

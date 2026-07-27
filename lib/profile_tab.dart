@@ -245,9 +245,12 @@ class _ProfileCard extends StatelessWidget {
             child: p?.photoUrl != null
                 ? ClipRRect(
               borderRadius: BorderRadius.circular(26),
+              // 🔒 [AUDIT H-5 / 2026-07-27] cacheWidth/Height — ນີ້ແມ່ນ avatar
+              // 90x90, ບໍ່ຈຳເປັນຕ້ອງ decode ຮູບເຕັມຄວາມລະອຽດເຂົ້າ memory
               child: Image.network(
                 p!.photoUrl!,
                 fit: BoxFit.cover,
+                cacheWidth: 180, cacheHeight: 180,
                 errorBuilder: (_, __, ___) => Center(
                   child: Text(p.avatarLetter, style: const TextStyle(
                     fontSize: 36, color: Colors.white,
@@ -351,9 +354,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   // ✅ ໃຊ້ Cloudinary ແທນ Firebase Storage
+  // 🔒 [AUDIT H-5 / 2026-07-27] ກ່ອນໜ້ານີ້ບໍ່ມີ maxWidth/maxHeight — ຮູບໂປຣໄຟລ໌
+  // ຈາກກ້ອງ (ຕົວຢ່າງ 4000x3000) ຖືກອັບໂຫລດເຕັມຄວາມລະອຽດ ທັງໆທີ່ສະແດງເປັນ
+  // avatar ນ້ອຍໆ (90x90) ເທົ່ານັ້ນ — ຈຳກັດ 800px ໃຫ້ກົງກັບຂະໜາດສະແດງຈິງ.
   Future<void> _pickPhoto() async {
     final picked = await ImagePicker().pickImage(
       source: ImageSource.gallery, imageQuality: 75,
+      maxWidth: 800, maxHeight: 800,
     );
     if (picked == null || !mounted) return;
     setState(() => _uploading = true);
@@ -423,6 +430,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         child: Image.network(
                           p!.photoUrl!,
                           fit: BoxFit.cover,
+                          cacheWidth: 180, cacheHeight: 180,
                           errorBuilder: (_, __, ___) => Center(
                             child: Text(
                               p.avatarLetter,
