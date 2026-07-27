@@ -7,8 +7,10 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
+import 'app_navigation_state.dart';
 import 'map_picker_screen.dart';
 import 'match_screen.dart';
+import 'phone_verification.dart';
 import 'quick_booking_provider.dart';
 import 'saved_address.dart';
 
@@ -17,12 +19,17 @@ class QuickBookingFlow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // ✅ [Phone-verified booking] ບໍ່ອະນຸຍາດໃຫ້ຈອງຖ້າບັນຊີຍັງບໍ່ມີ/ຍັງບໍ່ໄດ້
+    // ຢືນຢັນເບີໂທ — ເບິ່ງ phone_verification.dart
+    if (verifiedPhoneNumber() == null) {
+      return PhoneRequiredGate(
+          onGoToProfile: () => goToProfileTab(context, ref));
+    }
     final draft = ref.watch(quickBookingProvider);
 
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
         leading: draft.step == QuickBookingStep.service
@@ -362,7 +369,7 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
                       hintText: tr('address_label_hint'),
                       isDense: true,
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: C.white,
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 10),
                       border: OutlineInputBorder(
@@ -432,7 +439,6 @@ class _StepCheckout extends ConsumerStatefulWidget {
 }
 
 class _StepCheckoutState extends ConsumerState<_StepCheckout> {
-  final _phoneCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   final _couponCtrl = TextEditingController();
   bool _submitting = false;
@@ -440,16 +446,12 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
   @override
   void initState() {
     super.initState();
-    // ✅ pre-fill ຈາກ Firebase Auth ຖ້າມີ — ແຕ່ຍັງແກ້ໄຂໄດ້ສະເໝີ
-    // (ກັນກໍລະນີ user.phoneNumber ເປັນ null ເຖິງວ່າຈະ login ແລ້ວ ເຊັ່ນ login ດ້ວຍ Google)
     final user = FirebaseAuth.instance.currentUser;
-    _phoneCtrl.text = user?.phoneNumber ?? '';
     _nameCtrl.text = user?.displayName ?? '';
   }
 
   @override
   void dispose() {
-    _phoneCtrl.dispose();
     _nameCtrl.dispose();
     _couponCtrl.dispose();
     super.dispose();
@@ -462,15 +464,16 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
           .showSnackBar(SnackBar(content: Text(tr('please_login_first'))));
       return;
     }
-    final phone = _phoneCtrl.text.trim().isNotEmpty
-        ? _phoneCtrl.text.trim()
-        : (user.phoneNumber ?? '');
+    // ✅ [Phone-verified booking] ເບີໂທຢືນຢັນແລ້ວຂອງບັນຊີ — ໜ້ານີ້ຖືກ
+    // PhoneRequiredGate ຫຸ້ມຢູ່ QuickBookingFlow.build() ຢູ່ແລ້ວ, ກວດຄືນນີ້ຄື
+    // defense-in-depth ກ່ອນ write ຈິງ
+    final phone = verifiedPhoneNumber() ?? '';
     final name = _nameCtrl.text.trim().isNotEmpty
         ? _nameCtrl.text.trim()
         : (user.displayName ?? tr('customer'));
     if (phone.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(tr('please_enter_phone'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr('phone_verification_required_title'))));
       return;
     }
 
@@ -526,22 +529,15 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
               decoration: InputDecoration(
                 hintText: tr('name_short'),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: C.white,
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
             const SizedBox(height: 10),
-            TextField(
-              controller: _phoneCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                hintText: tr('phone'),
-                filled: true,
-                fillColor: Colors.white,
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+            VerifiedPhoneDisplay(
+              phone: verifiedPhoneNumber() ?? '',
+              onEditTap: () => goToProfileTab(context, ref),
             ),
             const SizedBox(height: 16),
             _SectionLabel(tr('discount_code_label')),
@@ -581,7 +577,7 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
                       hintText: tr('enter_code_hint'),
                       errorText: draft.couponError,
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: C.white,
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),

@@ -8,11 +8,14 @@
 //   ✅ mounted check ຫຼັງ async
 // ============================================================
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
 import 'brand_mark_tile.dart';
 import 'customer_register_flow.dart';
+import 'legal_content_provider.dart';
 import 'technician_register_screen.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -26,6 +29,23 @@ class _RegisterPageState extends State<RegisterPage> {
   // ✅ [FIX Medium-9] ກັນກົດຮ້ອງທັນທີໆຫຼາຍເທື່ອ — ບໍ່ໃຫ້ push route ຊ້ຳກັນ
   bool _navigating = false;
 
+  late final TapGestureRecognizer _termsTap;
+  late final TapGestureRecognizer _privacyTap;
+
+  @override
+  void initState() {
+    super.initState();
+    _termsTap = TapGestureRecognizer()..onTap = () => _showTermsPrivacy(context);
+    _privacyTap = TapGestureRecognizer()..onTap = () => _showTermsPrivacy(context);
+  }
+
+  @override
+  void dispose() {
+    _termsTap.dispose();
+    _privacyTap.dispose();
+    super.dispose();
+  }
+
   Future<void> _push(Widget page) async {
     if (_navigating) return;
     _navigating = true;
@@ -36,7 +56,7 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
+      backgroundColor: C.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -101,6 +121,31 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
             ),
           ]),
+          const SizedBox(height: 20),
+
+          // ── Terms & Privacy footer ──
+          SizedBox(
+            width: double.infinity,
+            child: Text.rich(
+              TextSpan(children: [
+                TextSpan(text: tr('register_legal_prefix')),
+                TextSpan(
+                  text: tr('terms_conditions_full'),
+                  style: const TextStyle(color: C.navy, fontWeight: FontWeight.w800),
+                  recognizer: _termsTap,
+                ),
+                TextSpan(text: tr('register_legal_and')),
+                TextSpan(
+                  text: tr('privacy_policy'),
+                  style: const TextStyle(color: C.navy, fontWeight: FontWeight.w800),
+                  recognizer: _privacyTap,
+                ),
+                TextSpan(text: tr('register_legal_suffix')),
+              ]),
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: C.muted, fontSize: 12, height: 1.5),
+            ),
+          ),
         ]),
       ),
     );
@@ -109,6 +154,64 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget _fieldLabel(String text) => Text(text, style: const TextStyle(
     fontSize: 13, fontWeight: FontWeight.w700, color: C.text,
   ));
+
+  void _showTermsPrivacy(BuildContext context) {
+    showModalBottomSheet(
+      context: context, isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.75, minChildSize: 0.4, maxChildSize: 0.92,
+        expand: false,
+        builder: (ctx, scrollCtrl) => ListView(
+          controller: scrollCtrl,
+          padding: const EdgeInsets.all(20),
+          children: [
+            Center(child: Container(width: 40, height: 4,
+                decoration: BoxDecoration(color: C.border,
+                    borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 16),
+            Text(tr('terms_privacy'), style: const TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w900, color: C.text)),
+            const SizedBox(height: 20),
+            Consumer(builder: (context, ref, _) {
+              final legal = ref.watch(legalContentProvider).value;
+              final terms = (legal != null && legal.terms.isNotEmpty)
+                  ? legal.terms : tr('terms_content');
+              final privacy = (legal != null && legal.privacy.isNotEmpty)
+                  ? legal.privacy : tr('privacy_content');
+              return Column(children: [
+                _legalSection(Icons.description, tr('terms_conditions_full'), terms),
+                const SizedBox(height: 14),
+                _legalSection(Icons.privacy_tip_outlined, tr('privacy_policy'), privacy),
+              ]);
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _legalSection(IconData icon, String title, String content) =>
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+            color: C.bg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: C.border, width: 1)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(icon, color: C.navy, size: 18),
+            const SizedBox(width: 8),
+            Text(title, style: const TextStyle(
+                fontSize: 15, fontWeight: FontWeight.w800, color: C.text)),
+          ]),
+          const SizedBox(height: 10),
+          Text(content, style: const TextStyle(
+              fontSize: 13, color: C.muted, height: 1.5)),
+        ]),
+      );
 }
 
 // ════════════════════════════════════════════════════════════

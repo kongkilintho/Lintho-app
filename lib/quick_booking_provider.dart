@@ -245,6 +245,9 @@ class QuickBookingNotifier extends Notifier<QuickBookingDraft> {
         'customerId': customerId,
         'customerName': customerName,
         'customerPhone': customerPhone,
+        // ✅ [Phone-verified booking] ຄືເບີດຽວກັນກັບ customerPhone (ຢືນຢັນແລ້ວ
+        // ຈາກບັນຊີ, ເບິ່ງ phone_verification.dart) — ຝັ່ງຊ່າງອ່ານ field ນີ້
+        'contactPhone': customerPhone,
         'serviceType': state.serviceType,
         'serviceEmoji': state.serviceEmoji,
         'category': state.category,

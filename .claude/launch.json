@@ -6,6 +6,12 @@
       "runtimeExecutable": "flutter",
       "runtimeArgs": ["run", "-d", "chrome", "--web-port", "8765"],
       "port": 8765
+    },
+    {
+      "name": "lintho-admin-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:\\Users\\DELL\\StudioProjects\\lintho-admin", "run", "dev"],
+      "port": 3000
     }
   ]
 }
