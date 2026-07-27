@@ -83,6 +83,42 @@ service cloud.firestore {
     // ບັງຄັບເປັນ 'pending' ຢູ່ແລ້ວຂ້າງເທິງ, providerId ນັ້ນຍັງຕ້ອງຜ່ານຂັ້ນຕອນ
     // acceptBooking() (transaction, booking_repository.dart) ຂອງຊ່າງເອງ ຈຶ່ງຈະ
     // ປ່ຽນເປັນ 'accepted' ໄດ້ — ບໍ່ແມ່ນການຂ້າມຂັ້ນຕອນຮັບງານແຕ່ຢ່າງໃດ.
+    // 🔒 [AUDIT H-4 / 2026-07-27] address/landmark/specialInstructions ບໍ່ເຄີຍ
+    // ຖືກກວດ type/size ຢູ່ rule ນີ້ເລີຍ (ມີແຕ່ client-side maxLength, ເບິ່ງ
+    // booking_form_screen.dart, ເຊິ່ງເປັນແຕ່ cosmetic). Booking.fromFirestore()
+    // (Booking.dart) ອ່ານ field ເຫຼົ່ານີ້ດ້ວຍ `as String?` ເຊິ່ງ throw ຖ້າຄ່າເປັນ
+    // non-null non-String (ບໍ່ແມ່ນ coerce) — modified client / manual edit
+    // ສ້າງ doc ທີ່ address ເປັນ number/map ໄດ້, ເຮັດໃຫ້ stream
+    // .map(Booking.fromFirestore) throw ແລະ ວຽກທັງໝົດຂອງ provider ທຸກຄົນຫາຍໄປ
+    // (ເບິ່ງ booking_repository.dart watchOpenJobs()). ຕອນນີ້ບັງຄັບ type ຢູ່ rule
+    // ນຳ (defense-in-depth ຄຽງຄູ່ກັບ Booking.fromFirestore ທີ່ຖືກເຮັດໃຫ້ປອດໄພ
+    // ຂຶ້ນນຳ, ເບິ່ງ _str() helper).
+    function isValidBookingTextFields() {
+      return (!('address' in request.resource.data) ||
+          (request.resource.data.address is string &&
+           request.resource.data.address.size() <= 500)) &&
+        (!('landmark' in request.resource.data) ||
+          (request.resource.data.landmark is string &&
+           request.resource.data.landmark.size() <= 300)) &&
+        (!('specialInstructions' in request.resource.data) ||
+          (request.resource.data.specialInstructions is string &&
+           request.resource.data.specialInstructions.size() <= 1000));
+    }
+
+    // 🔒 [AUDIT M-4 / 2026-07-27] `contactPhone` (ເບີໂທຢືນຢັນ OTP ຈາກບັນຊີ,
+    // ເບິ່ງ Booking.dart) ຖືກ copy ຈາກ FirebaseAuth.currentUser.phoneNumber
+    // ຝັ່ງ client ຕອນສ້າງ booking — ບໍ່ມີການກວດຄືນຝັ່ງ server ວ່າກົງກັບເບີໂທຈິງ
+    // ຂອງບັນຊີທີ່ login ຢູ່. modified client ສາມາດຂຽນເບີໂທໃດກໍໄດ້ໃສ່ field ນີ້.
+    // ຕອນນີ້ບັງຄັບວ່າຖ້າ contactPhone ມີມາ ຕ້ອງກົງກັບ request.auth.token.phone_number
+    // ຂອງບັນຊີທີ່ login ຢູ່ — ຍົກເວັ້ນເວລາ phone_number claim ບໍ່ມີເລີຍ (ບັນຊີທີ່
+    // login ຜ່ານຊ່ອງທາງອື່ນທີ່ບໍ່ແມ່ນເບີໂທ, ຖ້າມີໃນອະນາຄົດ) ເພື່ອບໍ່ໃຫ້ block flow
+    // ທີ່ຖືກຕ້ອງ.
+    function isValidContactPhone() {
+      return !('contactPhone' in request.resource.data) ||
+        request.auth.token.phone_number == null ||
+        request.resource.data.contactPhone == request.auth.token.phone_number;
+    }
+
     function isValidNewBookingShape() {
       return request.resource.data.status == 'pending' &&
         request.resource.data.paymentStatus == 'pending' &&
@@ -90,7 +126,8 @@ service cloud.firestore {
         request.resource.data.price >= 0 && request.resource.data.price <= 50000000 &&
         (!('grandTotal' in request.resource.data) ||
           (request.resource.data.grandTotal is number &&
-           request.resource.data.grandTotal >= 0 && request.resource.data.grandTotal <= 50000000));
+           request.resource.data.grandTotal >= 0 && request.resource.data.grandTotal <= 50000000)) &&
+        isValidBookingTextFields() && isValidContactPhone();
     }
 
     // 🔒 [AUDIT QA-1 / HI-2] ກ່ອນໜ້ານີ້ update ບໍ່ໄດ້ກວດຄ່າ/transition ຂອງ
@@ -103,6 +140,66 @@ service cloud.firestore {
       return request.resource.data.status != 'completed' ||
         (('paymentStatus' in request.resource.data) &&
          request.resource.data.paymentStatus == 'paid');
+    }
+
+    // 🔒 [AUDIT C-1 / 2026-07-27] ກ່ອນໜ້ານີ້ບໍ່ມີການກວດ status *transition*
+    // ເລີຍ — ມີແຕ່ isValidCompletionPayment() (ຂ້າງເທິງ) ທີ່ກວດວ່າ resulting
+    // doc ຕ້ອງມີ paymentStatus=='paid' ຖ້າ status ຈະເປັນ 'completed', ແຕ່ບໍ່ໄດ້
+    // ກວດວ່າ status ເກົ່າແມ່ນຫຍັງ. ໝາຍຄວາມວ່າ provider ທີ່ຜ່ານ isVerifiedProvider()
+    // ສາມາດຮັບງານ (status:'pending'→providerId=self) ພ້ອມຂຽນ
+    // status:'completed', paymentStatus:'paid' ໃນ write ດຽວກັນໄດ້ໂດຍກົງ — ຂ້າມ
+    // onTheWay/arrived/inProgress ທັງໝົດ — ແລ້ວ onBookingStatusChange (Cloud
+    // Function) ຈະຝາກເງິນເຂົ້າ wallet ຊ່າງທັນທີ ໂດຍບໍ່ມີວຽກແທ້ເກີດຂຶ້ນເລີຍ. ຕອນນີ້
+    // ບັງຄັບວ່າ status ຕ້ອງປ່ຽນຕາມລຳດັບຈິງເທົ່ານັ້ນ (state machine), ຂ້າມຂັ້ນຕອນ
+    // ບໍ່ໄດ້ — ຄືກັນກັບ job_workflow_Screen.dart ບັງຄັບຢູ່ client ຢູ່ແລ້ວ, ຕອນນີ້
+    // ບັງຄັບຊ້ຳຢູ່ rule ນຳ (defense-in-depth, ບໍ່ໄວ້ວາງໃຈ client ຝ່າຍດຽວ).
+    function isValidBookingStatusTransition() {
+      return !('status' in request.resource.data.diff(resource.data).affectedKeys()) ||
+        (resource.data.status == 'pending' &&
+          request.resource.data.status in ['accepted', 'cancelled', 'rejected']) ||
+        (resource.data.status == 'accepted' &&
+          request.resource.data.status in ['onTheWay', 'cancelled']) ||
+        (resource.data.status == 'onTheWay' &&
+          request.resource.data.status in ['arrived', 'cancelled']) ||
+        (resource.data.status == 'arrived' &&
+          request.resource.data.status in ['inProgress', 'cancelled']) ||
+        (resource.data.status == 'inProgress' &&
+          request.resource.data.status in ['completed', 'cancelled']);
+    }
+
+    // 🔒 [AUDIT C-1/H-3 / 2026-07-27] BCEL (ໂອນເງິນ) counter-confirmation
+    // (customerConfirmedPayment, ເບິ່ງ FOLLOWUP-K ຂ້າງລຸ່ມ) ຖືກກວດຢູ່ Dart client
+    // ເທົ່ານັ້ນ (booking_repository.dart confirmPaymentReceived(), ບໍ່ແມ່ນ rule
+    // ນີ້) — modified client / REST call ໂດຍກົງສາມາດຂຽນ paymentStatus:'paid'
+    // ໂດຍບໍ່ຜ່ານການຢືນຢັນຈາກລູກຄ້າເລີຍ. ຕອນນີ້ບັງຄັບຢູ່ rule ນຳ: paymentStatus
+    // ຈະປ່ຽນເປັນ 'paid' ໄດ້ສະເພາະຖ້າ paymentMethod=='cash' (self-attested,
+    // ຍອມຮັບເປັນຂໍ້ຈຳກັດເນື່ອງຈາກບໍ່ມີ payment gateway ແທ້) ຫຼື
+    // customerConfirmedPayment==true ຢູ່ແລ້ວ (ລູກຄ້າຢືນຢັນມາກ່ອນໜ້ານີ້ໃນ write
+    // ແຍກຕ່າງຫາກ — confirmPaymentSent()). ໃຊ້ resource.data (ຄ່າກ່ອນ write ນີ້)
+    // ບໍ່ແມ່ນ request.resource.data ເພື່ອບໍ່ໃຫ້ provider ຂຽນ
+    // customerConfirmedPayment:true ພ້ອມກັນໃນ write ດຽວກັນໄດ້ (field ນັ້ນຢູ່ໃນ
+    // list ຂອງ customer ເທົ່ານັ້ນຢູ່ແລ້ວ, ນີ້ເປັນການປ້ອງກັນຊ້ຳ).
+    function isValidPaymentTransition() {
+      return !('paymentStatus' in request.resource.data.diff(resource.data).affectedKeys()) ||
+        request.resource.data.paymentStatus != 'paid' ||
+        resource.data.paymentMethod == 'cash' ||
+        resource.data.customerConfirmedPayment == true;
+    }
+
+    // 🔒 [AUDIT H-2 / 2026-07-27] "sentTo" (Top-3 provider ທີ່ match_screen.dart
+    // ເລືອກສົ່ງຄຳຂໍໃຫ້, ເບິ່ງ FOLLOWUP-H) ຖືກກວດຢູ່ Dart client ເທົ່ານັ້ນ
+    // (isJobVisibleToProvider(), booking_provider.dart) — rule ອ່ານ/ຮັບງານ
+    // ບໍ່ເຄີຍອ້າງອີງ field ນີ້ເລີຍ. ໝາຍຄວາມວ່າ provider ຄົນໃດກໍໄດ້ທີ່ຜ່ານ
+    // isVerifiedProvider() ສາມາດ query bookings ໂດຍກົງ (ຂ້າມ UI filter) ເພື່ອອ່ານ
+    // PII ລູກຄ້າ (ຊື່/ເບີ/ທີ່ຢູ່/ຕຳແໜ່ງ) ຂອງທຸກ pending job ທົ່ວແອັບ, ບໍ່ແມ່ນສະເພາະ
+    // 3 ຄົນທີ່ຖືກເລືອກ, ແລະ ຮັບງານທີ່ບໍ່ໄດ້ຖືກສົ່ງໃຫ້ຕົນເອງໄດ້. ຕອນນີ້ບັງຄັບຢູ່
+    // rule ນຳທັງອ່ານແລະຮັບງານ — sentTo ຫວ່າງເປົ່າ/ບໍ່ມີ = ເບິ່ງເຫັນ/ຮັບໄດ້ໂດຍທຸກຄົນ
+    // (ຄືເກົ່າ, ກໍລະນີ booking ເກົ່າ/ຍັງບໍ່ທັນຜ່ານ top-3 flow), ບໍ່ດັ່ງນັ້ນຕ້ອງເປັນ
+    // ໜຶ່ງໃນ 3 ຄົນທີ່ຖືກເລືອກເທົ່ານັ້ນ.
+    function isValidSentToTargeting() {
+      return !('sentTo' in resource.data) ||
+        resource.data.sentTo.size() == 0 ||
+        request.auth.uid in resource.data.sentTo;
     }
 
     // 🔒 [AUDIT QA-1 / ME-3] ກ່ອນໜ້ານີ້ customer ສາມາດຂຽນ additionalCharges/
@@ -172,6 +269,19 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // 🔒 [AUDIT M-3 / 2026-07-27] settings/legal (ເນື້ອຫາ Terms & Privacy,
+    // ແກ້ໄຂໄດ້ໂດຍ admin ຜ່ານ lintho-admin) ຖືກກອງໄວ້ຫຼັງ isAuth() ຂ້າງເທິງ, ແຕ່
+    // register_otp.dart ສະແດງ Terms/Privacy sheet ນີ້ຢູ່ໜ້າເລືອກປະເພດບັນຊີ —
+    // ກ່ອນ sign-in ໃດໆ (customer_register_flow.dart/technician_register_screen.dart
+    // ບໍ່ signInAnonymously). ການອ່ານຈຶ່ງ permission-denied ງຽບໆ ແລະ sheet ຕົກ
+    // ໄປໃຊ້ຂໍ້ຄວາມ hardcoded ເກົ່າສະເໝີ ສຳລັບຜູ້ໃຊ້ໃໝ່ທຸກຄົນ — ບັນຫາເກົ່າທີ່
+    // legalContentProvider ຖືກສ້າງມາແກ້ ພຽງແຕ່ຍ້າຍໄປຢູ່ຈຸດດຽວທີ່ຮຽກກ່ອນ auth.
+    // ເນື້ອຫານີ້ບໍ່ແມ່ນຂໍ້ມູນລັບ (Terms & Privacy ສາທາລະນະຢູ່ແລ້ວ) — ອະນຸຍາດອ່ານ
+    // ໂດຍບໍ່ຕ້ອງ login ສະເພາະ doc ນີ້ອັນດຽວ, ຄົງ isAdmin()-only write ໄວ້ຄືເກົ່າ.
+    match /settings/legal {
+      allow read: if true;
+    }
+
     match /bookings/{bookingId} {
       // resource == null ກໍລະນີ doc ຍັງບໍ່ມີ (ໃຊ້ໂດຍ get() ກວດ idempotent
       // ກ່ອນ create ດ້ວຍ clientRequestId) — ບໍ່ມີ data ໃຫ້ leak ຢູ່ແລ້ວ ຈຶ່ງອະນຸຍາດໄດ້
@@ -179,7 +289,8 @@ service cloud.firestore {
         resource == null ||
         resource.data.customerId == request.auth.uid ||
         resource.data.providerId == request.auth.uid ||
-        (isVerifiedProvider() && resource.data.status == 'pending')
+        (isVerifiedProvider() && resource.data.status == 'pending' &&
+          isValidSentToTargeting())
       );
 
       // ປັບໃຫ້ Customer ທຸກຄົນທີ່ Login ສາມາດສ້າງ Booking ໄດ້ງ່າຍຂຶ້ນ
@@ -202,7 +313,8 @@ service cloud.firestore {
       //     ຫຼື 2) ບໍ່ມີເຈົ້າຂອງ ແລະ status='pending' (ກຳລັງຮັບງານໃໝ່) ເທົ່ານັ້ນ
       // ແລະ additionalChargesApproved ຖືກຍົກອອກຈາກ list ນີ້ — ມີແຕ່ customer
       // ເທົ່ານັ້ນທີ່ອະນຸມັດຄ່າໃຊ້ຈ່າຍເພີ່ມໄດ້ (ຢູ່ໃນ list ຂອງ customer ຂ້າງເທິງ).
-      allow update: if isAuth() && isValidCompletionPayment() && (
+      allow update: if isAuth() && isValidCompletionPayment() &&
+        isValidBookingStatusTransition() && isValidPaymentTransition() && (
         // 🔒 [FOLLOWUP-K] ເພີ່ມ 'customerConfirmedPayment' — ລູກຄ້າຢືນຢັນວ່າໄດ້
         // ໂອນເງິນຜ່ານ BCEL ແລ້ວ, ໃຊ້ເປັນ counter-signature ກ່ອນຊ່າງຈະຢືນຢັນຮັບເງິນ
         // ຝ່າຍດຽວໄດ້ (ເບິ່ງ confirmPaymentReceived() booking_repository.dart).
@@ -224,12 +336,25 @@ service cloud.firestore {
         // ລູກຄ້າ (ບໍ່ແມ່ນຊ່າງ) ຕັ້ງໄວ້ຕັ້ງແຕ່ຕົ້ນ — ຊ່າງທີ່ບໍ່ເຄີຍຜ່ານ KYC ຈຶ່ງ
         // ຍັງ "providerId == ຕົນເອງ" ໄດ້ໂດຍບໍ່ເຄີຍຜ່ານ isVerifiedProvider() ເລີຍ.
         // ຕອນນີ້ບັງຄັບ isVerifiedProvider() ໃນທັງສອງສາຂາ.
+        // 🔒 [AUDIT H-2 / 2026-07-27] ເພີ່ມ isValidSentToTargeting() ໃສ່ສາຂາ
+        // "ຮັບງານໃໝ່" (claim: status=='pending' && ຂຽນ providerId ເປັນຕົນເອງ) —
+        // ຮັບໄດ້ສະເພາະຖ້າ booking ນີ້ບໍ່ໄດ້ຖືກຈຳກັດ sentTo ຫຼື ຕົນເອງຢູ່ໃນ sentTo.
+        // ສາຂາ "ຢູ່ແລ້ວ" (resource.data.providerId==self) ບໍ່ຕ້ອງກວດຄືນ ເພາະ
+        // ໝາຍຄວາມວ່າຕົນເອງໄດ້ຮັບງານນີ້ໄປແລ້ວຢ່າງຖືກຕ້ອງ (ຜ່ານການກວດນີ້ມາແລ້ວຄັ້ງ
+        // ທຳອິດ). ເພີ່ມ providerPhone/providerRating/providerJobs/providerPhoto
+        // ໃສ່ list ອະນຸຍາດ [H-1] — acceptBooking() (booking_repository.dart)
+        // ຕອນນີ້ຂຽນ field ເຫຼົ່ານີ້ຈາກ providers/{uid} ຂອງຕົນເອງພາຍໃນ transaction
+        // ດຽວກັນກັບ status→accepted, ໃຫ້ໜ້າ Match/Tracking/Detail/Review ຂອງ
+        // ລູກຄ້າສະແດງຊື່/ເບີ/ຄະແນນ/ຮູບຊ່າງໄດ້ຈິງ (ກ່ອນໜ້ານີ້ບໍ່ເຄີຍຖືກຂຽນ, ໜ້າຈໍ
+        // ເຫຼົ່ານີ້ຈຶ່ງສະແດງຄ່າວ່າງ).
         (isProvider() && isVerifiedProvider() &&
           (resource.data.providerId == request.auth.uid ||
             (resource.data.status == 'pending' &&
-             request.resource.data.providerId == request.auth.uid)) &&
+             request.resource.data.providerId == request.auth.uid &&
+             isValidSentToTargeting())) &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['status', 'providerId', 'providerName', 'acceptedAt',
+            .hasOnly(['status', 'providerId', 'providerName', 'providerPhone',
+              'providerRating', 'providerJobs', 'providerPhoto', 'acceptedAt',
               'completedAt', 'cancelReason', 'beforePhotoUrl', 'afterPhotoUrl',
               'additionalCharges', 'additionalChargesNote',
               'paymentStatus', 'updatedAt'])) ||

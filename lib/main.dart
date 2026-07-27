@@ -1804,8 +1804,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (source == null || !context.mounted) return;
 
+    // 🔒 [AUDIT H-5 / 2026-07-27] ຈຳກັດ 800px — ຮູບໂປຣໄຟລ໌ສະແດງເປັນ avatar
+    // ນ້ອຍໆເທົ່ານັ້ນ, ບໍ່ຈຳເປັນຕ້ອງອັບໂຫລດເຕັມຄວາມລະອຽດຈາກກ້ອງ
     final picked = await ImagePicker().pickImage(
-        source: source, imageQuality: 75);
+        source: source, imageQuality: 75, maxWidth: 800, maxHeight: 800);
     if (picked == null || !context.mounted) return;
 
     setState(() => _uploadingPhoto = true);
@@ -2791,23 +2793,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     style: TextStyle(color: C.muted, fontSize: 13)),
               );
             }
-            return Column(children: addresses.map((a) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.location_on_outlined, color: C.navy),
-              title: Text(a.label.isEmpty ? 'ທີ່ຢູ່' : a.label,
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text(a.address),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete_outline, color: C.muted, size: 20),
-                onPressed: () async {
-                  final uid = FirebaseAuth.instance.currentUser?.uid;
-                  if (uid == null) return;
-                  await FirebaseFirestore.instance
-                      .collection('users').doc(uid)
-                      .collection('addresses').doc(a.id).delete();
-                },
+            // 🔒 [AUDIT M-13 / 2026-07-27] ກ່ອນໜ້ານີ້ list ນີ້ບໍ່ມີ scroll
+            // fallback ເລີຍ — ຫຼາຍທີ່ຢູ່ ຫຼື ທີ່ຢູ່ຍາວ ອາດເກີນຄວາມສູງທີ່ sheet
+            // ມີ ໂດຍບໍ່ມີທາງ scroll ໄປເບິ່ງລາຍການ/ປຸ່ມທີ່ຢູ່ລຸ່ມ. ຈຳກັດຄວາມສູງ
+            // ແລະ ຫຸ້ມ SingleChildScrollView, ພ້ອມຈຳກັດ subtitle ໃຫ້ 2 ແຖວ.
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280),
+              child: SingleChildScrollView(
+                child: Column(children: addresses.map((a) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.location_on_outlined, color: C.navy),
+                  title: Text(a.label.isEmpty ? 'ທີ່ຢູ່' : a.label,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text(a.address,
+                      maxLines: 2, overflow: TextOverflow.ellipsis),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline, color: C.muted, size: 20),
+                    tooltip: 'ລຶບທີ່ຢູ່',
+                    // 🔒 [AUDIT M-13 / 2026-07-27] ກ່ອນໜ້ານີ້ລຶບທັນທີບໍ່ມີ
+                    // ການຢືນຢັນ — ນິ້ວມືພາດຕໍາເອົາໄອຄອນຖັງຂີ້ເຫຍື້ອດຽວ ລຶບທີ່ຢູ່
+                    // ຖາວອນທັນທີ ບໍ່ມີ undo. ຕອນນີ້ຖາມຢືນຢັນກ່ອນ (ຄືກັນກັບ
+                    // ການຍົກເລີກ booking ທີ່ໃຊ້ dialog ຢືນຢັນຢູ່ແລ້ວທົ່ວແອັບ).
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (dCtx) => AlertDialog(
+                          title: const Text('ລຶບທີ່ຢູ່ນີ້?'),
+                          content: Text(
+                              'ທ່ານແນ່ໃຈບໍວ່າຕ້ອງການລຶບ "${a.label.isEmpty ? a.address : a.label}"?'),
+                          actions: [
+                            TextButton(
+                                onPressed: () => Navigator.pop(dCtx, false),
+                                child: const Text('ຍົກເລີກ')),
+                            TextButton(
+                                onPressed: () => Navigator.pop(dCtx, true),
+                                child: const Text('ລຶບ',
+                                    style: TextStyle(color: C.red))),
+                          ],
+                        ),
+                      );
+                      if (confirmed != true) return;
+                      final uid = FirebaseAuth.instance.currentUser?.uid;
+                      if (uid == null) return;
+                      await FirebaseFirestore.instance
+                          .collection('users').doc(uid)
+                          .collection('addresses').doc(a.id).delete();
+                    },
+                  ),
+                )).toList()),
               ),
-            )).toList());
+            );
           }),
           const SizedBox(height: 8),
           SizedBox(width: double.infinity, child: OutlinedButton.icon(

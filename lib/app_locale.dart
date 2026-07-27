@@ -786,6 +786,24 @@ final _strings = <AppLang, Map<String, String>>{
 
     // match_screen.dart
     'min_abbr':                      'ນ',
+
+    // 🔒 [AUDIT M-12 / 2026-07-27] chat_screen.dart / rewards_screen.dart /
+    // coupon_list_screen.dart / referral_screen.dart ເຄີຍ hardcode ຂໍ້ຄວາມ
+    // ພາສາລາວໂດຍກົງແທນທີ່ຈະຜ່ານ tr() — ຜູ້ໃຊ້ທີ່ປ່ຽນເປັນ EN/TH/ZH ຈະຍັງເຫັນ
+    // ຂໍ້ຄວາມພາສາລາວຄ້າງຢູ່ໜ້າເຫຼົ່ານີ້.
+    'chat_title':                    'ຂໍ້ຄວາມ',
+    'chat_book_first_hint':          'ຈອງບໍລິການກ່ອນ ຈາກນັ້ນ chat ຈະເປີດອັດຕະໂນມັດ',
+    'rewards_title':                 'ແຕ້ມສະສົມ',
+    'redeem_points_title':           'ແລກແຕ້ມເປັນຄູປອງສ່ວນຫຼຸດ',
+    'points_history_title':          'ປະຫວັດແຕ້ມ',
+    'points_history_load_failed':    'ໂຫລດປະຫວັດບໍ່ໄດ້',
+    'no_points_history':             'ຍັງບໍ່ມີປະຫວັດແຕ້ມ',
+    'coupons_title':                 'ຄູປອງສ່ວນຫຼຸດ',
+    'no_coupons':                    'ຍັງບໍ່ມີຄູປອງສ່ວນຫຼຸດ',
+    'referral_succeeded_count':      'ໝູ່ທີ່ໃຊ້ສຳເລັດ',
+    'referral_total_earned':         'ໄດ້ຮັບລວມ',
+    'enter_friend_code':             'ໃສ່ໂຄ້ດໝູ່',
+    'your_referral_code':            'ໂຄ້ດແນະນຳຂອງທ່ານ',
   },
 
   // ── English ───────────────────────────────────────────────
@@ -1515,6 +1533,21 @@ final _strings = <AppLang, Map<String, String>>{
 
     // match_screen.dart
     'min_abbr':                      'm',
+
+    // 🔒 [AUDIT M-12 / 2026-07-27]
+    'chat_title':                    'Messages',
+    'chat_book_first_hint':          'Book a service first, then chat opens automatically',
+    'rewards_title':                 'Points',
+    'redeem_points_title':           'Redeem points for a discount coupon',
+    'points_history_title':          'Points history',
+    'points_history_load_failed':    'Couldn\'t load history',
+    'no_points_history':             'No points history yet',
+    'coupons_title':                 'Discount coupons',
+    'no_coupons':                    'No discount coupons yet',
+    'referral_succeeded_count':      'Successful referrals',
+    'referral_total_earned':         'Total earned',
+    'enter_friend_code':             'Enter a friend\'s code',
+    'your_referral_code':            'Your referral code',
   },
 
   // ── ไทย ───────────────────────────────────────────────────
@@ -2233,6 +2266,21 @@ final _strings = <AppLang, Map<String, String>>{
 
     // match_screen.dart
     'min_abbr':                      'น',
+
+    // 🔒 [AUDIT M-12 / 2026-07-27]
+    'chat_title':                    'ข้อความ',
+    'chat_book_first_hint':          'จองบริการก่อน แล้วแชทจะเปิดอัตโนมัติ',
+    'rewards_title':                 'แต้มสะสม',
+    'redeem_points_title':           'แลกแต้มเป็นคูปองส่วนลด',
+    'points_history_title':          'ประวัติแต้ม',
+    'points_history_load_failed':    'โหลดประวัติไม่ได้',
+    'no_points_history':             'ยังไม่มีประวัติแต้ม',
+    'coupons_title':                 'คูปองส่วนลด',
+    'no_coupons':                    'ยังไม่มีคูปองส่วนลด',
+    'referral_succeeded_count':      'เพื่อนที่แนะนำสำเร็จ',
+    'referral_total_earned':         'ได้รับรวม',
+    'enter_friend_code':             'ใส่โค้ดเพื่อน',
+    'your_referral_code':            'โค้ดแนะนำของคุณ',
   },
 
   // ── 中文 ───────────────────────────────────────────────────
@@ -2951,5 +2999,20 @@ final _strings = <AppLang, Map<String, String>>{
 
     // match_screen.dart
     'min_abbr':                      '分',
+
+    // 🔒 [AUDIT M-12 / 2026-07-27]
+    'chat_title':                    '消息',
+    'chat_book_first_hint':          '请先预约服务，聊天将自动开启',
+    'rewards_title':                 '积分',
+    'redeem_points_title':           '用积分兑换优惠券',
+    'points_history_title':          '积分记录',
+    'points_history_load_failed':    '记录加载失败',
+    'no_points_history':             '暂无积分记录',
+    'coupons_title':                 '优惠券',
+    'no_coupons':                    '暂无优惠券',
+    'referral_succeeded_count':      '成功推荐的好友',
+    'referral_total_earned':         '累计获得',
+    'enter_friend_code':             '输入好友码',
+    'your_referral_code':            '您的推荐码',
   },
 };
