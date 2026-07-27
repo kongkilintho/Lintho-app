@@ -288,16 +288,28 @@ const REFERRAL_REWARD_BONUS = 20000;
 // query, ບໍ່ໄດ້ປ່ຽນລະຫວ່າງ retry) ຍັງເປັນ true ຢູ່ດີ → voucher ໃບທີສອງຖືກອອກ
 // ຊ້ຳ. ຕອນນີ້ໃຊ້ pattern ດຽວກັນກັບ grantWalletCredit/grantReferralReward —
 // signupVoucherIssued flag ຖືກກວດ+ຕັ້ງ "ພາຍໃນ" transaction ດຽວກັນກັບ voucher.
+//
+// 🔒 [AUDIT M-2 / 2026-07-27] ກອງແກ້ຄັ້ງທຳອິດ (ຂ້າງເທິງ) ຕັ້ງ flag ໄວ້ຢູ່
+// bookingRef ("this booking's" signupVoucherIssued) — ບໍ່ແມ່ນ ownerUid ຂອງ
+// customer. ຖ້າ customer ຄົນທີ່ຖືກແນະນຳສ້າງ 2 booking ໄວແທບພ້ອມກັນ (B1, B2),
+// ທັງສອງ onNewBooking invocation ອາດ count() ເຫັນ "ນີ້ແມ່ນ booking ທຳອິດ" ພ້ອມ
+// ກັນ (race — ອີກ doc ອາດຍັງບໍ່ visible ຕໍ່ query ຂອງອີກ invocation) ແລ້ວທັງສອງ
+// ຝ່າຍກວດ flag ຄົນລະ booking doc (B1.signupVoucherIssued ແລະ
+// B2.signupVoucherIssued) — ບໍ່ມີຝ່າຍໃດເຫັນອີກຝ່າຍ, ທັງສອງຈຶ່ງອອກ voucher ໄດ້
+// ສຳເລັດເປັນອິດສະຫຼະ ໄດ້ 2 ໃບແທນ 1. ຍ້າຍ flag ໄປໄວ້ users/{customerId} ແທນ —
+// ນີ້ແມ່ນ document ດຽວກັນທີ່ທັງສອງ invocation ຈະຕ້ອງອ່ານ/ຂຽນຮ່ວມກັນ, Firestore
+// transaction ຈຶ່ງບັງຄັບໃຫ້ອັນໜຶ່ງຊະນະ ອີກອັນໜຶ່ງ retry ແລ້ວເຫັນ flag ເປັນ true.
 async function grantSignupVoucher(referralCode, customerId, bookingId, bookingRef) {
   const codeDoc = await db.collection('referralCodes').doc(referralCode).get();
   if (!codeDoc.exists) return null;
   const ownerUid = codeDoc.data().ownerUid;
   if (ownerUid === customerId) return null; // ຫ້າມໃຊ້ໂຄ້ດຂອງຕົນເອງ
 
+  const customerRef = db.collection('users').doc(customerId);
   const voucherRef = db.collection('wallets').doc(customerId).collection('vouchers').doc();
   return db.runTransaction(async (tx) => {
-    const bookingSnap = await tx.get(bookingRef);
-    if (bookingSnap.data()?.signupVoucherIssued) return; // ✅ idempotent guard
+    const customerSnap = await tx.get(customerRef);
+    if (customerSnap.data()?.signupVoucherIssued) return; // ✅ idempotent guard
 
     tx.set(voucherRef, {
       amount: REFERRAL_SIGNUP_BONUS,
@@ -305,6 +317,7 @@ async function grantSignupVoucher(referralCode, customerId, bookingId, bookingRe
       bookingId,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    tx.set(customerRef, { signupVoucherIssued: true }, { merge: true });
     tx.update(bookingRef, { signupVoucherIssued: true });
   });
 }
