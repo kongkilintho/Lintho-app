@@ -25,6 +25,25 @@ service cloud.firestore {
       return isAuth() && getRole() == 'admin';
     }
 
+    // 🔒 [AUDIT ADM-5 / 2026-07-30] getRole()/isAdmin() only know the coarse
+    // users/{uid}.role=='admin' flag — the 5-tier AdminRole model
+    // (super_admin/operations_admin/finance_admin/support_admin/marketing_admin)
+    // used by lintho-admin's ROLE_PERMISSIONS lives in a separate
+    // users/{uid}.adminRole field that, until now, had NO meaning to these
+    // rules at all (every admin could write anything, regardless of tier).
+    // Returns null for non-admins so a caller can never accidentally use this
+    // without also being gated by admin status. Legacy admin accounts with no
+    // adminRole field default to 'super_admin' — same fallback already used by
+    // functions/index.js's _assertSuperAdmin() and lintho-admin's
+    // src/lib/api/realAuth.ts resolveAdminRole(), so an existing admin account
+    // is never locked out by this change.
+    function getAdminRole() {
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return isAuth() && exists(path) && get(path).data.role == 'admin'
+        ? (('adminRole' in get(path).data) ? get(path).data.adminRole : 'super_admin')
+        : null;
+    }
+
     function isCustomer() {
       return isAuth() && getRole() == 'customer';
     }
@@ -136,8 +155,16 @@ service cloud.firestore {
     // ເທົ່ານັ້ນ, booking_repository.dart:152), ເຮັດໃຫ້ onBookingStatusChange
     // ຝາກເງິນເຂົ້າ wallet ຊ່າງໃຫ້ວຽກທີ່ບໍ່ເຄີຍຈ່າຍເງິນ. ຕອນນີ້ບັງຄັບວ່າຖ້າ status
     // ໃໝ່ຈະເປັນ 'completed', paymentStatus ສຸດທ້າຍຕ້ອງເປັນ 'paid' ນຳ.
+    // 🔒 [AUDIT ADM-1 / 2026-07-30] ເດີມ check ນີ້ firing ທຸກຄັ້ງທີ່ resulting
+    // doc ມີ status=='completed', ບໍ່ວ່າ write ນີ້ຈະປ່ຽນ status ແທ້ ຫຼື ບໍ່ — ໝາຍ
+    // ຄວາມວ່າ admin refund (ຕັ້ງໃຈບໍ່ແຕະ status ເລີຍ, ພຽງແຕ່ປ່ຽນ paymentStatus
+    // ຈາກ 'paid' ເປັນ 'refunded' ໃສ່ booking ທີ່ status ຍັງເປັນ 'completed' ຄືເກົ່າ)
+    // ຈະຖືກ rule ນີ້ block ຢ່າງບໍ່ຖືກຕ້ອງ. ຕອນນີ້ jscheck ນີ້ກວດສະເພາະຕອນ status
+    // ແທ້ໆຖືກປ່ຽນຢູ່ໃນ write ນີ້ (ຄືຄວາມໝາຍເດີມ: "completion transition ຕ້ອງມາພ້ອມ
+    // paymentStatus:'paid'"), ບໍ່ແມ່ນ invariant ຕະຫຼອດໄປຂອງ doc ທີ່ completed ແລ້ວ.
     function isValidCompletionPayment() {
-      return request.resource.data.status != 'completed' ||
+      return !('status' in request.resource.data.diff(resource.data).affectedKeys()) ||
+        request.resource.data.status != 'completed' ||
         (('paymentStatus' in request.resource.data) &&
          request.resource.data.paymentStatus == 'paid');
     }
@@ -216,8 +243,22 @@ service cloud.firestore {
     }
 
     // ADMIN — ອ່ານ/ຂຽນໄດ້ທັງໝົດ
+    // 🔒 [AUDIT ADM-5 / 2026-07-30] Firestore ປະເມີນ match block ທຸກອັນທີ່ match
+    // ກັບ path ດຽວກັນ ແລ້ວ OR ຜົນ allow ເຂົ້າກັນ (ບໍ່ມີ "ສະເພາະເຈາະຈົງກວ່າຊະນະ") —
+    // ໝາຍຄວາມວ່າ blanket write ນີ້ຈະ grant write ໃສ່ bookings/{id} ໂດຍອັດຕະໂນມັດ
+    // ໂດຍບໍ່ສົນໃຈວ່າ match /bookings/{bookingId} ຂ້າງລຸ່ມຈຳກັດແນວໃດ, ເຮັດໃຫ້
+    // admin ຄົນໃດກໍໄດ້ (ບໍ່ວ່າ adminRole ໃດ) cancel/refund/edit booking ໃດກໍໄດ້
+    // ໄດ້ໂດຍກົງ — ບໍ່ມີການບັງຄັບ 5-tier permission model ຂອງ lintho-admin
+    // (ROLE_PERMISSIONS) ຢູ່ rule ຊັ້ນນີ້ເລີຍ. ຕອນນີ້ຍົກເວັ້ນ write ໃສ່ bookings/**
+    // ອອກຈາກ blanket bypass ນີ້ໂດຍສະເພາະ — ບັງຄັບໃຫ້ໄປຜ່ານ branch ລະອຽດ
+    // (isAdminRefund/isAdminCancel/isAdminEditNonCritical) ໃນ match /bookings
+    // ແທນ. read ບໍ່ຖືກແຕະ (ບໍ່ແມ່ນຈຸດອ່ອນທີ່ກວດພົບ) — ທຸກ collection ອື່ນນອກ
+    // bookings ບໍ່ຖືກກະທົບ (request.path[3] ຄືຊື່ collection ທຳອິດ, index ຫຼັງ
+    // /databases/{db}/documents/).
     match /{document=**} {
-      allow read, write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow read: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        && request.path[3] != 'bookings';
     }
 
     match /users/{uid} {
@@ -318,8 +359,21 @@ service cloud.firestore {
         // 🔒 [FOLLOWUP-K] ເພີ່ມ 'customerConfirmedPayment' — ລູກຄ້າຢືນຢັນວ່າໄດ້
         // ໂອນເງິນຜ່ານ BCEL ແລ້ວ, ໃຊ້ເປັນ counter-signature ກ່ອນຊ່າງຈະຢືນຢັນຮັບເງິນ
         // ຝ່າຍດຽວໄດ້ (ເບິ່ງ confirmPaymentReceived() booking_repository.dart).
+        // 🔒 [AUDIT SEC-1 / 2026-07-30] isValidBookingStatusTransition() ກວດແຕ່
+        // ຄ່າ status transition (ຖືກຕ້ອງຕາມລຳດັບ), ບໍ່ເຄີຍກວດວ່າໃຜເປັນຄົນຂຽນ —
+        // customer branch ນີ້ອະນຸຍາດ 'status' ຢູ່ໃນ hasOnly() ໂດຍບໍ່ຈຳກັດຄ່າປາຍທາງ
+        // ເລີຍ, ໝາຍຄວາມວ່າ customer ສາມາດຂຽນ status ຜ່ານທຸກຂັ້ນຕອນໄປຈົນຮອດ
+        // 'completed' ໂດຍກົງ (ຂ້າມຊ່າງທັງໝົດ), ກະຕຸ້ນ onBookingStatusChange ໃຫ້
+        // ຝາກເງິນເຂົ້າ wallet ຊ່າງ, ໃຫ້ reward points ຕົນເອງ, ແລະ post review ປອມ
+        // ໄດ້ — ທັງໆທີ່ CustomerBookingRepository (booking_repository.dart) ບໍ່ເຄີຍ
+        // ຂຽນ status ນອກຈາກ 'cancelled' ຢູ່ແລ້ວ (verified: cancelBooking() ເປັນ
+        // status write ດຽວໃນ class ນີ້). ຕອນນີ້ບັງຄັບວ່າ ຖ້າ customer ຂຽນ status,
+        // ຄ່າຕ້ອງເປັນ 'cancelled' ເທົ່ານັ້ນ — forward transition ທັງໝົດຕ້ອງມາຈາກ
+        // provider branch ຂ້າງລຸ່ມເທົ່ານັ້ນ.
         (resource.data.customerId == request.auth.uid &&
           isValidCustomerChargesResponse() &&
+          (!('status' in request.resource.data.diff(resource.data).affectedKeys()) ||
+            request.resource.data.status == 'cancelled') &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'reviewed', 'additionalChargesApproved', 'additionalCharges',
               'additionalChargesNote', 'paymentMethod', 'paymentStatus', 'slipUrl', 'sentTo',
@@ -369,7 +423,45 @@ service cloud.firestore {
           resource.data.status == 'pending' &&
           resource.data.providerId != request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['rejectedBy', 'updatedAt']))
+            .hasOnly(['rejectedBy', 'updatedAt'])) ||
+        // 🔒 [AUDIT ADM-5/ADM-1 / 2026-07-30] ຕົ້ນທາງ admin write ໃສ່ bookings
+        // ຕອນນີ້ຄື 3 branch ລະອຽດຂ້າງລຸ່ມ (ບໍ່ແມ່ນ blanket admin bypass ອີກຕໍ່ໄປ —
+        // ເບິ່ງ match /{document=**} ຂ້າງເທິງ) — ແຕ່ລະ branch ກົງກັບ
+        // ROLE_PERMISSIONS ໃນ lintho-admin src/constants/index.ts ເປັກໆ.
+        //
+        // ADM-1: ຄືນເງິນ (bookings:refund → super_admin, finance_admin) —
+        // ຕັ້ງໃຈບໍ່ແຕະ status ເລີຍ (status ຄົງເປັນ 'completed', parse ໄດ້ປົກກະຕິ
+        // ໃນ Customer/Provider app ແລະ ຍັງເຫັນຢູ່ໃນ provider job history —
+        // ກ່ອນໜ້ານີ້ useRefundBooking ຂຽນ status:'refunded', ບໍ່ແມ່ນສະມາຊິກຂອງ
+        // JobStatus enum, ເຮັດໃຫ້ Booking.fromFirestore()._parseStatus() fallback
+        // ເປັນ 'pending' ໃສ່ລູກຄ້າ ແລະ ຫາຍໄປຈາກ provider job history whereIn
+        // filter). ຄືນເງິນໄດ້ສະເພາະ booking ທີ່ status=='completed' ແລະ
+        // paymentStatus ຍັງເປັນ 'paid' ຢູ່ (ບໍ່ຄືນຊ້ຳ — ຄັ້ງທຳອິດປ່ຽນ paymentStatus
+        // ອອກຈາກ 'paid' ແລ້ວ ຄັ້ງທີສອງຈະບໍ່ຜ່ານ precondition ນີ້ອີກ).
+        (getAdminRole() in ['super_admin', 'finance_admin'] &&
+          resource.data.status == 'completed' &&
+          resource.data.paymentStatus == 'paid' &&
+          request.resource.data.paymentStatus == 'refunded' &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['paymentStatus', 'refundAmount', 'refundReason',
+              'refundedAt', 'refundedBy', 'updatedAt'])) ||
+        // ADM-5: ຍົກເລີກ (bookings:cancel → super_admin, operations_admin) —
+        // isValidBookingStatusTransition() (ຂ້າງເທິງ, ບັງຄັບຢູ່ແລ້ວທຸກ branch)
+        // ຈຳກັດວ່າຮັບໄດ້ສະເພາະຈາກ state ທີ່ບໍ່ແມ່ນ terminal ຢູ່ແລ້ວ.
+        (getAdminRole() in ['super_admin', 'operations_admin'] &&
+          request.resource.data.status == 'cancelled' &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'cancelReason', 'cancelledBy', 'updatedAt'])) ||
+        // ADM-5: ແກ້ໄຂຂໍ້ມູນ non-critical (bookings:write → super_admin,
+        // operations_admin, support_admin) — ຈຳກັດສະເພາະ field ທີ່
+        // EditBookingModal (lintho-admin) ຂຽນແທ້ (serviceType/address/notes/
+        // scheduledAt), ບໍ່ແຕະ status/price/providerId/ຄ່າການເງິນໃດໆ. ຈຳກັດແຕ່
+        // booking ທີ່ຍັງບໍ່ຮອດ terminal state — ບໍ່ມີເຫດຜົນທີ່ຈະແກ້ໄຂ booking
+        // ທີ່ completed/cancelled/rejected ໄປແລ້ວ (ຮັກສາ historical record).
+        (getAdminRole() in ['super_admin', 'operations_admin', 'support_admin'] &&
+          !(resource.data.status in ['completed', 'cancelled', 'rejected']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['serviceType', 'address', 'notes', 'scheduledAt', 'updatedAt']))
       );
       allow delete: if false;
     }
