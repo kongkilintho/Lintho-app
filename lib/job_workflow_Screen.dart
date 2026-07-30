@@ -83,8 +83,11 @@ class JobWorkflowScreen extends ConsumerWidget {
           const SizedBox(height: 20),
           if (b.status != JobStatus.completed &&
               b.status != JobStatus.cancelled &&
-              b.status != JobStatus.rejected)
+              b.status != JobStatus.rejected) ...[
             _ActionButton(booking: b),
+            const SizedBox(height: 10),
+            _CancelJobButton(booking: b),
+          ],
           const SizedBox(height: 30),
         ]),
       ),
@@ -1248,6 +1251,104 @@ class _ActionButton extends ConsumerWidget {
           duration: const Duration(seconds: 3)));
       Navigator.pop(context);
     }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// CANCEL JOB — [AUDIT PROV-2 / 2026-07-30]
+// ຊ່າງທີ່ຮັບງານໄປແລ້ວແຕ່ເຮັດຕໍ່ບໍ່ໄດ້ (ລົດເສຍ, ສຸກເສີນ) ຕ້ອງມີທາງຍົກເລີກ —
+// mirrors home_tab.dart's _showRejectSheet() (preset-reason bottom sheet)
+// ================================================================
+
+class _CancelJobButton extends ConsumerWidget {
+  final Booking booking;
+  const _CancelJobButton({required this.booking});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isLoading = ref.watch(bookingNotifierProvider).isLoading;
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: isLoading ? null : () => _showCancelSheet(context, ref),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: C.red.withValues(alpha: 0.4)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14)),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+        child: Text(tr('action_cancel_job'), style: const TextStyle(
+          color: C.red, fontSize: 14, fontWeight: FontWeight.w700,
+        )),
+      ),
+    );
+  }
+
+  void _showCancelSheet(BuildContext context, WidgetRef ref) {
+    final reasons = [
+      tr('cancel_job_vehicle'), tr('cancel_job_emergency'),
+      tr('cancel_job_customer_unreachable'), tr('cancel_job_other'),
+    ];
+    String? selected;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setS) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                  color: C.border, borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 16),
+            Text(tr('cancel_job_reason_title'), style: const TextStyle(
+              fontSize: 18, fontWeight: FontWeight.w800, color: C.text,
+            )),
+            const SizedBox(height: 12),
+            ...reasons.map((r) => RadioListTile<String>(
+              title: Text(r, style: const TextStyle(
+                  fontSize: 14, color: C.text)),
+              value: r, groupValue: selected, activeColor: C.navy,
+              onChanged: (v) => setS(() => selected = v),
+            )),
+            const SizedBox(height: 8),
+            SizedBox(width: double.infinity, child: ElevatedButton(
+              onPressed: selected == null ? null : () async {
+                final reason      = selected!;
+                final scaffoldMsg = ScaffoldMessenger.of(context);
+                final navigator   = Navigator.of(context);
+                Navigator.pop(ctx);
+                final ok = await ref
+                    .read(bookingNotifierProvider.notifier)
+                    .cancelJob(booking.id, reason);
+                if (ok) {
+                  navigator.pop();
+                } else {
+                  scaffoldMsg.showSnackBar(SnackBar(
+                    content:         Text(tr('error')),
+                    backgroundColor: C.red,
+                  ));
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: C.red, elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: Text(tr('confirm_cancel_job'), style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w800,
+                fontSize: 15,
+              )),
+            )),
+          ]),
+        ),
+      ),
+    );
   }
 }
 

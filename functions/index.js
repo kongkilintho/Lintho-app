@@ -154,10 +154,19 @@ exports.onBookingStatusChange = functions.firestore
     }
     if (after.status === 'rejected') notify(customerId, 'customer', '❌ ຖືກປະຕິເສດ', `${svcLabel} ຖືກປະຕິເສດ`, 'booking_update');
     if (after.status === 'cancelled') {
-      // 🔒 [AUDIT QA-1 / LO-6] providerId ອາດວ່າງເປົ່າ (booking ຍັງບໍ່ເຄີຍຖືກຮັບ
-      // ເລີຍ ຕອນລູກຄ້າຍົກເລີກ) — notify() ຂຽນ fcm_queue doc ໄດ້ປົກກະຕິແມ້
-      // targetUserId ວ່າງ, ແຕ່ບໍ່ຄວນ notify provider ທີ່ບໍ່ມີໂຕຕົນຈິງ
-      if (providerId) notify(providerId, 'provider', '❌ ຍົກເລີກ', `${svcLabel} ຖືກຍົກເລີກ`, 'booking_update');
+      // 🔒 [AUDIT PROV-2 / 2026-07-30] ຕອນນີ້ຊ່າງເອງກໍ່ຍົກເລີກໄດ້ (ຫຼັງຮັບງານໄປແລ້ວ
+      // ແຕ່ເຮັດຕໍ່ບໍ່ໄດ້) — ຖ້າຍັງ notify() ໃສ່ providerId ຢ່າງດຽວຄືເກົ່າ ຈະກາຍເປັນ
+      // ແຈ້ງຊ່າງເລື່ອງການຍົກເລີກຂອງຕົນເອງ (ບໍ່ມີປະໂຫຍດ) ໂດຍ *ບໍ່ເຄີຍ* ແຈ້ງລູກຄ້າເລີຍ
+      // ວ່າຊ່າງຍົກເລີກ. ໃຊ້ cancelledBy (ຕັ້ງໂດຍ providerCancelBooking()/
+      // cancelBooking()) ຕັດສິນວ່າຝ່າຍໃດຄວນຖືກແຈ້ງ.
+      if (after.cancelledBy === 'provider') {
+        notify(customerId, 'customer', '❌ ຊ່າງຍົກເລີກວຽກ', `${svcLabel} ຖືກຊ່າງຍົກເລີກ`, 'booking_update');
+      } else if (providerId) {
+        // 🔒 [AUDIT QA-1 / LO-6] providerId ອາດວ່າງເປົ່າ (booking ຍັງບໍ່ເຄີຍຖືກຮັບ
+        // ເລີຍ ຕອນລູກຄ້າຍົກເລີກ) — notify() ຂຽນ fcm_queue doc ໄດ້ປົກກະຕິແມ້
+        // targetUserId ວ່າງ, ແຕ່ບໍ່ຄວນ notify provider ທີ່ບໍ່ມີໂຕຕົນຈິງ
+        notify(providerId, 'provider', '❌ ຍົກເລີກ', `${svcLabel} ຖືກຍົກເລີກ`, 'booking_update');
+      }
     }
 
     // 🔒 [AUDIT H6] ກ່ອນໜ້ານີ້ providers/{id}.totalJobs/completionRate ຖືກ

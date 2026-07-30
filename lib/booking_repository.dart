@@ -222,6 +222,43 @@ class BookingRepository {
     // (ລູກຄ້າບໍ່ຄວນຮູ້ວ່າມີ provider ຄົນໜຶ່ງປະຕິເສດ, ຕາບໃດທີ່ຍັງມີຄົນອື່ນຮັບໄດ້).
   }
 
+  // ── ຍົກເລີກວຽກ (ຫຼັງຮັບງານໄປແລ້ວ) ──────────────────────────
+  // 🔒 [AUDIT PROV-2 / 2026-07-30] ຊ່າງທີ່ຮັບງານໄປແລ້ວ (accepted/onTheWay/
+  // arrived/inProgress) ບໍ່ເຄີຍມີທາງຍົກເລີກໄດ້ເລີຍຖ້າເຮັດຕໍ່ບໍ່ໄດ້ (ລົດເສຍ,
+  // ສຸກເສີນ) — booking ຄ້າງຢູ່ນັ້ນຕະຫຼອດໄປ ຈົນກວ່າລູກຄ້າຈະສັງເກດເຫັນເອງແລ້ວຍົກເລີກ
+  // ຝ່າຍລູກຄ້າ. firestore.rules ອະນຸຍາດ status→cancelled ຈາກ state ເຫຼົ່ານີ້ຢູ່ແລ້ວ
+  // (isValidBookingStatusTransition) ແລະ ອະນຸຍາດໃຫ້ provider (ເຈົ້າຂອງ) ຂຽນ
+  // status/cancelReason/cancelledBy ຢູ່ແລ້ວ (hasOnly list) — ພຽງແຕ່ບໍ່ເຄີຍມີ
+  // method ໃດເອີ້ນມັນເລີຍ. ບໍ່ຕັ້ງ cancelFeeAmount ເລີຍ (ຕ່າງຈາກ
+  // CustomerBookingRepository.cancelBooking()) — ຊ່າງຍົກເລີກເອງບໍ່ແມ່ນຄວາມຜິດ
+  // ຂອງລູກຄ້າ, ບໍ່ຄວນມີຄ່າທຳນຽມ. updateProviderJobStats() (functions/index.js)
+  // ຄິດໄລ່ completionRate ໃໝ່ໂດຍອັດຕະໂນມັດຢູ່ແລ້ວທຸກຄັ້ງທີ່ status ປ່ຽນເປັນ
+  // cancelled — ບໍ່ຕ້ອງແກ້ໄຂຝັ່ງ Cloud Function ສຳລັບສ່ວນນີ້.
+  Future<void> providerCancelBooking(String bookingId, String reason) async {
+    if (_uid.isEmpty) return;
+    final ref = _db.collection('bookings').doc(bookingId);
+
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      if (!snap.exists) return;
+      final b = Booking.fromFirestore(snap);
+
+      if (b.providerId != _uid) {
+        throw Exception('ບໍ່ແມ່ນວຽກຂອງທ່ານ');
+      }
+      if (b.status.isFinished) {
+        throw Exception('ບໍ່ສາມາດຍົກເລີກໄດ້: ສະຖານະປ່ຽນໄປແລ້ວ');
+      }
+
+      tx.update(ref, {
+        'status':       JobStatus.cancelled.name,
+        'cancelReason': reason,
+        'cancelledBy':  'provider',
+      });
+    }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+        'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
+  }
+
   // ── ອັບເດດ status ─────────────────────────────────────────
 
   // 🔒 [AUDIT CRIT-1] ນີ້ແມ່ນຊ່າງຢືນຢັນວ່າໄດ້ຮັບເງິນແລ້ວ (cash ໃນມື ຫຼື ເຫັນ BCEL

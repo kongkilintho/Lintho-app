@@ -219,6 +219,23 @@ class BookingNotifier extends Notifier<BookingState> {
     }
   }
 
+  // 🔒 [AUDIT PROV-2 / 2026-07-30] ຍົກເລີກວຽກຫຼັງຮັບໄປແລ້ວ — ເບິ່ງ
+  // providerCancelBooking() (booking_repository.dart) ສຳລັບ root cause.
+  Future<bool> cancelJob(String bookingId, String reason) async {
+    _setLoading(bookingId, true);
+    try {
+      await _repo.providerCancelBooking(bookingId, reason);
+      _setLoading(bookingId, false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        loadingIds: Set.from(state.loadingIds)..remove(bookingId),
+        error:      e.toString(),
+      );
+      return false;
+    }
+  }
+
   Future<bool> updateStatus(String bookingId, JobStatus status) async {
     _setLoading(bookingId, true);
     try {

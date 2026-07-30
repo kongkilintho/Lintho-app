@@ -288,6 +288,19 @@ service cloud.firestore {
         request.resource.data.additionalChargesApproved == false;
     }
 
+    // 🔒 [AUDIT PROV-2 / 2026-07-30] ຊ່າງທີ່ຮັບງານໄປແລ້ວ (accepted/onTheWay/
+    // arrived/inProgress) ບໍ່ເຄີຍມີທາງຍົກເລີກໄດ້ເລີຍຖ້າເຮັດຕໍ່ບໍ່ໄດ້ — booking
+    // ຄ້າງຢູ່ນັ້ນຕະຫຼອດໄປ. isValidBookingStatusTransition() ອະນຸຍາດ →cancelled
+    // ຈາກທຸກ state ທີ່ບໍ່ແມ່ນ terminal ຢູ່ແລ້ວ ໂດຍບໍ່ສົນວ່າໃຜຂຽນ — ພຽງແຕ່ບໍ່ເຄີຍມີ
+    // method/UI ໃດເອີ້ນມັນ. ຕອນນີ້ອະນຸຍາດ provider (ເຈົ້າຂອງ booking) ຂຽນ status→
+    // cancelled ໄດ້ (ຜ່ານ hasOnly() ຂ້າງລຸ່ມ) ພ້ອມກັບ cancelledBy — ຈຳກັດຄ່າ
+    // cancelledBy ໃຫ້ເປັນ 'provider' ເທົ່ານັ້ນ (ຄືກັນກັບ isValidProviderChargesRequest()
+    // ຂ້າງເທິງ) ບໍ່ໃຫ້ provider ຂຽນຄ່າອື່ນທຽມການຍົກເລີກຂອງຄົນອື່ນໄດ້.
+    function isValidProviderCancelAttribution() {
+      return !('cancelledBy' in request.resource.data.diff(resource.data).affectedKeys()) ||
+        request.resource.data.cancelledBy == 'provider';
+    }
+
     // ADMIN — ອ່ານ/ຂຽນໄດ້ທັງໝົດ
     // 🔒 [AUDIT ADM-5 / 2026-07-30] Firestore ປະເມີນ match block ທຸກອັນທີ່ match
     // ກັບ path ດຽວກັນ ແລ້ວ OR ຜົນ allow ເຂົ້າກັນ (ບໍ່ມີ "ສະເພາະເຈາະຈົງກວ່າຊະນະ") —
@@ -453,10 +466,11 @@ service cloud.firestore {
              request.resource.data.providerId == request.auth.uid &&
              isValidSentToTargeting())) &&
           isValidProviderChargesRequest() &&
+          isValidProviderCancelAttribution() &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'providerId', 'providerName', 'providerPhone',
               'providerRating', 'providerJobs', 'providerPhoto', 'acceptedAt',
-              'completedAt', 'cancelReason', 'beforePhotoUrl', 'afterPhotoUrl',
+              'completedAt', 'cancelReason', 'cancelledBy', 'beforePhotoUrl', 'afterPhotoUrl',
               'additionalCharges', 'additionalChargesNote', 'additionalChargesApproved',
               'paymentStatus', 'updatedAt'])) ||
         // 🔒 [AUDIT H7] "ປະຕິເສດ" ວຽກທີ່ຍັງບໍ່ມີ providerId (ຢູ່ໃນ open job
