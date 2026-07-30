@@ -9,6 +9,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'Booking.dart';
 import 'booking_repository.dart';
@@ -40,8 +41,40 @@ final pendingJobsProvider = Provider<List<Booking>>((ref) {
       [];
 });
 
-final openJobsProvider = StreamProvider<List<Booking>>((ref) {
-  return ref.watch(bookingRepoProvider).watchOpenJobs();
+// 🔒 [AUDIT BE-1 / 2026-07-30] watchOpenJobs() ຖືກແທນທີ່ດ້ວຍ 2 query ທີ່ພິສູດໄດ້
+// ແຍກກັນ (ເບິ່ງ booking_repository.dart) — ລວມທັງສອງເຂົ້າກັນຢູ່ນີ້ດ້ວຍ pattern
+// Riverpod ທຳມະດາ (watch 2 StreamProvider, merge ໃນ Provider ທຳມະດາ) ແທນທີ່ຈະ
+// hand-roll StreamController — Riverpod ຈັດການ subscription lifecycle ແລະ error
+// propagation ໃຫ້ເອງ. openJobsProvider ຍັງເປັນ AsyncValue<List<Booking>> ຄືເກົ່າ
+// (Provider<AsyncValue<T>> ໃຫ້ interface ດຽວກັນກັບ StreamProvider ຕອນ watch) —
+// unassignedOpenJobsProvider ຂ້າງລຸ່ມ ແລະ home_tab.dart ຈຶ່ງບໍ່ຕ້ອງແກ້ໄຂຫຍັງເລີຍ.
+final _openJobsPublicProvider = StreamProvider<List<Booking>>((ref) {
+  return ref.watch(bookingRepoProvider).watchOpenJobsPublic();
+});
+
+final _openJobsSentToMeProvider = StreamProvider<List<Booking>>((ref) {
+  return ref.watch(bookingRepoProvider).watchOpenJobsSentToMe();
+});
+
+final openJobsProvider = Provider<AsyncValue<List<Booking>>>((ref) {
+  final a = ref.watch(_openJobsPublicProvider);
+  final b = ref.watch(_openJobsSentToMeProvider);
+  if (a.hasError) {
+    debugPrint('openJobsProvider (public): ${a.error}');
+    return AsyncValue.error(a.error!, a.stackTrace ?? StackTrace.current);
+  }
+  if (b.hasError) {
+    debugPrint('openJobsProvider (sentToMe): ${b.error}');
+    return AsyncValue.error(b.error!, b.stackTrace ?? StackTrace.current);
+  }
+  if (!a.hasValue || !b.hasValue) return const AsyncValue.loading();
+  final seen = <String>{};
+  final merged = <Booking>[];
+  for (final booking in [...a.value!, ...b.value!]) {
+    if (seen.add(booking.id)) merged.add(booking);
+  }
+  merged.sort((x, y) => y.createdAt.compareTo(x.createdAt));
+  return AsyncValue.data(merged);
 });
 
 // ✅ [FIX-3] ວຽກ pending ທີ່ providerId ຍັງວ່າງເປົ່າ (ບໍ່ຖືກມອບໝາຍໃຫ້ໃຜ) —

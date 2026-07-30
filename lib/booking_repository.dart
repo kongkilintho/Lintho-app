@@ -87,17 +87,32 @@ class BookingRepository {
         .map(_safeMapBookings);
   }
 
-  // ✅ [FIX-3] ວຽກທີ່ຍັງບໍ່ຖືກມອບໝາຍ providerId (ບາງ flow ສ້າງ booking ໂດຍບໍ່
-  // ໃສ່ providerId — ເບິ່ງ booking_form_screen.dart) ຈະບໍ່ເຄີຍປາກົດຢູ່ໃນ
-  // watchActiveBookings() ຂອງ provider ຄົນໃດເລີຍ ເພາະ query ນັ້ນ filter
-  // ດ້ວຍ providerId == _uid. ນຳໃຊ້ rule ທີ່ມີຢູ່ແລ້ວ (firestore.rules:
-  // isProvider() && resource.data.status == 'pending') ໃຫ້ provider ເຫັນ
-  // ວຽກ pending ທັງໝົດ ໂດຍບໍ່ຈຳກັດ providerId — caller filter ຕໍ່ວ່າອັນໃດ
-  // ຍັງບໍ່ຖືກຮັບ (providerId ວ່າງ) ແລະ ກົງກັບ serviceTypes ຂອງຕົນເອງ
-  Stream<List<Booking>> watchOpenJobs() {
+  // 🔒 [AUDIT BE-1 / 2026-07-30] ກ່ອນໜ້ານີ້ watchOpenJobs() ດຽວນີ້ filter ດ້ວຍ
+  // status ຢ່າງດຽວ — ບໍ່ໄດ້ constrain sentTo ເລີຍ, ຂະນະທີ່ firestore.rules'
+  // read rule ອ້າງອີງ resource.data.sentTo (ຜ່ານ isOpenOrTargeted()). Firestore
+  // ຕ້ອງການໃຫ້ list-query rule ພິສູດໄດ້ຈາກ filter ຂອງ query ເອງເທົ່ານັ້ນ — query
+  // ນີ້ຈຶ່ງຖືກປະຕິເສດທັງໝົດ (permission-denied) ສະເໝີ, ບໍ່ວ່າ provider ຄົນໃດ.
+  // ແກ້ໂດຍແຍກເປັນ 2 query ທີ່ພິສູດໄດ້ແຍກກັນ (booking_provider.dart ລວມທັງສອງເຂົ້າ
+  // ກັນ): ອັນໜຶ່ງ filter openToAll==true (ພິສູດຕໍ່ກັບ isOpenOrTargeted() ສາຂາ
+  // ທຳອິດ), ອີກອັນ filter sentTo array-contains uid (ສາຂາທີສອງ). ບໍ່ໃຊ້ Filter.or()
+  // ອັນດຽວ ເພາະ Firestore ບໍ່ໄດ້ຢືນຢັນ (documented) ວ່າ OR ຂ້າມ field ຄົນລະອັນຈະ
+  // ພິສູດໄດ້ຄືກັນກັບ 2 query ແຍກ.
+  Stream<List<Booking>> watchOpenJobsPublic() {
     return _db
         .collection('bookings')
         .where('status', isEqualTo: JobStatus.pending.name)
+        .where('openToAll', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(50)
+        .snapshots()
+        .map(_safeMapBookings);
+  }
+
+  Stream<List<Booking>> watchOpenJobsSentToMe() {
+    return _db
+        .collection('bookings')
+        .where('status', isEqualTo: JobStatus.pending.name)
+        .where('sentTo', arrayContains: _uid)
         .orderBy('createdAt', descending: true)
         .limit(50)
         .snapshots()
@@ -340,6 +355,18 @@ class CustomerBookingRepository {
     final ref = (clientRequestId == null || clientRequestId.isEmpty)
         ? _db.collection('bookings').doc()
         : _db.collection('bookings').doc(clientRequestId);
+
+    // 🔒 [AUDIT BE-1 / 2026-07-30] openToAll ຕ້ອງຖືກຕັ້ງຄ່າຕອນສ້າງ booking ທຸກຄັ້ງ
+    // ໃຫ້ firestore.rules' isValidOpenToAllFlag() ຜ່ານ, ແລະ ໃຫ້ provider ເຫັນວຽກນີ້
+    // ຜ່ານ watchOpenJobsPublic() ກ່ອນຈະຖືກ match_screen.dart ຂຽນ sentTo. ຄິດໄລ່ຈາກ
+    // *ຄ່າ* ຂອງ providerId (ບໍ່ແມ່ນແຕ່ data.containsKey('providerId')) ເພື່ອບໍ່ໃຫ້
+    // ເກີດບັນຫາ undefined-vs-absent ຄືກັນກັບ BE-2 (onNewBooking, functions/index.js)
+    // — ຖ້າ caller ໃນອະນາຄົດປ່ຽນມາສົ່ງ 'providerId': null ຫຼື '' ແທນທີ່ຈະ omit key
+    // ໄປເລີຍ, ການກວດຄ່າແບບນີ້ຍັງຖືກຕ້ອງຢູ່. createBooking() ນີ້ເປັນຈຸດດຽວທີ່ທັງ
+    // booking_form_screen.dart ແລະ quick_booking_provider.dart ຮຽກ — ບໍ່ຕ້ອງແກ້ໄຂ
+    // ຈຸດອື່ນອີກ.
+    final pid = data['providerId'];
+    data['openToAll'] = !(pid is String && pid.isNotEmpty);
 
     // ✅ [AUDIT C5] ລວມ referral lookup ໄວ້ບ່ອນດຽວແທນທີ່ຈະໃຫ້ແຕ່ລະໜ້າຈໍຈອງ
     // (quick_booking_provider.dart, booking_form_screen.dart) ຂຽນແຍກກັນເອງ —

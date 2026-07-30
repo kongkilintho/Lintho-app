@@ -375,13 +375,18 @@ class _MatchScreenState extends State<MatchScreen>
         // ຄ້າງຢູ່ await ນີ້ໂດຍບໍ່ throw (state ບໍ່ປ່ຽນເປັນ waiting), ອາໄສແຕ່
         // _searchTimer (45s) ເປັນ safety net ດຽວ. ຕອນນີ້ timeout ໄວກວ່ານັ້ນ
         // ໃຫ້ catch block ດ້ານລຸ່ມ log ໄດ້ທັນທີ.
+        // 🔒 [AUDIT BE-1 / 2026-07-30] openToAll:false ຕ້ອງຂຽນພ້ອມກັບ sentTo ໃນ
+        // write ດຽວກັນ (atomic) — ນີ້ຄືສິ່ງທີ່ບອກ firestore.rules'
+        // isOpenOrTargeted() ວ່າ booking ນີ້ບໍ່ແມ່ນ "ເປີດໃຫ້ທຸກຄົນ" ອີກຕໍ່ໄປ, ຈຳກັດ
+        // ໃຫ້ເຫັນສະເພາະ 3 ຄົນທີ່ຖືກເລືອກ (sentTo) ເທົ່ານັ້ນ.
         await _db
             .collection('bookings')
             .doc(widget.bookingId)
             .update({
-          'sentTo':    ids,
-          'status':    'pending',
-          'updatedAt': FieldValue.serverTimestamp(),
+          'sentTo':     ids,
+          'openToAll':  false,
+          'status':     'pending',
+          'updatedAt':  FieldValue.serverTimestamp(),
         }).timeout(const Duration(seconds: 15));
         // TODO: ສົ່ງ FCM push ຜ່ານ Cloud Function
         // ຕອນນີ້ provider app ຈະ stream bookings

@@ -54,14 +54,39 @@ exports.onBookingStatusChange = functions.firestore
     const before = change.before.data();
     const after = change.after.data();
     const bookingId = context.params.bookingId;
-    if (before.status === after.status) return null;
+    const queue = [];
+
+    // 🔒 [AUDIT BE-3/PROV-3 / 2026-07-30] match_screen.dart's _sendRequestToTop3()
+    // ຂຽນ sentTo (top-3 provider ທີ່ຖືກເລືອກ) ໂດຍບໍ່ປ່ຽນ status ເລີຍ (ຍັງເປັນ
+    // 'pending' ຄືເກົ່າ) — ຂຽນນີ້ຈຶ່ງບໍ່ເຄີຍຜ່ານ early-return ຂ້າງລຸ່ມ (before.status
+    // === after.status), ໝາຍຄວາມວ່າ 3 ຊ່າງທີ່ຖືກເລືອກບໍ່ເຄີຍໄດ້ຮັບ push ເລີຍ (ມີ
+    // // TODO ຄ້າງໄວ້ໃນ match_screen.dart ຢືນຢັນວ່າບໍ່ເຄີຍເຮັດສຳເລັດ). ຄິດໄລ່ uid
+    // ໃໝ່ທີ່ຖືກເພີ່ມເຂົ້າ sentTo ໃນ write ນີ້ເທົ່ານັ້ນ (ບໍ່ແມ່ນທັງ array — retry ທີ່
+    // ປ່ຽນ candidate ບໍ່ຄວນ notify ຄົນເກົ່າຊ້ຳ) ແລ້ວ queue notification ໃຫ້ແຕ່ລະຄົນ.
+    // ຢູ່ນອກ early-return ຂ້າງລຸ່ມ ເພື່ອໃຫ້ firing ບໍ່ວ່າ status ຈະປ່ຽນຫຼືບໍ່.
+    const beforeSentTo = before.sentTo || [];
+    const afterSentTo = after.sentTo || [];
+    const newlySent = afterSentTo.filter((id) => !beforeSentTo.includes(id));
+    if (newlySent.length > 0) {
+      const svcLabelForSentTo = after.serviceType || after.category || 'ບໍລິການ';
+      newlySent.forEach((providerUid) => {
+        queue.push(db.collection('fcm_queue').add({
+          targetUserId: providerUid, targetRole: 'provider',
+          type: 'new_booking', bookingId,
+          title: '🔔 ງານໃໝ່!', body: `ມີວຽກ ${svcLabelForSentTo} ໃໝ່ໃຫ້ທ່ານ`,
+          data: { type: 'new_booking', bookingId },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
+        }));
+      });
+    }
+
+    if (before.status === after.status) return Promise.all(queue);
     const { customerId, providerId, serviceType, category, price, additionalCharges, additionalChargesApproved } = after;
     // ✅ [FIX HI-4] serviceType ອາດຂາດຢູ່ໃນ booking ເກົ່າ (ຫຼືກໍລະນີບໍ່ຄາດຄິດ) —
     // fallback ໄປ category ເພື່ອບໍ່ໃຫ້ notification ສະແດງ "undefined"
     const svcLabel = serviceType || category || 'ບໍລິການ';
     const providerDoc = await db.collection('providers').doc(providerId).get();
     const providerName = providerDoc.data()?.displayName || 'ຊ່າງ';
-    const queue = [];
     const notify = (targetUserId, targetRole, title, body, type) => {
       queue.push(db.collection('fcm_queue').add({
         targetUserId, targetRole, type, bookingId,
@@ -254,15 +279,26 @@ exports.onNewBooking = functions.firestore
     if (!data) return null;
     const { providerId, customerId, serviceType, category, referralCode } = data;
     const svcLabel = serviceType || category || 'ບໍລິການ';
-    const customerDoc = await db.collection('users').doc(customerId).get();
-    const customerName = customerDoc.data()?.displayName || 'ລູກຄ້າ';
-    const queue = [db.collection('fcm_queue').add({
-      targetUserId: providerId, targetRole: 'provider',
-      type: 'new_booking', bookingId,
-      title: '🔔 ງານໃໝ່!', body: `${customerName} ຕ້ອງການ ${svcLabel}`,
-      data: { type: 'new_booking', bookingId },
-      createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
-    })];
+    const queue = [];
+
+    // 🔒 [AUDIT BE-2 / 2026-07-30] providerId ບໍ່ມີເລີຍ (undefined) ສຳລັບ auto-
+    // match booking ທຸກອັນ (Quick Booking / ຟອມຫຼັກທີ່ບໍ່ໄດ້ເລືອກຊ່າງ) — Admin SDK
+    // throw synchronously ຕອນ .add({targetUserId: undefined, ...}) (ยืนยัน jing
+    // ຜ່ານ firebase-admin ຈິງ), function ນີ້ຈຶ່ງ crash ກ່ອນຮອດ referral logic
+    // ຂ້າງລຸ່ມທຸກຄັ້ງ. ຕອນນີ້ notify ສະເພາະຖ້າມີ providerId ແທ້ (booking ທີ່ຈອງຊ່າງ
+    // ສະເພາະຄົນໂດຍກົງ) — auto-match booking ຈະຖືກ notify ຜ່ານ onBookingStatusChange
+    // ຕອນ sentTo ຖືກຂຽນແທນ (ເບິ່ງ [AUDIT BE-3] ຂ້າງລຸ່ມ).
+    if (providerId) {
+      const customerDoc = await db.collection('users').doc(customerId).get();
+      const customerName = customerDoc.data()?.displayName || 'ລູກຄ້າ';
+      queue.push(db.collection('fcm_queue').add({
+        targetUserId: providerId, targetRole: 'provider',
+        type: 'new_booking', bookingId,
+        title: '🔔 ງານໃໝ່!', body: `${customerName} ຕ້ອງການ ${svcLabel}`,
+        data: { type: 'new_booking', bookingId },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
+      }));
+    }
 
     // ✅ Referral: ໝູ່ໃໝ່ນຳໂຄ້ດໄປໃຊ້ ໃນການຈອງຄັ້ງທຳອິດ → ໄດ້ສ່ວນຫຼຸດທັນທີ
     if (referralCode) {

@@ -138,6 +138,19 @@ service cloud.firestore {
         request.resource.data.contactPhone == request.auth.token.phone_number;
     }
 
+    // 🔒 [AUDIT BE-1 / 2026-07-30] openToAll ຕ້ອງກົງກັບການມີ/ບໍ່ມີ providerId
+    // ຕອນສ້າງ booking — customer ບໍ່ສາມາດປອມໃຫ້ booking ທີ່ຈອງຊ່າງສະເພາະຄົນ
+    // (providerId ຖືກຕັ້ງແລ້ວ) ກາຍເປັນ "ເປີດໃຫ້ທຸກຄົນເຫັນ" (openToAll:true) ໄດ້,
+    // ຫຼືກົງກັນຂ້າມ. ເບິ່ງ isOpenOrTargeted() ຂ້າງລຸ່ມສຳລັບຄວາມໝາຍ field ນີ້.
+    function isValidOpenToAllFlag() {
+      return request.resource.data.openToAll is bool &&
+        (
+          (!('providerId' in request.resource.data) || request.resource.data.providerId == '')
+            ? request.resource.data.openToAll == true
+            : request.resource.data.openToAll == false
+        );
+    }
+
     function isValidNewBookingShape() {
       return request.resource.data.status == 'pending' &&
         request.resource.data.paymentStatus == 'pending' &&
@@ -146,7 +159,7 @@ service cloud.firestore {
         (!('grandTotal' in request.resource.data) ||
           (request.resource.data.grandTotal is number &&
            request.resource.data.grandTotal >= 0 && request.resource.data.grandTotal <= 50000000)) &&
-        isValidBookingTextFields() && isValidContactPhone();
+        isValidBookingTextFields() && isValidContactPhone() && isValidOpenToAllFlag();
     }
 
     // 🔒 [AUDIT QA-1 / HI-2] ກ່ອນໜ້ານີ້ update ບໍ່ໄດ້ກວດຄ່າ/transition ຂອງ
@@ -227,6 +240,23 @@ service cloud.firestore {
       return !('sentTo' in resource.data) ||
         resource.data.sentTo.size() == 0 ||
         request.auth.uid in resource.data.sentTo;
+    }
+
+    // 🔒 [AUDIT BE-1 / 2026-07-30] watchOpenJobs() (booking_repository.dart)
+    // ບໍ່ເຄີຍ filter ດ້ວຍ sentTo ເລີຍ — Firestore ຕ້ອງການໃຫ້ list-query rule
+    // ພິສູດໄດ້ຈາກ filter ຂອງ query ເອງເທົ່ານັ້ນ (ບໍ່ແມ່ນອ່ານ resource.data ຂອງແຕ່ລະ
+    // doc ຫຼັງຈາກນັ້ນ) — ເມື່ອ isValidSentToTargeting() ອ້າງອີງ resource.data.sentTo
+    // ໂດຍທີ່ query ບໍ່ໄດ້ constrain field ນີ້ເລີຍ, Firestore ປະຕິເສດ query ທັງໝົດ
+    // (permission-denied), ບໍ່ແມ່ນສະເພາະ doc ທີ່ຜິດ — ໝາຍຄວາມວ່າ open job board
+    // ວ່າງເປົ່າສະເໝີສຳລັບ provider ທຸກຄົນ. ແກ້ໂດຍແຍກເປັນ 2 query ທີ່ພິສູດໄດ້ແຍກກັນ
+    // (watchOpenJobsPublic()/watchOpenJobsSentToMe() ໃນ booking_repository.dart):
+    // query ໜຶ່ງ filter openToAll==true (ພິສູດໄດ້ຈາກ branch ທຳອິດ), ອີກອັນ filter
+    // sentTo array-contains uid (ພິສູດໄດ້ຈາກ branch ທີສອງ). ໃຊ້ສະເພາະ READ —
+    // ACCEPT/write ຍັງໃຊ້ isValidSentToTargeting() ເກົ່າ (ບໍ່ແມ່ນ list query,
+    // ບໍ່ຕິດຂໍ້ຈຳກັດນີ້, ພຶດຕິກຳຖືກຕ້ອງແລ້ວ ບໍ່ຕ້ອງແກ້).
+    function isOpenOrTargeted() {
+      return (('openToAll' in resource.data) && resource.data.openToAll == true) ||
+             (('sentTo' in resource.data) && request.auth.uid in resource.data.sentTo);
     }
 
     // 🔒 [AUDIT QA-1 / ME-3] ກ່ອນໜ້ານີ້ customer ສາມາດຂຽນ additionalCharges/
@@ -331,7 +361,7 @@ service cloud.firestore {
         resource.data.customerId == request.auth.uid ||
         resource.data.providerId == request.auth.uid ||
         (isVerifiedProvider() && resource.data.status == 'pending' &&
-          isValidSentToTargeting())
+          isOpenOrTargeted())
       );
 
       // ປັບໃຫ້ Customer ທຸກຄົນທີ່ Login ສາມາດສ້າງ Booking ໄດ້ງ່າຍຂຶ້ນ
@@ -377,8 +407,8 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'reviewed', 'additionalChargesApproved', 'additionalCharges',
               'additionalChargesNote', 'paymentMethod', 'paymentStatus', 'slipUrl', 'sentTo',
-              'updatedAt', 'cancelReason', 'cancelledBy', 'cancelFeeAmount', 'matchConfirmed',
-              'customerConfirmedPayment'])) ||
+              'openToAll', 'updatedAt', 'cancelReason', 'cancelledBy', 'cancelFeeAmount',
+              'matchConfirmed', 'customerConfirmedPayment'])) ||
         // 🔒 [AUDIT H3] ກ່ອນໜ້ານີ້ຮັບງານໃໝ່ (claim: status=='pending' &&
         // ຂຽນ providerId ເປັນຕົນເອງ) ພຽງແຕ່ກວດ isProvider() (role=='provider'
         // ເປົ່າໆ, ຈິງ/ບໍ່ຈິງກໍໄດ້ຖ້າຍັງບໍ່ຜ່ານ KYC) — ບໍ່ຄືກັນກັບ read rule ຂ້າງເທິງ
