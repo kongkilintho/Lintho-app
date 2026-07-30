@@ -283,9 +283,23 @@ service cloud.firestore {
     // isValidCustomerChargesResponse() ຂ້າງເທິງທີ່ຈຳກັດ customer ໃຫ້ null
     // ເທົ່ານັ້ນ) — provider ບໍ່ສາມາດອະນຸມັດຄ່າໃຊ້ຈ່າຍເພີ່ມຂອງຕົນເອງໄດ້ເລີຍ, ມີແຕ່
     // customer branch (ບໍ່ຈຳກັດຄ່າ) ເທົ່ານັ້ນທີ່ອະນຸມັດ (true) ໄດ້.
+    // 🔒 [AUDIT SEC-2 / 2026-07-30] ຂ້າງເທິງຈຳກັດແຕ່ additionalChargesApproved —
+    // ຄ່າ additionalCharges/additionalChargesNote ຕົວເອງ (ຈຳນວນເງິນ) ບໍ່ເຄີຍຖືກ
+    // ກວດ type/range ເລີຍຕອນ provider ຂຽນ, ຕ່າງຈາກ price ຂອງ booking ໃໝ່
+    // (isValidNewBookingShape() ຂ້າງເທິງ ຈຳກັດ 0-50000000 ຢູ່ແລ້ວ) — provider
+    // client ຄົນໃດກໍໄດ້ຈຶ່ງສາມາດຮ້ອງຂໍຄ່າໃຊ້ຈ່າຍເພີ່ມເປັນຄ່າລົບ ຫຼື ຈຳນວນບໍ່ມີເຫດຜົນ
+    // ໄດ້. ໃຊ້ຂອບເຂດດຽວກັນກັບ price (0-50000000) ເມື່ອ field ນີ້ຖືກຂຽນ.
     function isValidProviderChargesRequest() {
-      return !('additionalChargesApproved' in request.resource.data.diff(resource.data).affectedKeys()) ||
-        request.resource.data.additionalChargesApproved == false;
+      return (!('additionalChargesApproved' in request.resource.data.diff(resource.data).affectedKeys()) ||
+        request.resource.data.additionalChargesApproved == false) &&
+        (!('additionalCharges' in request.resource.data.diff(resource.data).affectedKeys()) ||
+          request.resource.data.additionalCharges == null ||
+          (request.resource.data.additionalCharges is number &&
+           request.resource.data.additionalCharges > 0 &&
+           request.resource.data.additionalCharges <= 50000000)) &&
+        (!('additionalChargesNote' in request.resource.data.diff(resource.data).affectedKeys()) ||
+          request.resource.data.additionalChargesNote == null ||
+          request.resource.data.additionalChargesNote is string);
     }
 
     // 🔒 [AUDIT PROV-2 / 2026-07-30] ຊ່າງທີ່ຮັບງານໄປແລ້ວ (accepted/onTheWay/

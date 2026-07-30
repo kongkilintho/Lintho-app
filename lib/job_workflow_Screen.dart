@@ -1206,6 +1206,16 @@ class _ActionButton extends ConsumerWidget {
     final b = booking;
 
     if (nextStatus == JobStatus.completed) {
+      // 🔒 [AUDIT PROV-4 / 2026-07-30] badge "ຈຳເປັນ" (required_badge) ຂ້າງເທິງ
+      // ສະແດງເມື່ອຮູບກ່ອນ/ຫຼັງບໍ່ຄົບ ແຕ່ບໍ່ເຄີຍມີຫຍັງບັງຄັບແທ້ — provider ກົດ
+      // "ສຳເລັດວຽກ" ໄດ້ໂດຍບໍ່ມີຮູບກ່ອນເລີຍ. ບັງຄັບຢູ່ນີ້ແທ້: ຕ້ອງມີ beforePhotoUrl
+      // ກ່ອນຈຶ່ງອະນຸຍາດເປີດ dialog ຢືນຢັນສຳເລັດວຽກ.
+      if (b.beforePhotoUrl == null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('before_photo_required_error')),
+            backgroundColor: C.red));
+        return;
+      }
       final confirm = await showDialog<bool>(
         context: context,
         builder: (_) => AlertDialog(

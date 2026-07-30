@@ -118,6 +118,10 @@ exports.onBookingStatusChange = functions.firestore
     if (after.status === 'accepted') notify(customerId, 'customer', '✅ ຊ່າງຮັບງານແລ້ວ!', `${providerName} ກຳລັງກຽມໄປ`, 'booking_update');
     if (after.status === 'onTheWay') notify(customerId, 'customer', '🚗 ຊ່າງກຳລັງໄປ!', `${providerName} ກຳລັງເດີນທາງ`, 'booking_update');
     if (after.status === 'arrived') notify(customerId, 'customer', '📍 ຊ່າງຮອດແລ້ວ!', `${providerName} ຢູ່ໜ້ານາງ`, 'booking_update');
+    // 🔒 [AUDIT CUST-2 / 2026-07-30] ທຸກ transition ອື່ນ (accepted/onTheWay/
+    // arrived/completed/rejected/cancelled) ມີ notify() ໝົດ — inProgress ຄົນ
+    // ດຽວທີ່ບໍ່ເຄີຍແຈ້ງລູກຄ້າ (ຊ່າງເລີ່ມເຮັດວຽກແລ້ວແຕ່ລູກຄ້າບໍ່ຮູ້).
+    if (after.status === 'inProgress') notify(customerId, 'customer', '🔧 ຊ່າງເລີ່ມເຮັດວຽກແລ້ວ!', `${providerName} ກຳລັງເຮັດວຽກ ${svcLabel}`, 'booking_update');
     if (after.status === 'completed') {
       notify(customerId, 'customer', '🎉 ວຽກສຳເລັດ!', `${svcLabel} ສຳເລັດ · ກະລຸນາໃຫ້ຄະແນນ`, 'booking_update');
 
@@ -277,27 +281,39 @@ exports.cleanupExpiredBookings = functions.pubsub
       .where('expiresAt', '<', now)
       .get();
     if (snap.empty) return null;
-    const batch = db.batch();
+    // 🔒 [AUDIT BE-5 / 2026-07-30] ບໍ່ມີການແບ່ງ chunk ມາກ່ອນ — batch ດຽວມີ
+    // ຂອບເຂດສູງສຸດ 500 operations (ຂອບເຂດຂອງ Firestore), ຖ້າ backlog ໃຫຍ່ກວ່າ
+    // ນີ້ (ໄຟຟ້າດັບ/downtime ດົນ ຫຼື cron ບໍ່ໄດ້ run ຫຼາຍຮອບ) batch.commit() ຈະ
+    // throw ແລະ booking ໝົດອາຍຸແມ່ນຫນຶ່ງກໍ່ບໍ່ຖືກຍົກເລີກເລີຍໃນຮອບນັ້ນ. ແບ່ງເປັນ
+    // chunk ລະ ≤500 ແລ້ວ commit ແຍກກັນແທນ.
+    const CHUNK_SIZE = 500;
+    const chunks = [];
+    for (let i = 0; i < snap.docs.length; i += CHUNK_SIZE) {
+      chunks.push(snap.docs.slice(i, i + CHUNK_SIZE));
+    }
     const notifications = [];
-    snap.docs.forEach((doc) => {
-      batch.update(doc.ref, {
-        status: 'cancelled',
-        cancelReason: 'expired_no_provider',
-        cancelledBy: 'system',
+    await Promise.all(chunks.map((chunk) => {
+      const batch = db.batch();
+      chunk.forEach((doc) => {
+        batch.update(doc.ref, {
+          status: 'cancelled',
+          cancelReason: 'expired_no_provider',
+          cancelledBy: 'system',
+        });
+        const { customerId, serviceType, category } = doc.data();
+        if (customerId) {
+          notifications.push(db.collection('fcm_queue').add({
+            targetUserId: customerId, targetRole: 'customer',
+            type: 'booking_update', bookingId: doc.id,
+            title: '⏰ ບໍ່ມີຊ່າງຮັບງານ',
+            body: `${serviceType || category || 'ການຈອງ'} ຖືກຍົກເລີກ · ບໍ່ມີຊ່າງຮັບໃນເວລາ`,
+            data: { type: 'booking_update', bookingId: doc.id },
+            createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
+          }));
+        }
       });
-      const { customerId, serviceType, category } = doc.data();
-      if (customerId) {
-        notifications.push(db.collection('fcm_queue').add({
-          targetUserId: customerId, targetRole: 'customer',
-          type: 'booking_update', bookingId: doc.id,
-          title: '⏰ ບໍ່ມີຊ່າງຮັບງານ',
-          body: `${serviceType || category || 'ການຈອງ'} ຖືກຍົກເລີກ · ບໍ່ມີຊ່າງຮັບໃນເວລາ`,
-          data: { type: 'booking_update', bookingId: doc.id },
-          createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
-        }));
-      }
-    });
-    await batch.commit();
+      return batch.commit();
+    }));
     return Promise.all(notifications);
   });
 

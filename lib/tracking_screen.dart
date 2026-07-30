@@ -149,6 +149,10 @@ class _TrackingScreenState extends State<TrackingScreen>
   String        _paymentMethod             = 'cash';
   bool          _customerConfirmedPayment  = false;
   bool          _confirmingPayment         = false;
+  // 🔒 [AUDIT CUST-4 / 2026-07-30] ໃຊ້ຄິດໄລ່ grace window ດຽວກັນກັບ
+  // cancelBooking() (booking_repository.dart) — ໃຫ້ dialog ຄຳເຕືອນຄ່າທຳນຽມ
+  // ກົງກັບຄ່າທຳນຽມທີ່ຈິງຈະຖືກຄິດ.
+  DateTime?     _acceptedAt;
 
   // ── controllers ───────────────────────────────────────────
   late final MapController          _mapCtrl;
@@ -238,6 +242,7 @@ class _TrackingScreenState extends State<TrackingScreen>
           _isLoading = false;
           _paymentMethod            = d['paymentMethod'] as String? ?? 'cash';
           _customerConfirmedPayment = d['customerConfirmedPayment'] as bool? ?? false;
+          _acceptedAt = (d['acceptedAt'] as Timestamp?)?.toDate();
         });
       } else {
         setState(() => _isLoading = false);
@@ -269,6 +274,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         _additionalChargesApproved = d['additionalChargesApproved'] as bool? ?? false;
         _paymentMethod             = d['paymentMethod'] as String? ?? 'cash';
         _customerConfirmedPayment  = d['customerConfirmedPayment'] as bool? ?? false;
+        _acceptedAt = (d['acceptedAt'] as Timestamp?)?.toDate();
       });
 
       if (newStatus != _status) {
@@ -400,8 +406,15 @@ class _TrackingScreenState extends State<TrackingScreen>
 
   Future<void> _confirmAndCancel() async {
     final reasonCtrl = TextEditingController();
-    final showFeeWarning = _status == BookingStatus.onWay ||
-        _status == BookingStatus.arrived;
+    // 🔒 [AUDIT CUST-4 / 2026-07-30] ກ່ອນໜ້ານີ້ສະແດງຄຳເຕືອນຄ່າທຳນຽມທຸກຄັ້ງທີ່
+    // onWay/arrived ໂດຍບໍ່ສົນ grace window 2 ນາທີ — cancelBooking() ຄິດໄລ່
+    // fee=0 ພາຍໃນ grace window ຢູ່ແລ້ວ (booking_repository.dart), ຄຳເຕືອນນີ້
+    // ຈຶ່ງບອກຜິດ (ຫລອກວ່າມີຄ່າທຳນຽມທັງໆທີ່ບໍ່ມີ) ຖ້າຍົກເລີກໄວພໍ. ຄິດໄລ່ withinGrace
+    // ດ້ວຍ logic ດຽວກັນ ກ່ອນຕັດສິນວ່າຈະສະແດງຄຳເຕືອນ.
+    final withinGrace = _acceptedAt != null &&
+        DateTime.now().difference(_acceptedAt!) < const Duration(minutes: 2);
+    final showFeeWarning = (_status == BookingStatus.onWay ||
+        _status == BookingStatus.arrived) && !withinGrace;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(

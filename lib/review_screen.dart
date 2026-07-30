@@ -118,16 +118,33 @@ class _ReviewScreenState extends State<ReviewScreen>
       // ຕັ້ງ bookings/{id}.reviewed = true ໃຫ້ອັດຕະໂນມັດ, ໃນ transaction ດຽວ,
       // ຫຼັງຈາກກວດ server-side ວ່າ booking ນີ້ເປັນຂອງລູກຄ້າ+ຊ່າງຄູ່ນີ້ແທ້,
       // completed ແລ້ວ, ແລະ ຍັງບໍ່ເຄີຍ review.
-      await provRef.collection('reviews').add({
-        'customerId':       user?.uid     ?? '',
-        'customerName':     user?.displayName ?? 'ລູກຄ້າ',
-        'customerPhotoUrl': user?.photoURL    ?? '',
-        'providerId':       widget.provider.uid,
-        'rating':           _selectedStar.toDouble(),
-        'comment':          _commentCtrl.text.trim(),
-        'bookingId':        widget.bookingId,
-        'serviceName':      widget.serviceName,
-        'createdAt':        now,
+      //
+      // 🔒 [AUDIT CUST-3 / 2026-07-30] .add() ສ້າງ doc ID ແບບສຸ່ມ — ຖ້າ submit
+      // ຖືກເອີ້ນ 2 ຄັ້ງໃກ້ກັນ (double-tap ກ່ອນ _isLoading disable ປຸ່ມ, ຫຼື retry
+      // ຫຼັງ timeout ທີ່ຈິງແລ້ວສຳເລັດ) ຈະໄດ້ 2 review doc ຄົນລະ ID, ທັງສອງຜ່ານ
+      // rules ໄດ້ (booking.reviewed ຍັງ false ຢູ່ຕອນທັງສອງ read/write ພ້ອມກັນ),
+      // ແລະ onReviewCreated ທັງສອງ invocation ອາດອ່ານ ratingSum/reviewCount
+      // ກ່ອນອັນທຳອິດຈະ commit — ນັບຄະແນນຊ້ຳ. ໃຊ້ bookingId ເປັນ doc ID ແທນ
+      // (deterministic, ບໍ່ແມ່ນສຸ່ມ) ພາຍໃນ transaction ທີ່ກວດວ່າ doc ນີ້ຍັງບໍ່ມີ
+      // ກ່ອນ — Firestore transaction ຮັບປະກັນວ່າຖ້າ 2 ຄັ້ງແຂ່ງກັນ, ຄັ້ງທີສອງຈະ
+      // ອ່ານເຫັນ doc ທີ່ຄັ້ງທຳອິດຂຽນໄປແລ້ວຕອນ retry ແລະ throw ແທນທີ່ຈະຂຽນຊ້ຳ.
+      final reviewRef = provRef.collection('reviews').doc(widget.bookingId);
+      await db.runTransaction((tx) async {
+        final existing = await tx.get(reviewRef);
+        if (existing.exists) {
+          throw Exception('ບໍ່ສາມາດໃຫ້ຄະແນນຊ້ຳໄດ້');
+        }
+        tx.set(reviewRef, {
+          'customerId':       user?.uid     ?? '',
+          'customerName':     user?.displayName ?? 'ລູກຄ້າ',
+          'customerPhotoUrl': user?.photoURL    ?? '',
+          'providerId':       widget.provider.uid,
+          'rating':           _selectedStar.toDouble(),
+          'comment':          _commentCtrl.text.trim(),
+          'bookingId':        widget.bookingId,
+          'serviceName':      widget.serviceName,
+          'createdAt':        now,
+        });
       }).timeout(const Duration(seconds: 15));
 
       // ✅ RULE: mounted check ຫຼັງ async

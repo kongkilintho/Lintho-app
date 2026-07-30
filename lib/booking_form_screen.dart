@@ -1533,8 +1533,20 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
                 ),
               );
               if (!mounted || time == null) return;
-              setState(() => o.scheduledAt = DateTime(
-                  date.year, date.month, date.day, time.hour, time.minute));
+              final picked = DateTime(
+                  date.year, date.month, date.day, time.hour, time.minute);
+              // 🔒 [AUDIT CUST-1 / 2026-07-30] showDatePicker.firstDate ກັນວັນທີ
+              // ໃນອະດີດໄດ້ ແຕ່ showTimePicker ບໍ່ມີຂອບເຂດຫຍັງເລີຍ — ຖ້າເລືອກວັນທີ
+              // ມື້ນີ້ + ໂມງທີ່ຜ່ານໄປແລ້ວ, scheduledAt ຈະຢູ່ໃນອະດີດໄດ້ໂດຍບໍ່ມີການກວດ
+              // ຈາກ client ຫຼື server (isValidNewBookingShape() ບໍ່ແຕະ scheduledAt).
+              // ປະຕິເສດຢູ່ນີ້ແທນທີ່ຈະຍອມຮັບແລ້ວປ່ອຍໃຫ້ຊ່າງເຫັນວຽກ "ນັດ" ທີ່ໝົດເວລາໄປແລ້ວ.
+              if (picked.isBefore(DateTime.now())) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(tr('past_scheduled_time_error')),
+                    backgroundColor: C.red));
+                return;
+              }
+              setState(() => o.scheduledAt = picked);
             },
             child: Container(
               padding: const EdgeInsets.all(16),

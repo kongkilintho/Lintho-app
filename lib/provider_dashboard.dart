@@ -37,7 +37,12 @@ class ProviderDashboard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final idx          = ref.watch(navIndexProvider);
-    final pendingCount = ref.watch(pendingJobsProvider).length;
+    // 🔒 [AUDIT PROV-5 / 2026-07-30] pendingJobsProvider ນັບສະເພາະວຽກທີ່ຖືກ
+    // ມອບໝາຍໃຫ້ provider ນີ້ໂດຍກົງ — ບໍ່ນັບ unassignedOpenJobsProvider (ວຽກເປີດ/
+    // broadcast ທີ່ຍັງບໍ່ຖືກມອບໝາຍໃຫ້ໃຜ) ເລີຍ, ເຮັດໃຫ້ badge ບໍ່ຂຶ້ນທັງໆທີ່ມີວຽກ
+    // ລໍຖ້າຢູ່ໜ້າ home tab. ນັບລວມທັງສອງ.
+    final pendingCount = ref.watch(pendingJobsProvider).length +
+        ref.watch(unassignedOpenJobsProvider).length;
 
     return Scaffold(
       body: IndexedStack(index: idx, children: _tabs),
