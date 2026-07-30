@@ -272,6 +272,22 @@ service cloud.firestore {
               request.resource.data.additionalChargesNote == null);
     }
 
+    // 🔒 [AUDIT BE-4 / 2026-07-30] requestAdditionalCharges() (booking_repository.dart,
+    // ຝັ່ງ provider) ຂຽນ additionalChargesApproved:false ພ້ອມກັບ additionalCharges/
+    // additionalChargesNote ຕອນຮ້ອງຂໍຄ່າໃຊ້ຈ່າຍເພີ່ມ — ແຕ່ field ນີ້ບໍ່ເຄີຍຢູ່ໃນ
+    // provider ຂອງ hasOnly() list ເລີຍ (ມີແຕ່ໃນ list ຂອງ customer), ແລະ ຕັ້ງແຕ່
+    // booking ບໍ່ເຄີຍມີ field ນີ້ມາກ່ອນ, write ຄັ້ງທຳອິດຈຶ່ງນັບເປັນ affected key
+    // ໃໝ່ສະເໝີ — ເຮັດໃຫ້ hasOnly() ບໍ່ຜ່ານ ແລະ write ທັງໝົດຖືກປະຕິເສດ
+    // (permission-denied) ທຸກຄັ້ງ, ບໍ່ວ່າ provider ຄົນໃດ. ຕອນນີ້ອະນຸຍາດ provider
+    // ຂຽນ field ນີ້ໄດ້ — ແຕ່ຈຳກັດຄ່າໃຫ້ເປັນ false ເທົ່ານັ້ນ (ຄືກັນກັບ
+    // isValidCustomerChargesResponse() ຂ້າງເທິງທີ່ຈຳກັດ customer ໃຫ້ null
+    // ເທົ່ານັ້ນ) — provider ບໍ່ສາມາດອະນຸມັດຄ່າໃຊ້ຈ່າຍເພີ່ມຂອງຕົນເອງໄດ້ເລີຍ, ມີແຕ່
+    // customer branch (ບໍ່ຈຳກັດຄ່າ) ເທົ່ານັ້ນທີ່ອະນຸມັດ (true) ໄດ້.
+    function isValidProviderChargesRequest() {
+      return !('additionalChargesApproved' in request.resource.data.diff(resource.data).affectedKeys()) ||
+        request.resource.data.additionalChargesApproved == false;
+    }
+
     // ADMIN — ອ່ານ/ຂຽນໄດ້ທັງໝົດ
     // 🔒 [AUDIT ADM-5 / 2026-07-30] Firestore ປະເມີນ match block ທຸກອັນທີ່ match
     // ກັບ path ດຽວກັນ ແລ້ວ OR ຜົນ allow ເຂົ້າກັນ (ບໍ່ມີ "ສະເພາະເຈາະຈົງກວ່າຊະນະ") —
@@ -436,11 +452,12 @@ service cloud.firestore {
             (resource.data.status == 'pending' &&
              request.resource.data.providerId == request.auth.uid &&
              isValidSentToTargeting())) &&
+          isValidProviderChargesRequest() &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'providerId', 'providerName', 'providerPhone',
               'providerRating', 'providerJobs', 'providerPhoto', 'acceptedAt',
               'completedAt', 'cancelReason', 'beforePhotoUrl', 'afterPhotoUrl',
-              'additionalCharges', 'additionalChargesNote',
+              'additionalCharges', 'additionalChargesNote', 'additionalChargesApproved',
               'paymentStatus', 'updatedAt'])) ||
         // 🔒 [AUDIT H7] "ປະຕິເສດ" ວຽກທີ່ຍັງບໍ່ມີ providerId (ຢູ່ໃນ open job
         // board — ບໍ່ໄດ້ຖືກມອບໝາຍໃຫ້ໃຜສະເພາະ) ບໍ່ຄວນປ່ຽນ status ເປັນ terminal

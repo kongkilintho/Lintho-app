@@ -80,6 +80,27 @@ exports.onBookingStatusChange = functions.firestore
       });
     }
 
+    // 🔒 [AUDIT PROV-1 / 2026-07-30] ອະນຸມັດຄ່າໃຊ້ຈ່າຍເພີ່ມ *ຫຼັງ* booking completed
+    // ໄປແລ້ວ (status ບໍ່ປ່ຽນຢູ່ໃນ write ນີ້) — block ຄິດໄລ່ payout ຫຼັກຂ້າງລຸ່ມ
+    // (after.status === 'completed' ພາຍໃນ if (before.status !== after.status))
+    // ບໍ່ເຄີຍຮອດເລີຍໃນກໍລະນີນີ້ ເພາະ early-return ຂ້າງເທິງ. ຢູ່ນອກ/ກ່ອນ early-return
+    // ນັ້ນໂດຍເຈດຕະນາ — mutually exclusive ກັບ block ຫຼັກ (ອັນນັ້ນຮຽກກ່ອນ status
+    // ປ່ຽນເປັນ completed ແທ້, ອັນນີ້ຮຽກກ່ອນ status ບໍ່ປ່ຽນ) ຈຶ່ງບໍ່ມີທາງຄິດໄລ່ຊ້ຳກັນ.
+    const chargesJustApproved = !before.additionalChargesApproved && after.additionalChargesApproved;
+    if (before.status === after.status && after.status === 'completed' && chargesJustApproved &&
+        after.paymentStatus === 'paid' && after.additionalCharges > 0) {
+      const svcLabelForCharges = after.serviceType || after.category || 'ບໍລິການ';
+      queue.push(grantAdditionalChargesWalletCredit(
+        after.providerId, bookingId, svcLabelForCharges, after.additionalCharges, change.after.ref));
+      queue.push(db.collection('fcm_queue').add({
+        targetUserId: after.providerId, targetRole: 'provider',
+        type: 'payment', bookingId,
+        title: '💰 ລາຍຮັບເພີ່ມເຂົ້າ!', body: `₭${after.additionalCharges} ຄ່າໃຊ້ຈ່າຍເພີ່ມ`,
+        data: { type: 'payment', bookingId },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
+      }));
+    }
+
     if (before.status === after.status) return Promise.all(queue);
     const { customerId, providerId, serviceType, category, price, additionalCharges, additionalChargesApproved } = after;
     // ✅ [FIX HI-4] serviceType ອາດຂາດຢູ່ໃນ booking ເກົ່າ (ຫຼືກໍລະນີບໍ່ຄາດຄິດ) —
@@ -380,6 +401,34 @@ async function grantWalletCredit(providerId, bookingId, serviceLabel, total, boo
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     tx.update(bookingRef, { walletCredited: true });
+  });
+}
+
+// 🔒 [AUDIT PROV-1 / 2026-07-30] ຄ່າໃຊ້ຈ່າຍເພີ່ມ (additionalCharges) ທີ່ customer
+// ອະນຸມັດ *ຫຼັງ* booking ຖືກ completed ໄປແລ້ວ (status ບໍ່ປ່ຽນຢູ່ໃນ write ນັ້ນ) ບໍ່
+// ເຄີຍຖືກຄິດໄລ່ເຂົ້າ wallet ຊ່າງເລີຍ — grantWalletCredit() ຖືກເອີ້ນສະເພາະຕອນ
+// status ປ່ຽນເປັນ 'completed' ເທົ່ານັ້ນ (ໃຊ້ walletCredited flag ຢູ່ແລ້ວຕອນນັ້ນ),
+// ອະນຸມັດຊ້າຈຶ່ງບໍ່ເຄີຍຜ່ານ block ນັ້ນອີກ. ຟັງຊັນນີ້ແມ່ນ grantWalletCredit() ຮູບ
+// ດຽວກັນເປັກໆ ແຕ່ໃຊ້ flag ແຍກຕ່າງຫາກ (additionalChargesWalletCredited) — ຖ້າໃຊ້
+// walletCredited ຊ້ຳ ຈະ no-op ທັນທີເພາະຄ່ານັ້ນເປັນ true ແລ້ວຈາກການຄິດໄລ່ຄັ້ງທຳອິດ.
+async function grantAdditionalChargesWalletCredit(providerId, bookingId, serviceLabel, amount, bookingRef) {
+  const walletRef = db.collection('wallets').doc(providerId);
+  const txnRef = db.collection('transactions').doc();
+  return db.runTransaction(async (tx) => {
+    const bookingSnap = await tx.get(bookingRef);
+    if (bookingSnap.data()?.additionalChargesWalletCredited) return; // ✅ idempotent guard
+
+    tx.set(walletRef, {
+      balance: admin.firestore.FieldValue.increment(amount),
+      totalEarnings: admin.firestore.FieldValue.increment(amount),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    tx.set(txnRef, {
+      providerId, bookingId, type: 'earning', amount,
+      description: `ຄ່າໃຊ້ຈ່າຍເພີ່ມ: ${serviceLabel}`,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    tx.update(bookingRef, { additionalChargesWalletCredited: true });
   });
 }
 
