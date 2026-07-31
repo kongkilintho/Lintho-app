@@ -17,6 +17,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
+import 'booking_provider.dart' show currentUidProvider;
 import 'geohash_util.dart';
 
 // ── LOCATION SERVICE ─────────────────────────────────────────
@@ -184,6 +185,10 @@ final locationServiceProvider = Provider((_) => LocationService());
 
 final onlineStatusProvider =
 StateNotifierProvider<OnlineStatusNotifier, bool>((ref) {
+  // ✅ [FIX account-switch] ບໍ່ watch ຄ່ານີ້ໄວ້, state=true ຈາກບັນຊີເກົ່າຈະ
+  // ຄ້າງຢູ່ຫຼັງສະຫຼັບບັນຊີ — toggle() ຈະອ່ານ state ເກົ່າ (true) ແລ້ວສັ່ງ
+  // setOnline(false) ໃສ່ບັນຊີໃໝ່ແທນ (ເບິ່ງຄືກົດ "Online" ແລ້ວບໍ່ມີຫຍັງເກີດຂຶ້ນ).
+  ref.watch(currentUidProvider);
   return OnlineStatusNotifier(ref.read(locationServiceProvider));
 });
 

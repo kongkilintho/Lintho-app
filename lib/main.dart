@@ -52,6 +52,8 @@ import 'widgets/pulsing_fade.dart';
 import 'theme/app_theme.dart';
 import 'app_navigation_state.dart';
 import 'phone_verification.dart';
+import 'support_help.dart';
+import 'support_provider.dart';
 
 const firebaseOptions = FirebaseOptions(
   apiKey:            "AIzaSyD-bIErOqCC6vHqn45oHhtL52Cw54O8SMs",
@@ -388,7 +390,7 @@ class _LoginPageState extends State<LoginPage>
     // ບໍ່ໄດ້ (invalid-email) ຖ້າພິມຕາມ hint ຂອງຊ່ອງນີ້ເອງ. ຕອນນີ້ໃຊ້ function
     // ດຽວກັນນຳ ໃຫ້ຄ່າກົງກັນສະເໝີ.
     final email = input.contains('@')
-        ? input
+        ? input.toLowerCase()
         : '${laoPhoneDigitsOnly(input)}@lintho.app';
     setState(() { _loading = true; _error = null; });
     try {
@@ -411,7 +413,13 @@ class _LoginPageState extends State<LoginPage>
   Future<void> _loginWithGoogle() async {
     setState(() { _googleLoading = true; _error = null; });
     try {
-      final googleUser = await GoogleSignIn().signIn();
+      final googleSignIn = GoogleSignIn();
+      // ✅ [FIX] signIn() ຈະ silent sign-in ດ້ວຍບັນຊີເກົ່າທີ່ cache ໄວ້ໃນເຄື່ອງ
+      // ໂດຍອັດຕະໂນມັດ ຖ້າບໍ່ signOut() ກ່ອນ — ບໍ່ຂຶ້ນ Account Picker ໃຫ້ເລືອກ
+      // Email ອື່ນເລີຍ. signOut() ລ້າງ session cache ນັ້ນ, ບັງຄັບໃຫ້ dialog
+      // ເລືອກ Account ຂຶ້ນມາທຸກຄັ້ງທີ່ກົດປຸ່ມນີ້.
+      await googleSignIn.signOut();
+      final googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
         // ຜູ້ໃຊ້ກົດຍົກເລີກ — ບໍ່ຕ້ອງສະແດງ error
         return;
@@ -425,6 +433,8 @@ class _LoginPageState extends State<LoginPage>
           await FirebaseAuth.instance.signInWithCredential(credential);
 
       final user = userCred.user;
+      String role = 'customer';
+      String status = 'active';
       if (user != null) {
         final doc = FirebaseFirestore.instance.collection('users').doc(user.uid);
         final snap = await doc.get();
@@ -437,10 +447,28 @@ class _LoginPageState extends State<LoginPage>
             'photoUrl':    user.photoURL ?? '',
             'createdAt':   FieldValue.serverTimestamp(),
           });
+        } else {
+          final data = snap.data();
+          role   = data?['role'] as String? ?? 'customer';
+          status = data?['status'] as String? ?? 'active';
         }
       }
       if (!mounted) return;
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      // ✅ [FIX] ບັນຊີ Provider ບາງບັນຊີ login ດ້ວຍ Google — ກວດ role ໃນ
+      // Firestore ທັນທີຫຼັງ sign-in ແລ້ວໂດດໄປ Provider Dashboard ໂດຍກົງ,
+      // ບໍ່ຕ້ອງລໍ RoleRouter stream ອັບເດດ.
+      if (role == 'provider') {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => status == 'pending'
+                ? const PendingApprovalScreen()
+                : const ProviderDashboard(),
+          ),
+          (route) => false,
+        );
+      } else {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = '${tr("error")}: $e');
@@ -610,12 +638,16 @@ class _LoginPageState extends State<LoginPage>
                     const SizedBox(height: 28),
                     TextField(
                       controller: _emailCtrl,
-                      keyboardType: TextInputType.phone,
+                      // ✅ [FIX] ຮອງຮັບທັງເບີໂທ ແລະ Email — ບາງບັນຊີ Provider
+                      // ຖືກສ້າງດ້ວຍ Gmail, keyboardType.phone ກ່ອນໜ້ານີ້ເຮັດໃຫ້
+                      // ພິມ '@'/ຕົວອັກສອນບໍ່ໄດ້ ຈຶ່ງ login ບໍ່ຜ່ານ
+                      keyboardType: TextInputType.emailAddress,
+                      autocorrect: false,
                       style: const TextStyle(
                           fontSize: 15, color: C.text),
                       decoration: _fieldDecoration(
                         hint: '020 7X XXX XXX',
-                        icon: Icons.phone_android_outlined,
+                        icon: Icons.person_outline,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -2065,8 +2097,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _tile(Icons.language, tr('language'), '',
                   iconColor: C.sky,
                   onTap: () => LanguageSelector.show(context)),
-              _tile(Icons.vpn_key_outlined, 'ຕັ້ງຄ່າຄວາມປອດໄພ',
-                  'ປ່ຽນລະຫັດຜ່ານ / ຄວາມປອດໄພ', iconColor: C.green,
+              _tile(Icons.vpn_key_outlined, tr('security'),
+                  tr('security_sub'), iconColor: C.green,
                   onTap: () => _showSecurity(context)),
             ]),
             const SizedBox(height: 12),
@@ -2203,7 +2235,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ? const SizedBox(width: 18, height: 18,
                       child: CircularProgressIndicator(
                           strokeWidth: 2.2, color: Colors.white))
-                  : const Text('ຢືນຢັນ', style: TextStyle(
+                  : Text(tr('confirm'), style: const TextStyle(
                       color: Colors.white, fontWeight: FontWeight.w700)),
             ),
           ],
@@ -2230,13 +2262,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               decoration: BoxDecoration(color: C.border,
                   borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 16),
-          const Text('ຕັ້ງຄ່າຄວາມປອດໄພ', style: TextStyle(
+          Text(tr('security'), style: const TextStyle(
               fontSize: 18, fontWeight: FontWeight.w900, color: C.text)),
           const SizedBox(height: 20),
           TextField(
             controller: currentCtrl, obscureText: true,
             decoration: InputDecoration(
-              labelText: 'ລະຫັດຜ່ານປັດຈຸບັນ',
+              labelText: tr('current_password'),
               prefixIcon: const Icon(Icons.lock_outline, color: C.muted),
               filled: true, fillColor: C.bg,
               border: OutlineInputBorder(
@@ -2258,7 +2290,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: const Text('ລືມລະຫັດຜ່ານ?', style: TextStyle(
+              child: Text(tr('forgot_password'), style: const TextStyle(
                   color: C.sky, fontSize: 13, fontWeight: FontWeight.w700)),
             ),
           ),
@@ -2266,7 +2298,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextField(
             controller: newCtrl, obscureText: true,
             decoration: InputDecoration(
-              labelText: 'ລະຫັດຜ່ານໃໝ່',
+              labelText: tr('new_password'),
               prefixIcon: const Icon(Icons.lock_outline, color: C.muted),
               filled: true, fillColor: C.bg,
               border: OutlineInputBorder(
@@ -2278,7 +2310,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextField(
             controller: confirmCtrl, obscureText: true,
             decoration: InputDecoration(
-              labelText: 'ຢືນຢັນລະຫັດຜ່ານໃໝ່',
+              labelText: tr('confirm_password'),
               prefixIcon: const Icon(Icons.lock_outline, color: C.muted),
               filled: true, fillColor: C.bg,
               border: OutlineInputBorder(
@@ -2293,14 +2325,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               final newPass = newCtrl.text.trim();
               final confirm = confirmCtrl.text.trim();
               if (current.isEmpty || newPass.isEmpty || confirm.isEmpty) {
-                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                    content: Text('ກະລຸນາໃສ່ຂໍ້ມູນໃຫ້ຄົບ'),
+                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                    content: Text(tr('fill_all')),
                     backgroundColor: C.red));
                 return;
               }
               if (newPass != confirm) {
-                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                    content: Text('ລະຫັດຜ່ານໃໝ່ບໍ່ຕົງກັນ'),
+                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                    content: Text(tr('password_mismatch')),
                     backgroundColor: C.red));
                 return;
               }
@@ -2313,14 +2345,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 await user.updatePassword(newPass);
                 if (!ctx.mounted) return;
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('ບັນທຶກສຳເລັດ'),
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(tr('password_changed_success')),
                     backgroundColor: C.success,
                     behavior: SnackBarBehavior.floating));
               } catch (e) {
                 if (!ctx.mounted) return;
                 ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                    content: Text('ເກີດຂໍ້ຜິດພາດ: $e'),
+                    content: Text('${tr('error')}: $e'),
                     backgroundColor: C.red));
               }
             },
@@ -2329,7 +2361,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.symmetric(vertical: 16)),
-            child: const Text('💾 ບັນທຶກ', style: TextStyle(
+            child: Text(tr('save'), style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.w800,
                 fontSize: 16)),
           )),
@@ -2383,14 +2415,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user  = FirebaseAuth.instance.currentUser;
     final phone = user?.phoneNumber;
     if (user == null || phone == null || phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('ບໍ່ພົບເບີໂທທີ່ຜູກກັບບັນຊີນີ້'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr('phone_not_linked')),
           backgroundColor: C.red));
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('ກຳລັງສົ່ງລະຫັດ OTP...'),
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(tr('otp_sending')),
         behavior: SnackBarBehavior.floating));
 
     await FirebaseAuth.instance.verifyPhoneNumber(
@@ -2409,7 +2441,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             '${e.code} — ${e.message}');
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('ສົ່ງ OTP ບໍ່ສຳເລັດ: ${e.code}'),
+            content: Text('${tr('otp_send_failed')}: ${e.code}'),
             backgroundColor: C.red));
       },
       codeSent: (String verificationId, int? resendToken) {
@@ -2441,10 +2473,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 decoration: BoxDecoration(color: C.border,
                     borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 16),
-            const Text('ຢືນຢັນ OTP', style: TextStyle(
+            Text(tr('otp_verify_title'), style: const TextStyle(
                 fontSize: 18, fontWeight: FontWeight.w900, color: C.text)),
             const SizedBox(height: 6),
-            Text('ລະຫັດຖືກສົ່ງໄປທີ່ $phone', style: const TextStyle(
+            Text('${tr('otp_sent_to')} $phone', style: const TextStyle(
                 fontSize: 12.5, color: C.muted)),
             const SizedBox(height: 20),
             TextField(
@@ -2465,8 +2497,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPressed: loading ? null : () async {
                 final code = otpCtrl.text.trim();
                 if (code.isEmpty) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                      content: Text('ກະລຸນາໃສ່ລະຫັດ OTP'),
+                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                      content: Text(tr('fill_all')),
                       backgroundColor: C.red));
                   return;
                 }
@@ -2483,7 +2515,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 } on FirebaseAuthException catch (e) {
                   setS(() => loading = false);
                   ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                      content: Text('ລະຫັດ OTP ບໍ່ຖືກຕ້ອງ: ${e.code}'),
+                      content: Text('${tr('otp_invalid')}: ${e.code}'),
                       backgroundColor: C.red));
                 }
               },
@@ -2495,7 +2527,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ? const SizedBox(width: 22, height: 22,
                       child: CircularProgressIndicator(
                           strokeWidth: 2.5, color: Colors.white))
-                  : const Text('ຢືນຢັນ', style: TextStyle(
+                  : Text(tr('confirm'), style: const TextStyle(
                       color: Colors.white, fontWeight: FontWeight.w800,
                       fontSize: 16)),
             )),
@@ -2523,13 +2555,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               decoration: BoxDecoration(color: C.border,
                   borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 16),
-          const Text('ຕັ້ງລະຫັດຜ່ານໃໝ່', style: TextStyle(
+          Text(tr('set_new_password_title'), style: const TextStyle(
               fontSize: 18, fontWeight: FontWeight.w900, color: C.text)),
           const SizedBox(height: 20),
           TextField(
             controller: newCtrl, obscureText: true,
             decoration: InputDecoration(
-              labelText: 'ລະຫັດຜ່ານໃໝ່',
+              labelText: tr('new_password'),
               prefixIcon: const Icon(Icons.lock_outline, color: C.muted),
               filled: true, fillColor: C.bg,
               border: OutlineInputBorder(
@@ -2541,7 +2573,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextField(
             controller: confirmCtrl, obscureText: true,
             decoration: InputDecoration(
-              labelText: 'ຢືນຢັນລະຫັດຜ່ານໃໝ່',
+              labelText: tr('confirm_password'),
               prefixIcon: const Icon(Icons.lock_outline, color: C.muted),
               filled: true, fillColor: C.bg,
               border: OutlineInputBorder(
@@ -2555,14 +2587,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               final newPass = newCtrl.text.trim();
               final confirm = confirmCtrl.text.trim();
               if (newPass.isEmpty || confirm.isEmpty) {
-                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                    content: Text('ກະລຸນາໃສ່ຂໍ້ມູນໃຫ້ຄົບ'),
+                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                    content: Text(tr('fill_all')),
                     backgroundColor: C.red));
                 return;
               }
               if (newPass != confirm) {
-                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                    content: Text('ລະຫັດຜ່ານໃໝ່ບໍ່ຕົງກັນ'),
+                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                    content: Text(tr('password_mismatch')),
                     backgroundColor: C.red));
                 return;
               }
@@ -2575,14 +2607,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 await user.updatePassword(newPass);
                 if (!ctx.mounted) return;
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('ປ່ຽນລະຫັດຜ່ານສຳເລັດ'),
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(tr('password_changed_success')),
                     backgroundColor: C.success,
                     behavior: SnackBarBehavior.floating));
               } catch (e) {
                 if (!ctx.mounted) return;
                 ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                    content: Text('ເກີດຂໍ້ຜິດພາດ: $e'),
+                    content: Text('${tr('error')}: $e'),
                     backgroundColor: C.red));
               }
             },
@@ -2591,7 +2623,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.symmetric(vertical: 16)),
-            child: const Text('💾 ບັນທຶກ', style: TextStyle(
+            child: Text(tr('save'), style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.w800,
                 fontSize: 16)),
           )),
@@ -3017,29 +3049,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('ຊ່ວຍເຫຼືອ', style: TextStyle(
-              fontSize: 18, fontWeight: FontWeight.w800, color: C.text)),
-          const SizedBox(height: 16),
-          ListTile(
-            leading: const Icon(Icons.phone, color: C.navy),
-            title: const Text('ໂທຫາ Support'),
-            subtitle: const Text('020 XXXX XXXX'),
-            onTap: () => Navigator.pop(ctx),
-          ),
-          ListTile(
-            leading: const Icon(Icons.chat_outlined, color: C.navy),
-            title: const Text('Chat Support'),
-            onTap: () => Navigator.pop(ctx),
-          ),
-          ListTile(
-            leading: const Icon(Icons.info_outline, color: C.navy),
-            title: const Text('FAQ'),
-            onTap: () => Navigator.pop(ctx),
-          ),
-        ]),
+      builder: (ctx) => Consumer(
+        builder: (ctx, ref, _) {
+          final info = ref.watch(supportInfoProvider)
+              .valueOrNull ?? const SupportInfo();
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(tr('help'), style: const TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w800, color: C.text)),
+              if (info.hours.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(info.hours, style: const TextStyle(
+                    fontSize: 12, color: C.muted)),
+              ],
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.phone, color: C.navy),
+                title: Text(tr('call_support')),
+                subtitle: Text(info.phoneDisplay),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  callSupport(context, info.phone);
+                },
+              ),
+              if (info.whatsapp.isNotEmpty)
+                ListTile(
+                  leading: const Icon(Icons.chat_bubble_outline, color: C.navy),
+                  title: Text(tr('whatsapp_support')),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    whatsappSupport(context, info.whatsapp);
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.chat_outlined, color: C.navy),
+                title: Text(tr('chat_support')),
+                subtitle: Text(info.email),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  chatSupport(context, info.email);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.info_outline, color: C.navy),
+                title: const Text('FAQ'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showFaqSheet(context);
+                },
+              ),
+            ]),
+          );
+        },
       ),
     );
   }
@@ -3339,7 +3401,7 @@ class FavoriteProvidersScreen extends StatelessWidget {
       backgroundColor: C.background,
       appBar: AppBar(
         elevation: 0,
-        title: const Text('ຊ່າງຖືກໃຈ', style: TextStyle(
+        title: Text(tr('favorite_providers'), style: const TextStyle(
             color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),
         centerTitle: true,
       ),
@@ -3355,12 +3417,12 @@ class FavoriteProvidersScreen extends StatelessWidget {
                 color: C.red, size: 36),
           ),
           const SizedBox(height: 16),
-          const Text('ຍັງບໍ່ມີຊ່າງທີ່ທ່ານກົດໃຈ', style: TextStyle(
+          Text(tr('no_favorite_providers'), style: const TextStyle(
               color: C.text, fontSize: 15, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
-          const Text('ກົດໃຈຊ່າງ ຫຼື ແມ່ບ້ານປະຈຳຫຼັງຈົບງານ\nເພື່ອບັນທຶກໄວ້ທີ່ນີ້',
+          Text(tr('no_favorite_providers_sub'),
               textAlign: TextAlign.center,
-              style: TextStyle(color: C.muted, fontSize: 13)),
+              style: const TextStyle(color: C.muted, fontSize: 13)),
         ],
       )),
     );

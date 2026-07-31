@@ -22,13 +22,27 @@ final profileRepoProvider  = Provider((_) => ProfileRepository());
 final customerBookingRepoProvider =
     Provider((_) => CustomerBookingRepository());
 
+// 🔒 [FIX account-switch] StreamProvider ຂ້າງລຸ່ມນີ້ (ບໍ່ໄດ້ໃຊ້ .autoDispose)
+// ສ້າງ query ຄັ້ງດຽວແລ້ວ cache ໄວ້ຕະຫຼອດອາຍຸແອັບ (ProviderScope ຢູ່ main.dart
+// ຄົງຢູ່ຕະຫຼອດ process, ບໍ່ recreate ຕອນ login/logout) — _uid ຖືກອ່ານຕອນ
+// stream ຖືກສ້າງເທື່ອທຳອິດເທົ່ານັ້ນ. ຖ້າສະຫຼັບບັນຊີ (ເຊັ່ນ logout ແລ້ວ Google
+// sign-in ບັນຊີອື່ນ) ໂດຍບໍ່ restart ແອັບ, stream ເກົ່າຍັງຄ້າງ query ຫາ uid ເກົ່າ —
+// ໜ້າ jobs/earnings ຈຶ່ງບໍ່ຂຶ້ນຂໍ້ມູນຈົນກວ່າຈະ pull-to-refresh (invalidate
+// ໂດຍບັງເອີນ). watch currentUidProvider ໃນທຸກ provider ຂ້າງລຸ່ມ ບັງຄັບໃຫ້ມັນ
+// rebuild ດ້ວຍ uid ໃໝ່ທັນທີທີ່ auth state ປ່ຽນ.
+final currentUidProvider = StreamProvider<String?>((ref) {
+  return FirebaseAuth.instance.authStateChanges().map((u) => u?.uid);
+});
+
 // ── BOOKING STREAMS ──────────────────────────────────────────
 
 final activeBookingsProvider = StreamProvider<List<Booking>>((ref) {
+  ref.watch(currentUidProvider);
   return ref.watch(bookingRepoProvider).watchActiveBookings();
 });
 
 final jobHistoryProvider = StreamProvider<List<Booking>>((ref) {
+  ref.watch(currentUidProvider);
   return ref.watch(bookingRepoProvider).watchJobHistory();
 });
 
@@ -49,10 +63,12 @@ final pendingJobsProvider = Provider<List<Booking>>((ref) {
 // (Provider<AsyncValue<T>> ໃຫ້ interface ດຽວກັນກັບ StreamProvider ຕອນ watch) —
 // unassignedOpenJobsProvider ຂ້າງລຸ່ມ ແລະ home_tab.dart ຈຶ່ງບໍ່ຕ້ອງແກ້ໄຂຫຍັງເລີຍ.
 final _openJobsPublicProvider = StreamProvider<List<Booking>>((ref) {
+  ref.watch(currentUidProvider);
   return ref.watch(bookingRepoProvider).watchOpenJobsPublic();
 });
 
 final _openJobsSentToMeProvider = StreamProvider<List<Booking>>((ref) {
+  ref.watch(currentUidProvider);
   return ref.watch(bookingRepoProvider).watchOpenJobsSentToMe();
 });
 
@@ -126,24 +142,29 @@ final ongoingJobProvider = Provider<Booking?>((ref) {
 // ── EARNINGS ─────────────────────────────────────────────────
 
 final walletProvider = StreamProvider<Wallet>((ref) {
+  ref.watch(currentUidProvider);
   return ref.watch(earningsRepoProvider).watchWallet();
 });
 
 final transactionsProvider = StreamProvider<List<ProviderTransaction>>((ref) {
+  ref.watch(currentUidProvider);
   return ref.watch(earningsRepoProvider).watchTransactions();
 });
 
 // ── PROFILE ──────────────────────────────────────────────────
 
 final profileStreamProvider = StreamProvider<ProviderProfile>((ref) {
+  ref.watch(currentUidProvider);
   return ref.watch(profileRepoProvider).watchProfile();
 });
 
 final scheduleProvider = StreamProvider<WorkSchedule>((ref) {
+  ref.watch(currentUidProvider);
   return ref.watch(profileRepoProvider).watchSchedule();
 });
 
 final reviewsProvider = StreamProvider<List<Review>>((ref) {
+  ref.watch(currentUidProvider);
   return ref.watch(profileRepoProvider).watchReviews();
 });
 

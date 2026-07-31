@@ -2,13 +2,25 @@
 // earnings_tab.dart — LinTho Provider App
 // ============================================================
 
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
 import 'Booking.dart';
 import 'booking_provider.dart';
 import 'widgets/error_state_view.dart';
+
+// 🔧 [DEV] ຕື່ມຂໍ້ມູນບັນຊີ BCEL One ຈິງທີ່ LinTho ຮັບເງິນຕື່ມ wallet ຊ່າງ —
+// ຄ່ານີ້ສະແດງໃນ Top-up sheet ເທົ່ານັ້ນ, ບໍ່ກ່ຽວກັບການອະນຸມັດ (ອະນຸມັດຢູ່ຝັ່ງ
+// admin ຫຼັງກວດການໂອນຈິງ, ເບິ່ງ EarningsRepository.requestTopup()).
+const String kTopUpBankName    = 'BCEL One';
+const String kTopUpAccountName = 'LinTho Co., Ltd';
+const String kTopUpAccountNo   = '010-12-00-00000000-0';
 
 class ProviderEarningsTab extends ConsumerWidget {
   const ProviderEarningsTab({super.key});
@@ -51,7 +63,8 @@ class ProviderEarningsTab extends ConsumerWidget {
             padding: const EdgeInsets.all(20),
             children: [
               _WalletCards(wallet: wallet,
-                  onWithdraw: () => _showWithdrawalSheet(context, ref)),
+                  onWithdraw: () => _showWithdrawalSheet(context, ref),
+                  onTopUp: () => _showTopUpSheet(context, ref)),
               const SizedBox(height: 20),
               _WeeklyChart(txAsync: txAsync),
               const SizedBox(height: 20),
@@ -190,6 +203,234 @@ class ProviderEarningsTab extends ConsumerWidget {
       ),
     ).whenComplete(ctrl.dispose); // 🔒 [AUDIT L-6 / 2026-07-27] dispose the
     //                                controller once the sheet is fully closed
+  }
+
+  // ✅ [Top-up] ຄຳຂໍຕື່ມເງິນ — ສະແດງຂໍ້ມູນໂອນທະນາຄານ + QR (ເປັນ QR ຂໍ້ຄວາມ
+  // ຂໍ້ມູນບັນຊີ, ບໍ່ແມ່ນ payment QR ມາດຕະຖານ BCEL — ໃຊ້ສະແກນ/ແຕະຄັດລອກເລກບັນຊີ
+  // ໄວໆເທົ່ານັ້ນ) ພ້ອມ reference code ໃຫ້ໃສ່ຕອນໂອນ ເພື່ອໃຫ້ admin ກົງກັບຄຳຂໍນີ້
+  // ໄດ້ງ່າຍຕອນກວດ. ກົດ "ຢືນຢັນວ່າໂອນເງິນແລ້ວ" ພຽງແຕ່ສ້າງຄຳຂໍ status:'pending' —
+  // ບໍ່ໄດ້ເພີ່ມຍອດ wallet ທັນທີ (ຕ້ອງລໍ admin ກວດການໂອນຈິງກ່ອນ, ຄືກັນກັບ
+  // ຂະບວນການຖອນເງິນຂ້າງເທິງ).
+  Future<File?> _pickSlipImage(BuildContext context) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Wrap(children: [
+          ListTile(
+            leading: const Icon(Icons.camera_alt_outlined, color: C.teal),
+            title: Text(tr('take_photo')),
+            onTap: () => Navigator.pop(ctx, ImageSource.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined, color: C.teal),
+            title: Text(tr('choose_from_gallery')),
+            onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+          ),
+        ]),
+      ),
+    );
+    if (source == null) return null;
+    final picked = await ImagePicker().pickImage(
+      source: source, imageQuality: 75, maxWidth: 1600, maxHeight: 1600,
+    );
+    return picked == null ? null : File(picked.path);
+  }
+
+  void _showTopUpSheet(BuildContext context, WidgetRef ref) {
+    final ctrl = TextEditingController();
+    final uid  = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final ref6 = uid.length >= 6
+        ? uid.substring(uid.length - 6).toUpperCase()
+        : uid.toUpperCase();
+    bool submitting = false;
+    File? slipFile;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Padding(
+          padding: EdgeInsets.only(
+              left: 20, right: 20, top: 20,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24),
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const _Handle(),
+              const SizedBox(height: 16),
+              Text(tr('top_up_title'), style: const TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.w900, color: C.text)),
+              const SizedBox(height: 20),
+              Text(tr('top_up_amount_label'), style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700, color: C.text)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: ctrl,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(fontSize: 18,
+                    fontWeight: FontWeight.w800, color: C.text),
+                decoration: InputDecoration(
+                  prefixText: '₭  ',
+                  hintText: '100,000',
+                  hintStyle: const TextStyle(color: C.muted),
+                  filled: true, fillColor: C.bg,
+                  contentPadding: const EdgeInsets.all(16),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: C.border)),
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: C.border)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: C.sky, width: 2)),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(tr('top_up_note'),
+                  style: const TextStyle(fontSize: 11, color: C.muted)),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: C.bg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: C.border),
+                ),
+                child: Column(children: [
+                  Text(tr('top_up_bank_details'), style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w800, color: C.text)),
+                  const SizedBox(height: 12),
+                  QrImageView(
+                    data: '$kTopUpBankName|$kTopUpAccountNo|REF:$ref6',
+                    version: QrVersions.auto,
+                    size: 140,
+                    backgroundColor: Colors.white,
+                  ),
+                  const SizedBox(height: 12),
+                  _TopUpDetailRow(label: tr('bank_name'), value: kTopUpBankName),
+                  _TopUpDetailRow(label: tr('account_holder'), value: kTopUpAccountName),
+                  _TopUpDetailRow(label: tr('account_no'), value: kTopUpAccountNo),
+                  const SizedBox(height: 8),
+                  _TopUpDetailRow(
+                    label: tr('top_up_reference'),
+                    value: ref6,
+                    highlight: true,
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 20),
+              Text(tr('top_up_slip_label'), style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700, color: C.text)),
+              const SizedBox(height: 8),
+              InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: submitting ? null : () async {
+                  final file = await _pickSlipImage(ctx);
+                  if (file != null) setS(() => slipFile = file);
+                },
+                child: Container(
+                  height: 160,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: C.bg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: slipFile == null ? C.border : C.primary,
+                        width: slipFile == null ? 1 : 1.6),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: slipFile == null
+                      ? Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.upload_file_outlined,
+                                color: C.muted, size: 28),
+                            const SizedBox(height: 8),
+                            Text(tr('top_up_slip_hint'), style: const TextStyle(
+                                fontSize: 12, color: C.muted)),
+                          ],
+                        )
+                      : Stack(fit: StackFit.expand, children: [
+                          Image.file(slipFile!, fit: BoxFit.cover),
+                          Positioned(
+                            left: 0, right: 0, bottom: 0,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              color: Colors.black.withValues(alpha: 0.55),
+                              child: Text(tr('top_up_slip_change'),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 11)),
+                            ),
+                          ),
+                        ]),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(width: double.infinity, child: ElevatedButton(
+                onPressed: submitting ? null : () async {
+                  final amt = double.tryParse(ctrl.text.replaceAll(',', ''));
+                  if (amt == null || amt <= 0) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                        content: Text('ຈຳນວນເງິນບໍ່ຖືກຕ້ອງ'),
+                        backgroundColor: C.red));
+                    return;
+                  }
+                  if (slipFile == null) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                        content: Text(tr('top_up_slip_required')),
+                        backgroundColor: C.red));
+                    return;
+                  }
+                  setS(() => submitting = true);
+                  try {
+                    final slipUrl = await ref.read(earningsRepoProvider)
+                        .uploadTopupSlip(slipFile!);
+                    await ref.read(earningsRepoProvider)
+                        .requestTopup(amt, slipUrl: slipUrl);
+                    if (ctx.mounted) {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(tr('top_up_sent')),
+                          backgroundColor: C.success));
+                    }
+                  } catch (e) {
+                    if (ctx.mounted) {
+                      setS(() => submitting = false);
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(content: Text('$e'),
+                              backgroundColor: C.red));
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: C.primary, elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 16)),
+                child: submitting
+                    ? Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2.4, color: Colors.white)),
+                        const SizedBox(width: 10),
+                        Text(tr('top_up_slip_uploading'), style: const TextStyle(
+                            color: Colors.white, fontSize: 14)),
+                      ])
+                    : Text(tr('confirm_top_up'), style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w800,
+                        fontSize: 16)),
+              )),
+            ]),
+          ),
+        ),
+      ),
+    ).whenComplete(ctrl.dispose);
   }
 
   // 🔒 [AUDIT M-5 / 2026-07-27] ກ່ອນໜ້ານີ້ບໍ່ມີ `submitting` guard ຄືກັນກັບ
@@ -464,18 +705,21 @@ class _TxListSkeletonState extends State<_TxListSkeleton>
 class _WalletCards extends StatelessWidget {
   final Wallet        wallet;
   final VoidCallback? onWithdraw;
-  const _WalletCards({required this.wallet, this.onWithdraw});
+  final VoidCallback? onTopUp;
+  const _WalletCards({required this.wallet, this.onWithdraw, this.onTopUp});
 
   @override
   Widget build(BuildContext context) {
     return Row(children: [
       _Card(
-        amount:      _spaced(wallet.formattedBalance),
-        label:       tr('balance'),
-        icon:        Icons.account_balance_wallet_outlined,
-        color:       C.navy,
-        onTap:       onWithdraw,
-        actionLabel: '${tr("withdraw")} →',
+        amount: _spaced(wallet.formattedBalance),
+        label:  tr('balance'),
+        icon:   Icons.account_balance_wallet_outlined,
+        color:  C.navy,
+        actions: [
+          _CardAction('+ ${tr("top_up")}', onTopUp),
+          _CardAction('${tr("withdraw")} →', onWithdraw),
+        ],
       ),
       const SizedBox(width: 12),
       _Card(
@@ -492,71 +736,79 @@ class _WalletCards extends StatelessWidget {
       formatted.startsWith('₭') ? '${formatted.substring(1)} ₭' : formatted;
 }
 
-class _Card extends StatelessWidget {
-  final String        amount;
+class _CardAction {
   final String        label;
-  final IconData      icon;
-  final Color         color;
   final VoidCallback? onTap;
-  final String?       actionLabel;
+  const _CardAction(this.label, this.onTap);
+}
+
+class _Card extends StatelessWidget {
+  final String            amount;
+  final String            label;
+  final IconData           icon;
+  final Color              color;
+  final List<_CardAction>  actions;
 
   const _Card({
     required this.amount, required this.label,
     required this.icon,   required this.color,
-    this.onTap, this.actionLabel,
+    this.actions = const [],
   });
 
   @override
   Widget build(BuildContext context) {
-    // ✅ GestureDetector → Material + InkWell
-    return Expanded(child: Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
+    return Expanded(child: Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color,
         borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [BoxShadow(
-              // ✅ withOpacity → withValues
-              color: color.withValues(alpha: 0.25),
-              blurRadius: 12, offset: const Offset(0, 6),
-            )],
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ✅ withOpacity → withValues
-                Icon(icon,
-                    color: Colors.white.withValues(alpha: 0.85), size: 20),
-                const SizedBox(height: 8),
-                Text(amount, style: const TextStyle(
-                    color: Colors.white, fontSize: 22,
-                    fontWeight: FontWeight.w900)),
-                const SizedBox(height: 2),
-                Text(label, style: TextStyle(
-                  // ✅ withOpacity → withValues
-                    color: Colors.white.withValues(alpha: 0.75),
-                    fontSize: 11)),
-                if (actionLabel != null) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      // ✅ withOpacity → withValues
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(actionLabel!, style: const TextStyle(
-                        color: Colors.white, fontSize: 11,
-                        fontWeight: FontWeight.w700)),
-                  ),
-                ],
-              ]),
-        ),
+        boxShadow: [BoxShadow(
+          // ✅ withOpacity → withValues
+          color: color.withValues(alpha: 0.25),
+          blurRadius: 12, offset: const Offset(0, 6),
+        )],
       ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ✅ withOpacity → withValues
+            Icon(icon,
+                color: Colors.white.withValues(alpha: 0.85), size: 20),
+            const SizedBox(height: 8),
+            Text(amount, style: const TextStyle(
+                color: Colors.white, fontSize: 22,
+                fontWeight: FontWeight.w900)),
+            const SizedBox(height: 2),
+            Text(label, style: TextStyle(
+              // ✅ withOpacity → withValues
+                color: Colors.white.withValues(alpha: 0.75),
+                fontSize: 11)),
+            if (actions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(spacing: 6, runSpacing: 6, children: actions.map((a) =>
+                  // ✅ GestureDetector → Material + InkWell (ແຍກແຕ່ລະ pill ໃຫ້
+                  // ກົດໄດ້ເອກະລາດຈາກກັນ — card ນີ້ອາດມີ 2 ຄຳສັ່ງ, ບໍ່ໃຫ້ pill
+                  // ດຽວກັນທັງໝົດ trigger callback ດຽວ)
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: a.onTap,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          // ✅ withOpacity → withValues
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(a.label, style: const TextStyle(
+                            color: Colors.white, fontSize: 11,
+                            fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  )).toList()),
+            ],
+          ]),
     ));
   }
 }
@@ -742,11 +994,15 @@ class _TxRow extends StatelessWidget {
     TxType.withdrawal: Icons.account_balance_outlined,
     TxType.bonus:      Icons.card_giftcard_rounded,
     TxType.refund:     Icons.replay_rounded,
+    TxType.topup:      Icons.add_card_rounded,
+    TxType.adjustment: Icons.tune_rounded,
   };
 
   @override
   Widget build(BuildContext context) {
-    final color = tx.type.isCredit ? C.green : C.red;
+    // ✅ tx.isCredit (instance-level, ເບິ່ງ Booking.dart) ບໍ່ແມ່ນ tx.type.isCredit
+    // (fixed ຕໍ່ type) — admin adjustment ອາດເປັນໄດ້ທັງບວກ/ລົບດ້ວຍ type ດຽວກັນ
+    final color = tx.isCredit ? C.green : C.red;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(14),
@@ -796,6 +1052,43 @@ class _Handle extends StatelessWidget {
         decoration: BoxDecoration(
             color: C.border,
             borderRadius: BorderRadius.circular(2))));
+  }
+}
+
+class _TopUpDetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool   highlight;
+  const _TopUpDetailRow({
+    required this.label, required this.value, this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, color: C.muted)),
+          Flexible(child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: value));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('✅ ຄັດລອກແລ້ວ'), duration: Duration(seconds: 1)),
+                );
+              },
+              child: Text(value, textAlign: TextAlign.right, style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: highlight ? FontWeight.w900 : FontWeight.w700,
+                  color: highlight ? C.primary : C.text)),
+            ),
+          )),
+        ],
+      ),
+    );
   }
 }
 

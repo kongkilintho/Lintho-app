@@ -549,7 +549,8 @@ class CustomerBookingRepository {
 // ════════════════════════════════════════════════════════════
 
 class EarningsRepository {
-  final _db = FirebaseFirestore.instance;
+  final _db      = FirebaseFirestore.instance;
+  final _storage = FirebaseStorage.instance;
   // ✅ [FIX-1] ?? '' ແທນ !
   String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
@@ -583,6 +584,49 @@ class EarningsRepository {
     await _db.collection('withdrawalRequests').add({
       'providerId': _uid,
       'amount':     amount,
+      'status':     'pending',
+      'createdAt':  FieldValue.serverTimestamp(),
+    }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+        'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
+  }
+
+  // 🔒 [AUDIT CRIT-5 follow-up] file upload ໃຊ້ເວລາດົນກວ່າ Firestore query
+  // ໂດຍທຳມະຊາດ — timeout ດົນກວ່າ kNetworkOpTimeout (ຄືກັນກັບ ProfileRepository.
+  // uploadProfilePhoto/uploadKyc ຂ້າງເທິງ).
+  static const _kUploadTimeout = Duration(seconds: 30);
+
+  // ✅ [Top-up slip] ຮູບ slip ໂອນເງິນ — admin ຕ້ອງເບິ່ງຮູບນີ້ກ່ອນອະນຸມັດ (ບໍ່ມີ
+  // ຮູບ = ບໍ່ມີຫຼັກຖານການໂອນຈິງ). path ແຍກຕໍ່ provider, ຊື່ໄຟລ໌ unique ຕໍ່ຄຳຂໍ
+  // (timestamp) ບໍ່ໃຫ້ຄຳຂໍໃໝ່ຂຽນທັບຮູບຂອງຄຳຂໍເກົ່າ. ເບິ່ງ storage.rules —
+  // topupRequests/{uid}/** ຂຽນ/ອ່ານໄດ້ສະເພາະເຈົ້າຂອງ (admin ອ່ານຜ່ານ token
+  // ໃນ download URL ທີ່ເກັບໄວ້ໃນ Firestore ໂດຍກົງ, ຄືກັນກັບ KYC).
+  Future<String> uploadTopupSlip(File slip) async {
+    final fileName = 'slip_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final task = await _storage
+        .ref('topupRequests/$_uid/$fileName')
+        .putFile(slip, SettableMetadata(contentType: 'image/jpeg'))
+        .timeout(_kUploadTimeout, onTimeout: () => throw Exception(
+            'ອັບໂຫລດຮູບໝົດເວລາ, ກະລຸນາລອງໃໝ່ (upload timed out)'));
+    return task.ref.getDownloadURL().timeout(kNetworkOpTimeout,
+        onTimeout: () => throw Exception(
+            'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
+  }
+
+  // 🔒 [Top-up] ຄືກັນກັບ requestWithdrawal() — client ບໍ່ສາມາດຂຽນ
+  // wallets/{uid}.balance ຫຼື transactions/{id} ໂດຍກົງໄດ້ເລີຍ (firestore.rules
+  // ບັງຄັບໃຫ້ຜ່ານ Admin SDK ເທົ່ານັ້ນ, ເບິ່ງ [AUDIT C3]/[FOLLOWUP-1]). ຄຳຂໍນີ້ພຽງແຕ່
+  // ບັນທຶກຄວາມຕັ້ງໃຈຕື່ມເງິນ ('pending') — admin ຕ້ອງກວດການໂອນຈິງຜ່ານທະນາຄານ
+  // ກ່ອນຈຶ່ງເພີ່ມຍອດ+ສ້າງ transaction ຈິງ (ຄືກັນກັບຂະບວນການອະນຸມັດຄຳຂໍຖອນເງິນ)
+  // — ບໍ່ດັ່ງນັ້ນ provider ຄົນໃດກໍໄດ້ຈະສາມາດຕື່ມເງິນປອມເຂົ້າ wallet ຕົນເອງໄດ້
+  // ໂດຍບໍ່ຕ້ອງໂອນເງິນຈິງເລີຍ. slipUrl ບັງຄັບ (upload ກ່ອນຢູ່ UI, ເບິ່ງ
+  // earnings_tab.dart) — ບໍ່ມີຮູບ = admin ບໍ່ມີທາງກວດການໂອນໄດ້ເລີຍ.
+  Future<void> requestTopup(double amount, {required String slipUrl}) async {
+    if (_uid.isEmpty) return; // ✅ [FIX-1] guard
+    if (amount < 10000) throw Exception('ຂັ້ນຕ່ຳ ₭10,000');
+    await _db.collection('topupRequests').add({
+      'providerId': _uid,
+      'amount':     amount,
+      'slipUrl':    slipUrl,
       'status':     'pending',
       'createdAt':  FieldValue.serverTimestamp(),
     }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(

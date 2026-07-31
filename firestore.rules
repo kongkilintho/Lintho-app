@@ -132,8 +132,18 @@ service cloud.firestore {
     // ຂອງບັນຊີທີ່ login ຢູ່ — ຍົກເວັ້ນເວລາ phone_number claim ບໍ່ມີເລີຍ (ບັນຊີທີ່
     // login ຜ່ານຊ່ອງທາງອື່ນທີ່ບໍ່ແມ່ນເບີໂທ, ຖ້າມີໃນອະນາຄົດ) ເພື່ອບໍ່ໃຫ້ block flow
     // ທີ່ຖືກຕ້ອງ.
+    // 🔒 [FIX] ກ່ອນໜ້ານີ້ `request.auth.token.phone_number == null` throw
+    // evaluation error (ບໍ່ໄດ້ຄືນ null) ຖ້າ token ບໍ່ມີ claim ນີ້ເລີຍ (ບັນຊີ
+    // login ຜ່ານ Google/email ທີ່ບໍ່ເຄີຍຜ່ານ Firebase Phone Auth) — ຕ່າງຈາກ
+    // ຄອມເມັນ/ຈຸດປະສົງເດີມຂ້າງເທິງ. ຜົນຄື booking create ທຸກອັນ (ທັງ
+    // booking_form_screen.dart ແລະ quick_booking_provider.dart ຂຽນ
+    // contactPhone ສະເໝີ) ຖືກ deny ດ້ວຍ permission-denied ສຳລັບບັນຊີໃດກໍໄດ້ທີ່
+    // ບໍ່ເຄີຍຢືນຢັນເບີໂທແທ້ — ຢືນຢັນຜ່ານ Firestore emulator (rules-unit-testing):
+    // "Property phone_number is undefined on object." ຕອນນີ້ກວດ key existence
+    // ກ່ອນດ້ວຍ 'in' (ບໍ່ throw ຖ້າບໍ່ມີ, ຄືກັນກັບ pattern ອື່ນໆໃນ file ນີ້).
     function isValidContactPhone() {
       return !('contactPhone' in request.resource.data) ||
+        !('phone_number' in request.auth.token) ||
         request.auth.token.phone_number == null ||
         request.resource.data.contactPhone == request.auth.token.phone_number;
     }
@@ -394,6 +404,17 @@ service cloud.firestore {
     // ໂດຍບໍ່ຕ້ອງ login ສະເພາະ doc ນີ້ອັນດຽວ, ຄົງ isAdmin()-only write ໄວ້ຄືເກົ່າ.
     match /settings/legal {
       allow read: if true;
+    }
+
+    // settings/support (ເບີໂທ/WhatsApp/Email/ເວລາເປີດບໍລິການ ຂອງທີມ Support —
+    // ອ່ານໄດ້ໂດຍ settings/{docId} ຂ້າງເທິງແລ້ວ, ບໍ່ຕ້ອງມີ match ແຍກ) ແລະ
+    // faqs (top-level collection, ບໍ່ຢູ່ໃຕ້ settings/{docId} ຈຶ່ງຕ້ອງມີ match
+    // ຂອງຕົນເອງ — ບໍ່ດັ່ງນັ້ນຈະຕົກໄປໂດນ blanket admin-only bypass ຂ້າງເທິງ).
+    // ອ່ານໄດ້ໂດຍ user ທີ່ login ແລ້ວທຸກຄົນ (ບໍ່ແມ່ນຂໍ້ມູນລັບ), ຂຽນໄດ້ສະເພາະ admin
+    // ຜ່ານ lintho-admin.
+    match /faqs/{faqId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
     }
 
     match /bookings/{bookingId} {
@@ -674,6 +695,21 @@ service cloud.firestore {
       allow create: if isProvider() &&
         request.resource.data.providerId == request.auth.uid &&
         request.resource.data.amount is number && request.resource.data.amount > 0;
+      allow read: if isAuth() && resource.data.providerId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // 🔒 [Top-up] ຄຳຂໍຕື່ມເງິນ — pattern ດຽວກັນກັບ withdrawalRequests ຂ້າງເທິງ.
+    // client ສ້າງໄດ້ແຕ່ status:'pending' ເທົ່ານັ້ນ, ຫ້າມແກ້ໄຂ/ລຶບຫຼັງສ້າງ — ການ
+    // ອະນຸມັດ (ເພີ່ມ wallets.balance ຈິງ + ສ້າງ transactions ປະເພດ 'topup') ຕ້ອງ
+    // ຜ່ານ Admin SDK ເທົ່ານັ້ນ (ຫຼັງ admin ກວດການໂອນຈິງຜ່ານທະນາຄານແລ້ວ) —
+    // ບໍ່ດັ່ງນັ້ນ provider ຄົນໃດກໍໄດ້ຈະສາມາດຕັ້ງຄ່າ status:'completed' ເອງ ຫຼືອ້າງ
+    // ວ່າໂອນເງິນແລ້ວ ໂດຍບໍ່ຕ້ອງໂອນຈິງ.
+    match /topupRequests/{reqId} {
+      allow create: if isProvider() &&
+        request.resource.data.providerId == request.auth.uid &&
+        request.resource.data.amount is number && request.resource.data.amount > 0 &&
+        request.resource.data.status == 'pending';
       allow read: if isAuth() && resource.data.providerId == request.auth.uid;
       allow update, delete: if false;
     }

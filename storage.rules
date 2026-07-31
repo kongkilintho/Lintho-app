@@ -42,6 +42,14 @@ service firebase.storage {
       allow write: if isAuth() && isOwner(uid) && isValidImage();
     }
 
+    // ຮູບ slip ໂອນເງິນ (Top-up) — ຂໍ້ມູນການເງິນ/ທະນາຄານ, ອ່ານ/ຂຽນໄດ້ສະເພາະ
+    // ເຈົ້າຂອງເທົ່ານັ້ນ (ຄືກັນກັບ kyc/{uid} ຂ້າງເທິງ) — admin panel ອ່ານຜ່ານ
+    // download-URL token ທີ່ເກັບໄວ້ໃນ topupRequests/{id}.slipUrl ໂດຍກົງ
+    // (ບໍ່ຜ່ານ rules ນີ້), ບໍ່ຕ້ອງເປີດ read ໃຫ້ auth ໃດກໍໄດ້
+    match /topupRequests/{uid}/{fileName} {
+      allow read, write: if isAuth() && isOwner(uid) && isValidImage();
+    }
+
     // ຄ່າເລີ່ມຕົ້ນ: ປະຕິເສດທຸກຢ່າງທີ່ບໍ່ກົງກັບ path ຂ້າງເທິງ
     match /{allPaths=**} {
       allow read, write: if false;

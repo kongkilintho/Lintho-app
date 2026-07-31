@@ -44,7 +44,7 @@ extension JobStatusX on JobStatus {
   ].contains(this);
 }
 
-enum TxType { earning, withdrawal, bonus, refund }
+enum TxType { earning, withdrawal, bonus, refund, topup, adjustment }
 
 extension TxTypeX on TxType {
   String get label => switch (this) {
@@ -52,8 +52,17 @@ extension TxTypeX on TxType {
     TxType.withdrawal => 'ຖອນເງິນ',
     TxType.bonus      => 'ໂບນັດ',
     TxType.refund     => 'ຄືນເງິນ',
+    TxType.topup      => 'ຕື່ມເງິນ',
+    TxType.adjustment => 'ຍອດປັບປຸງ',
   };
-  bool get isCredit => this == TxType.earning || this == TxType.bonus;
+  // 🔒 [Admin wallet adjustment] adjustment ຄົງທີ່ false ຢູ່ນີ້ໂດຍຕັ້ງໃຈ — ນີ້
+  // ຄືຄ່າທີ່ _WeeklyChart (booking_provider.dart) ໃຊ້ກອງ "ລາຍຮັບຈິງ" ເທົ່ານັ້ນ
+  // ເຂົ້າກຣາຟ, ແລະ admin adjustment (ບໍ່ວ່າບວກ ຫຼື ຫັກ) ບໍ່ຄວນນັບເປັນຜົນງານ/
+  // ລາຍຮັບຈິງ. ສຳລັບການສະແດງເຄື່ອງໝາຍ +/- ແລະ ສີໃນລາຍການ (ProviderTransaction.
+  // isCredit ຂ້າງລຸ່ມ) ໃຊ້ເຄື່ອງໝາຍຂອງ amount ທີ່ເກັບໄວ້ຈິງແທນ — admin ອາດ
+  // ບວກ(ຄືນ)ຫຼືຫັກເງິນໄດ້ທັງສອງທິດທາງດ້ວຍ type ດຽວກັນນີ້.
+  bool get isCredit =>
+      this == TxType.earning || this == TxType.bonus || this == TxType.topup;
 }
 
 enum KycStatus { none, pending, verified, rejected }
@@ -391,9 +400,16 @@ class ProviderTransaction {
     );
   }
 
+  // ✅ [Admin wallet adjustment] ທຸກ type ອື່ນ amount ເປັນບວກສະເໝີ ແລະ sign/ສີ
+  // ມາຈາກ type.isCredit (fixed ຕໍ່ type) — ແຕ່ adjustment ອາດເປັນໄດ້ທັງບວກ
+  // (admin ຄືນເງິນ/bonus ພິເສດ) ຫຼືລົບ (admin ຫັກ) ດ້ວຍ type ດຽວກັນ, ຈຶ່ງໃຊ້
+  // ເຄື່ອງໝາຍຂອງ amount ທີ່ເກັບໄວ້ຈິງແທນສຳລັບ type ນີ້ໂດຍສະເພາະ.
+  bool get isCredit => type == TxType.adjustment ? amount >= 0 : type.isCredit;
+  double get absAmount => amount.abs();
+
   String get formattedAmount {
-    final sign = type.isCredit ? '+' : '-';
-    return '$sign${Booking._fmt(amount)}';
+    final sign = isCredit ? '+' : '-';
+    return '$sign${Booking._fmt(absAmount)}';
   }
 
   String get formattedDate {
