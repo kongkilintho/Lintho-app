@@ -13,14 +13,8 @@ import 'app_colors.dart';
 import 'app_locale.dart';
 import 'Booking.dart';
 import 'booking_provider.dart';
+import 'payment_config_provider.dart';
 import 'widgets/error_state_view.dart';
-
-// 🔧 [DEV] ຕື່ມຂໍ້ມູນບັນຊີ BCEL One ຈິງທີ່ LinTho ຮັບເງິນຕື່ມ wallet ຊ່າງ —
-// ຄ່ານີ້ສະແດງໃນ Top-up sheet ເທົ່ານັ້ນ, ບໍ່ກ່ຽວກັບການອະນຸມັດ (ອະນຸມັດຢູ່ຝັ່ງ
-// admin ຫຼັງກວດການໂອນຈິງ, ເບິ່ງ EarningsRepository.requestTopup()).
-const String kTopUpBankName    = 'BCEL One';
-const String kTopUpAccountName = 'LinTho Co., Ltd';
-const String kTopUpAccountNo   = '010-12-00-00000000-0';
 
 class ProviderEarningsTab extends ConsumerWidget {
   const ProviderEarningsTab({super.key});
@@ -244,6 +238,10 @@ class ProviderEarningsTab extends ConsumerWidget {
     final ref6 = uid.length >= 6
         ? uid.substring(uid.length - 6).toUpperCase()
         : uid.toUpperCase();
+    // ✅ [Dynamic payment config] admin ຕັ້ງຄ່າຜ່ານ lintho-admin (Settings >
+    // Payment) — ຖ້າຍັງບໍ່ທັນຕັ້ງ (qrImageUrl null), fallback ໄປໃຊ້ QR ສ້າງເອງ
+    // ຈາກຂໍ້ຄວາມຄືເກົ່າ ແທນທີ່ຈະສະແດງຮູບຫວ່າງ.
+    final cfg = ref.read(paymentConfigProvider).valueOrNull ?? PaymentConfig.fallback;
     bool submitting = false;
     File? slipFile;
 
@@ -304,16 +302,30 @@ class ProviderEarningsTab extends ConsumerWidget {
                   Text(tr('top_up_bank_details'), style: const TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w800, color: C.text)),
                   const SizedBox(height: 12),
-                  QrImageView(
-                    data: '$kTopUpBankName|$kTopUpAccountNo|REF:$ref6',
-                    version: QrVersions.auto,
-                    size: 140,
-                    backgroundColor: Colors.white,
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: cfg.qrImageUrl != null
+                        ? Image.network(
+                            cfg.qrImageUrl!,
+                            width: 140, height: 140, fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => QrImageView(
+                              data: '${cfg.bankName}|${cfg.accountNumber}|REF:$ref6',
+                              version: QrVersions.auto,
+                              size: 140,
+                              backgroundColor: Colors.white,
+                            ),
+                          )
+                        : QrImageView(
+                            data: '${cfg.bankName}|${cfg.accountNumber}|REF:$ref6',
+                            version: QrVersions.auto,
+                            size: 140,
+                            backgroundColor: Colors.white,
+                          ),
                   ),
                   const SizedBox(height: 12),
-                  _TopUpDetailRow(label: tr('bank_name'), value: kTopUpBankName),
-                  _TopUpDetailRow(label: tr('account_holder'), value: kTopUpAccountName),
-                  _TopUpDetailRow(label: tr('account_no'), value: kTopUpAccountNo),
+                  _TopUpDetailRow(label: tr('bank_name'), value: cfg.bankName),
+                  _TopUpDetailRow(label: tr('account_holder'), value: cfg.accountName),
+                  _TopUpDetailRow(label: tr('account_no'), value: cfg.accountNumber),
                   const SizedBox(height: 8),
                   _TopUpDetailRow(
                     label: tr('top_up_reference'),

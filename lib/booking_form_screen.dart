@@ -22,6 +22,7 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,6 +37,7 @@ import 'booking_provider.dart';
 import 'cloudinary_service.dart';
 import 'coupon_repository.dart';
 import 'match_screen.dart';
+import 'payment_config_provider.dart';
 import 'phone_verification.dart';
 import 'pricing_repository.dart';
 
@@ -2513,12 +2515,17 @@ class _PaymentCard extends StatelessWidget {
   );
 }
 
-class _BcelQrBox extends StatelessWidget {
+class _BcelQrBox extends ConsumerWidget {
   final BookingOrder order;
   const _BcelQrBox({required this.order});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // ✅ [Dynamic payment config] admin ຕັ້ງຄ່າຜ່ານ lintho-admin (Settings >
+    // Payment) — ຖ້າຍັງບໍ່ທັນຕັ້ງ (qrImageUrl null), fallback ໄປໃຊ້ QR ສ້າງເອງ
+    // ຈາກ order.bcelQrData ຄືເກົ່າ (ບໍ່ໃຫ້ໜ້ານີ້ຫວ່າງເປົ່າ).
+    final cfg = ref.watch(paymentConfigProvider).valueOrNull ?? PaymentConfig.fallback;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -2540,18 +2547,39 @@ class _BcelQrBox extends StatelessWidget {
             border: Border.all(
                 color: C.categoryAcAccent.withValues(alpha: 0.2)),
           ),
-          child: QrImageView(
-            data:            order.bcelQrData,
-            version:         QrVersions.auto,
-            size:            160,
-            eyeStyle: const QrEyeStyle(
-              eyeShape: QrEyeShape.square,
-              color: C.categoryAcAccent,
-            ),
-            dataModuleStyle: const QrDataModuleStyle(
-              dataModuleShape: QrDataModuleShape.square,
-              color: C.categoryAcAccent,
-            ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: cfg.qrImageUrl != null
+                ? Image.network(
+                    cfg.qrImageUrl!,
+                    width: 160, height: 160, fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => QrImageView(
+                      data:    order.bcelQrData,
+                      version: QrVersions.auto,
+                      size:    160,
+                      eyeStyle: const QrEyeStyle(
+                        eyeShape: QrEyeShape.square,
+                        color: C.categoryAcAccent,
+                      ),
+                      dataModuleStyle: const QrDataModuleStyle(
+                        dataModuleShape: QrDataModuleShape.square,
+                        color: C.categoryAcAccent,
+                      ),
+                    ),
+                  )
+                : QrImageView(
+                    data:    order.bcelQrData,
+                    version: QrVersions.auto,
+                    size:    160,
+                    eyeStyle: const QrEyeStyle(
+                      eyeShape: QrEyeShape.square,
+                      color: C.categoryAcAccent,
+                    ),
+                    dataModuleStyle: const QrDataModuleStyle(
+                      dataModuleShape: QrDataModuleShape.square,
+                      color: C.categoryAcAccent,
+                    ),
+                  ),
           ),
         ),
         const SizedBox(height: 10),
@@ -2568,7 +2596,64 @@ class _BcelQrBox extends StatelessWidget {
             style: const TextStyle(fontSize: 12, color: C.muted)),
         Text(tr('bcel_qr_generate_note'),
             style: const TextStyle(fontSize: 11, color: C.muted)),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+                color: C.categoryAcAccent.withValues(alpha: 0.2)),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            _BcelAccountRow(label: tr('bank_name'), value: cfg.bankName),
+            _BcelAccountRow(label: tr('account_holder'), value: cfg.accountName),
+            _BcelAccountRow(
+                label: tr('account_no'), value: cfg.accountNumber, copyable: true),
+          ]),
+        ),
       ]),
+    );
+  }
+}
+
+class _BcelAccountRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool   copyable;
+  const _BcelAccountRow({
+    required this.label, required this.value, this.copyable = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, color: C.muted)),
+          Flexible(child: InkWell(
+            onTap: !copyable ? null : () {
+              Clipboard.setData(ClipboardData(text: value));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('✅ ຄັດລອກແລ້ວ'),
+                    duration: Duration(seconds: 1)),
+              );
+            },
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Flexible(child: Text(value, textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w800,
+                      color: C.categoryAcAccent))),
+              if (copyable) ...[
+                const SizedBox(width: 4),
+                const Icon(Icons.copy_rounded, size: 13, color: C.categoryAcAccent),
+              ],
+            ]),
+          )),
+        ],
+      ),
     );
   }
 }

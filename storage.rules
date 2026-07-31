@@ -23,6 +23,17 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
+    // 🔒 [Payment Config] path ຂ້າງລຸ່ມ (payment_config/qr.jpg) ບໍ່ມີ "ເຈົ້າຂອງ"
+    // ຄື path ອື່ນໆຂ້າງເທິງ (ບໍ່ໄດ້ຢູ່ໃຕ້ {uid} ໃດໆ — ມີແຕ່ຄ່າດຽວໃຊ້ຮ່ວມກັນທັງ
+    // ແອັບ) — ຕ້ອງກວດວ່າຄົນຂຽນເປັນ admin ແທນ isOwner(). Storage Rules ອ່ານ
+    // Firestore ໂດຍກົງຜ່ານ firestore.get() (cross-service rules, Firebase
+    // ຮອງຮັບມາຕັ້ງແຕ່ 2023) — ໃຫ້ຄ່າດຽວກັນກັບ isAdmin()/getRole() ໃນ
+    // firestore.rules (users/{uid}.role == 'admin').
+    function isAdmin() {
+      return isAuth() &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
     // KYC ID/selfie ຮູບ — ຂໍ້ມູນລະອຽດອ່ອນທີ່ສຸດ, ອ່ານ/ຂຽນໄດ້ສະເພາະເຈົ້າຂອງ
     // ເອງເທົ່ານັ້ນ (admin ອ່ານຜ່ານ Admin SDK ຝັ່ງ server, ບໍ່ຜ່ານ rules ນີ້)
     match /kyc/{uid}/{fileName} {
@@ -48,6 +59,14 @@ service firebase.storage {
     // (ບໍ່ຜ່ານ rules ນີ້), ບໍ່ຕ້ອງເປີດ read ໃຫ້ auth ໃດກໍໄດ້
     match /topupRequests/{uid}/{fileName} {
       allow read, write: if isAuth() && isOwner(uid) && isValidImage();
+    }
+
+    // ຮູບ QR ຮັບເງິນ (BCEL One) — ຄ່າດຽວໃຊ້ຮ່ວມກັນທັງແອັບ, ອ່ານໄດ້ໂດຍ user
+    // login ໃດກໍໄດ້ (customer/provider ຕ້ອງເຫັນຕອນຈ່າຍເງິນ/ຕື່ມເງິນ), ຂຽນໄດ້
+    // ສະເພາະ admin ຜ່ານ lintho-admin (ໜ້າ Settings > Payment)
+    match /payment_config/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAdmin() && isValidImage();
     }
 
     // ຄ່າເລີ່ມຕົ້ນ: ປະຕິເສດທຸກຢ່າງທີ່ບໍ່ກົງກັບ path ຂ້າງເທິງ
