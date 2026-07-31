@@ -1799,6 +1799,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       const SizedBox(height: 12),
       _BookingReviewCard(
         order: o,
+        onEditService:  () => setState(() => _step = 1),
         onEditSchedule: () => setState(() => _step = 2),
         onEditAddress:  () => setState(() => _step = 3),
       ),
@@ -2260,10 +2261,12 @@ class _CouponBoxState extends State<_CouponBox> {
 
 class _BookingReviewCard extends StatelessWidget {
   final BookingOrder  order;
+  final VoidCallback   onEditService;
   final VoidCallback   onEditSchedule;
   final VoidCallback   onEditAddress;
   const _BookingReviewCard({
     required this.order,
+    required this.onEditService,
     required this.onEditSchedule,
     required this.onEditAddress,
   });
@@ -2291,7 +2294,7 @@ class _BookingReviewCard extends StatelessWidget {
     child: Column(children: [
       _ReviewRow(
         icon: Icons.build_outlined, label: tr('step_label_service'),
-        value: bookingCatLabel(order),
+        value: bookingCatLabel(order), onEdit: onEditService,
       ),
       const Divider(height: 20),
       _ReviewRow(

@@ -276,12 +276,29 @@ class QuickBookingNotifier extends Notifier<QuickBookingDraft> {
       // ໄດ້ພຽງແຕ່ debugPrint, ບໍ່ກະທົບ booking ທີ່ສ້າງສຳເລັດແລ້ວ.
       if (state.saveAsDefaultAddress) {
         try {
-          await db.collection('users').doc(customerId).collection('addresses').add({
-            'label': state.addressLabel ?? 'ບ້ານ',
-            'address': state.address,
-            'location': state.location,
-            'createdAt': Timestamp.fromDate(DateTime.now()),
-          });
+          final addressesRef =
+              db.collection('users').doc(customerId).collection('addresses');
+          // ✅ [FIX quick-booking dupe address] ກ່ອນຫນ້ານີ້ .add() ບໍ່ມີເງື່ອນໄຂ —
+          // ຖ້າຜູ້ໃຊ້ຕິກ "ບັນທຶກເປັນທີ່ຢູ່ຄົງທີ່" ຊ້ຳກັນຫຼາຍຄັ້ງດ້ວຍທີ່ຢູ່ດຽວກັນ
+          // (ລວມທັງເລືອກຈາກ chip ທີ່ບັນທຶກໄວ້ແລ້ວ) ຈະສ້າງ doc ຊ້ຳຂຶ້ນເລື່ອຍໆ.
+          // ຕອນນີ້ກວດຫາທີ່ຢູ່ດຽວກັນກ່ອນ — ຖ້າມີແລ້ວ update ແທນ insert ໃໝ່.
+          final existing = await addressesRef
+              .where('address', isEqualTo: state.address)
+              .limit(1)
+              .get();
+          if (existing.docs.isNotEmpty) {
+            await existing.docs.first.reference.update({
+              'label': state.addressLabel ?? 'ບ້ານ',
+              'location': state.location,
+            });
+          } else {
+            await addressesRef.add({
+              'label': state.addressLabel ?? 'ບ້ານ',
+              'address': state.address,
+              'location': state.location,
+              'createdAt': Timestamp.fromDate(DateTime.now()),
+            });
+          }
         } catch (e) {
           debugPrint('QuickBookingNotifier: saveAsDefaultAddress failed (booking already succeeded): $e');
         }

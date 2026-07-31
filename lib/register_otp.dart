@@ -1,7 +1,7 @@
 // ============================================================
 // register_otp.dart — LinTho App
 // Register — ໜ້າທຳອິດ: ເລືອກປະເພດບັນຊີ
-//   'ລູກຄ້າ' → CustomerRegisterFlow (Phone → OTP → ຂໍ້ມູນ → Selfie → Location)
+//   'ລູກຄ້າ' → CustomerRegisterFlow (Phone → OTP → ຂໍ້ມູນ+ລະຫັດຜ່ານ → Home)
 //   'ຊ່າງ'   → TechnicianRegisterScreen (ຂໍ້ມູນພື້ນຖານ + ຂໍ້ມູນເພີ່ມເຕີມ)
 // Rules:
 //   ✅ InkWell + Material ແທນ GestureDetector
@@ -16,6 +16,7 @@ import 'app_locale.dart';
 import 'brand_mark_tile.dart';
 import 'customer_register_flow.dart';
 import 'legal_content_provider.dart';
+import 'main.dart' show LoginPage;
 import 'technician_register_screen.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -114,7 +115,8 @@ class _RegisterPageState extends State<RegisterPage> {
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(4),
-                onTap: () => Navigator.pop(context),
+                onTap: () => Navigator.pushReplacement(
+                    context, MaterialPageRoute(builder: (_) => const LoginPage())),
                 child: Text(tr('login'), style: const TextStyle(
                   color: C.teal, fontWeight: FontWeight.w800,
                 )),

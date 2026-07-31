@@ -308,6 +308,14 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         await user.linkWithCredential(credential);
       }
       await user.reload();
+      // ✅ [FIX] user.reload() ອັບເດດແຕ່ FirebaseUser.phoneNumber (local field)
+      // — ບໍ່ໄດ້ອອກ ID token ໃໝ່. firestore.rules' isValidContactPhone()
+      // ອ່ານເບີໂທຈາກ request.auth.token.phone_number (claim ຝັງໃນ token ເກົ່າ),
+      // ດັ່ງນັ້ນຖ້າຜູ້ໃຊ້ປ່ຽນເບີ (updatePhoneNumber, ບໍ່ແມ່ນເບີທຳອິດ) ແລ້ວຈອງທັນທີ,
+      // token ເກົ່າຍັງມີເບີເກົ່າຢູ່ → contactPhone (ເບີໃໝ່) ບໍ່ກົງກັບ token
+      // claim (ເບີເກົ່າ) → booking create ຖືກ permission-denied ຈົນກວ່າ token
+      // ຈະ refresh ເອງ (ອາດເຖິງ 1 ຊົ່ວໂມງ). Force refresh ທັນທີບ່ອນນີ້.
+      await user.getIdToken(true);
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'phone':           _normalizedPhone,

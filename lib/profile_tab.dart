@@ -23,6 +23,8 @@ import 'Booking.dart';
 import 'booking_provider.dart';
 import 'cloudinary_service.dart';
 import 'language_selector.dart';
+import 'support_help.dart';
+import 'support_provider.dart';
 import 'widgets/stat_card.dart';
 
 // ════════════════════════════════════════════════════════════
@@ -1064,11 +1066,12 @@ class _KycScreenState extends ConsumerState<KycScreen> {
 // HELP SCREEN
 // ════════════════════════════════════════════════════════════
 
-class HelpScreen extends StatelessWidget {
+class HelpScreen extends ConsumerWidget {
   const HelpScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final info = ref.watch(supportInfoProvider).valueOrNull ?? const SupportInfo();
     return Scaffold(
       backgroundColor: C.background,
       appBar: AppBar(
@@ -1086,11 +1089,21 @@ class HelpScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (info.hours.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(info.hours, style: const TextStyle(
+                  fontSize: 12, color: C.muted)),
+            ),
           _HelpTile(Icons.phone,         tr('call_support'),
-              '020 XXXX XXXX'),
+              info.phoneDisplay, onTap: () => callSupport(context, info.phone)),
+          if (info.whatsapp.isNotEmpty)
+            _HelpTile(Icons.chat_bubble_outline, tr('whatsapp_support'),
+                info.phoneDisplay, onTap: () => whatsappSupport(context, info.whatsapp)),
           _HelpTile(Icons.chat_outlined,  tr('chat_support'),
-              'LinTho Support'),
-          _HelpTile(Icons.info_outline,   'FAQ', tr('help')),
+              info.email, onTap: () => chatSupport(context, info.email)),
+          _HelpTile(Icons.info_outline,   'FAQ', tr('help'),
+              onTap: () => showFaqSheet(context)),
         ],
       ),
     );
@@ -1098,10 +1111,11 @@ class HelpScreen extends StatelessWidget {
 }
 
 class _HelpTile extends StatelessWidget {
-  final IconData icon;
-  final String   title;
-  final String   sub;
-  const _HelpTile(this.icon, this.title, this.sub);
+  final IconData      icon;
+  final String        title;
+  final String        sub;
+  final VoidCallback  onTap;
+  const _HelpTile(this.icon, this.title, this.sub, {required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1120,7 +1134,7 @@ class _HelpTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: () {},
+          onTap: onTap,
           child: ListTile(
             leading: Container(
               width: 40, height: 40,

@@ -3,10 +3,10 @@
 // ລົງທະບຽນ 'ລູກຄ້າ' — Multi-step:
 //   Step 0: ເບີໂທລະສັບ
 //   Step 1: ຢືນຢັນ OTP (Firebase Phone Auth)
-//   Step 2: ຂໍ້ມູນສ່ວນຕົວ (ຊື່ + ລະຫັດຜ່ານ)
-//   Step 3: ເຊວຟີຢືນຢັນຕົວຕົນ (ກ້ອງໜ້າ)
-//   Step 4: ເປີດຕຳແໜ່ງ GPS
-//   → ບັນທຶກ Firestore + ເຂົ້າສູ່ໜ້າຫຼັກ (RoleRouter)
+//   Step 2: ຂໍ້ມູນສ່ວນຕົວ (ຊື່ + ລະຫັດຜ່ານ) — step ສຸດທ້າຍ
+//   → ຫຼັງສົ່ງຂໍ້ມູນສ່ວນຕົວ: ຂໍ GPS permission ອັດຕະໂນມັດ (best-effort, ບໍ່
+//     blocking — ປະຕິເສດກໍ່ຍັງເຂົ້າໄດ້), ບັນທຶກ Firestore, ແລ້ວເຂົ້າສູ່ໜ້າຫຼັກ
+//     (RoleRouter) ທັນທີ. ບໍ່ມີ Selfie KYC ຝັ່ງລູກຄ້າ (ເກັບໄວ້ສະເພາະຝັ່ງຊ່າງ).
 // Rules:
 //   ✅ withValues(alpha:) ແທນ withOpacity
 //   ✅ InkWell + Material ແທນ GestureDetector
@@ -16,18 +16,15 @@
 // ============================================================
 
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
 import 'brand_mark_tile.dart';
-import 'cloudinary_service.dart';
 import 'lao_phone.dart';
 import 'main.dart' show LoginPage;
 import 'widgets/app_text_field.dart';
@@ -56,9 +53,7 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
   bool    _showLoginLink = false;
 
   String? _verificationId;
-  File?   _selfieFile;
   double? _lat, _lng;
-  bool    _locationDeniedForever = false;
 
   // ✅ [FIX ME-AUTH-2] cooldown ຕອນ "ສົ່ງ OTP ຄືນ" — ກັນກົດຊ້ຳໆບໍ່ຈຳກັດ
   Timer?  _resendTimer;
@@ -100,7 +95,7 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
   // ດຽວກັນສະເໝີສຳລັບເບີດຽວກັນ), users/{uid} doc ຈະມີຢູ່ແລ້ວ ແລະ ການ set
   // role:'customer' ຈະຖືກຕີເປັນ "update" ບໍ່ແມ່ນ "create" → permission-denied
   // ຢູ່ security rules. ກວດຄັດປະຕິເສດແຕ່ຫົວທີ (ຫຼັງ OTP ຢືນຢັນສຳເລັດ) ເພື່ອບໍ່ໃຫ້
-  // user ເສຍເວລາຖ່າຍເຊວຟີ+ເປີດ GPS ຫຼາຍ step ແລ້ວມາລົ້ມເຫຼວຕອນຈົບ.
+  // user ເສຍເວລາໃສ່ຊື່+ລະຫັດຜ່ານແລ້ວມາລົ້ມເຫຼວຕອນຈົບ.
   Future<bool> _blockIfRoleConflict(String uid) async {
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
@@ -228,7 +223,7 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
     }
   }
 
-  // ── Step 2: ຂໍ້ມູນສ່ວນຕົວ ──────────────────────────────
+  // ── Step 2: ຂໍ້ມູນສ່ວນຕົວ (step ສຸດທ້າຍ) ─────────────────
 
   Future<void> _submitPersonalInfo() async {
     final name    = _nameCtrl.text.trim();
@@ -241,11 +236,20 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
 
     setState(() { _loading = true; _error = null; });
 
-    // ✅ DEBUG BYPASS — ບໍ່ແຕະ Firebase Auth ເລີຍ, ໄປ step ຕໍ່ໄປທັນທີ
+    // ✅ DEBUG BYPASS — ບໍ່ແຕະ Firebase Auth ເລີຍ, ຈຳລອງຈົບ flow ທັນທີ
     if (_debugBypass) {
       debugPrint('[CustomerRegisterFlow] DEBUG BYPASS — skip linkWithCredential, '
           'name=$name');
-      setState(() { _loading = false; _step = 3; });
+      await _requestLocationSilently();
+      debugPrint('[CustomerRegisterFlow] DEBUG BYPASS — flow completed (no real '
+          'write). phone=$_normalizedPhone name=$name lat=$_lat lng=$_lng');
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Debug bypass — flow ຈົບແລ້ວ (ບໍ່ໄດ້ບັນທຶກຂໍ້ມູນແທ້)'),
+        backgroundColor: C.orange,
+      ));
+      Navigator.of(context).popUntil((route) => route.isFirst);
       return;
     }
 
@@ -261,8 +265,11 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
       );
       await user.updateDisplayName(name);
 
+      // ✅ ຂໍ GPS permission ອັດຕະໂນມັດຢູ່ນີ້ (ບໍ່ແມ່ນ step ແຍກໃຫ້ກົດອີກຕໍ່ໄປ) —
+      // best-effort ເທົ່ານັ້ນ, ປະຕິເສດ/ລົ້ມເຫຼວກໍ່ຍັງເຂົ້າໜ້າຫຼັກໄດ້ຕາມປົກກະຕິ
+      await _requestLocationSilently();
       if (!mounted) return;
-      setState(() { _loading = false; _step = 3; });
+      await _finish(name);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       // 🔒 [AUDIT QA-2 / HI-AUTH-1] ກ່ອນໜ້ານີ້ 'provider-already-linked'/
@@ -293,133 +300,49 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
     );
   }
 
-  // ── Step 3: Selfie ───────────────────────────────────────
+  // ── GPS permission — ອັດຕະໂນມັດ, ບໍ່ blocking ────────────
 
-  Future<void> _takeSelfie() async {
+  Future<void> _requestLocationSilently() async {
     try {
-      final picked = await ImagePicker().pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice: CameraDevice.front,
-        imageQuality: 75,
-        maxWidth: 1280,
-        maxHeight: 1280,
-      );
-      if (picked == null || !mounted) return;
-      setState(() => _selfieFile = File(picked.path));
-    } catch (e) {
-      debugPrint('[CustomerRegisterFlow] _takeSelfie EXCEPTION: $e');
-      if (!mounted) return;
-      setState(() => _error = tr('camera_permission_error'));
-    }
-  }
-
-  void _continueAfterSelfie() {
-    if (_selfieFile == null) {
-      setState(() => _error = tr('must_take_selfie'));
-      return;
-    }
-    setState(() { _error = null; _step = 4; });
-  }
-
-  // ── Step 4: Location ─────────────────────────────────────
-
-  Future<void> _useCurrentLocation() async {
-    setState(() { _loading = true; _error = null; _locationDeniedForever = false; });
-    try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        if (!mounted) return;
-        setState(() { _loading = false; _error = tr('must_enable_location'); });
-        return;
-      }
+      if (!await Geolocator.isLocationServiceEnabled()) return;
       var perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) {
         perm = await Geolocator.requestPermission();
       }
-      if (perm == LocationPermission.deniedForever) {
-        if (!mounted) return;
-        setState(() {
-          _loading = false;
-          _error = tr('location_denied_forever');
-          _locationDeniedForever = true;
-        });
-        return;
-      }
-      if (perm == LocationPermission.denied) {
-        if (!mounted) return;
-        setState(() { _loading = false; _error = tr('must_enable_location'); });
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
         return;
       }
       final pos = await Geolocator.getCurrentPosition(
-        timeLimit: const Duration(seconds: 15),
+        timeLimit: const Duration(seconds: 10),
       );
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _lat = pos.latitude;
-        _lng = pos.longitude;
-      });
+      _lat = pos.latitude;
+      _lng = pos.longitude;
     } catch (e) {
-      debugPrint('[CustomerRegisterFlow] _useCurrentLocation EXCEPTION: $e');
-      if (!mounted) return;
-      setState(() { _loading = false; _error = tr('location_error'); });
+      // ✅ best-effort — ຄວາມຜິດພາດໃດໆບໍ່ໃຫ້ຢຸດ flow, ຕັ້ງຄ່າຕຳແໜ່ງພາຍຫຼັງໄດ້
+      debugPrint('[CustomerRegisterFlow] _requestLocationSilently EXCEPTION: $e');
     }
   }
 
   // ── Finalize: ບັນທຶກ Firestore + ເຂົ້າສູ່ໜ້າຫຼັກ ──────
 
-  Future<void> _finish() async {
-    if (_lat == null || _lng == null) {
-      setState(() => _error = tr('must_enable_location'));
-      return;
-    }
-    setState(() { _loading = true; _error = null; });
-
-    // ✅ DEBUG BYPASS — ບໍ່ຂຽນ Firestore ແທ້ (ບໍ່ມີ auth.uid ໃຫ້ໃຊ້) ພຽງແຕ່
-    // ສະແດງວ່າ flow ໄປຮອດຈົບ — print mock data ອອກ console ໃຫ້ກວດໄດ້
-    if (_debugBypass) {
-      debugPrint('[CustomerRegisterFlow] DEBUG BYPASS — flow completed (no real '
-          'write). phone=$_normalizedPhone name=${_nameCtrl.text.trim()} '
-          'lat=$_lat lng=$_lng selfie=${_selfieFile?.path}');
-      if (!mounted) return;
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Debug bypass — flow ຈົບແລ້ວ (ບໍ່ໄດ້ບັນທຶກຂໍ້ມູນແທ້)'),
-        backgroundColor: C.orange,
-      ));
-      Navigator.of(context).popUntil((route) => route.isFirst);
-      return;
-    }
-
+  Future<void> _finish(String name) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       final uid  = user?.uid;
       if (uid == null) throw Exception('no-auth-user');
 
-      // ✅ [FIX ME-AUTH-6 / Medium-2] ອັບໂຫຼດຮູບກ່ອນຂຽນ Firestore — ຖ້າ
-      // Cloudinary upload ລົ້ມເຫຼວ (offline/network drop) ຈະບໍ່ຂຽນ profile
-      // doc ເລີຍ ບໍ່ໃຫ້ບັນຊີກາຍເປັນ "active" ຄ້າງໄວ້ໂດຍບໍ່ມີຮູບຖາວອນ.
-      String photoUrl = '';
-      if (_selfieFile != null) {
-        photoUrl = await CloudinaryService.instance
-                .uploadImage(_selfieFile!, folder: 'profiles/customers/$uid') ??
-            '';
-      }
-
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'uid':         uid,
-        'displayName': _nameCtrl.text.trim(),
+        'displayName': name,
         'phone':       _normalizedPhone,
         'role':        'customer',
-        'photoUrl':    photoUrl,
+        'photoUrl':    '',
         'status':      'active',
-        'lat':         _lat,
-        'lng':         _lng,
+        if (_lat != null) 'lat': _lat,
+        if (_lng != null) 'lng': _lng,
         'createdAt':   FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-
-      if (photoUrl.isNotEmpty) {
-        await FirebaseAuth.instance.currentUser?.updatePhotoURL(photoUrl);
-      }
 
       if (!mounted) return;
       setState(() => _loading = false);
@@ -449,9 +372,7 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
   String get _stepTitle => switch (_step) {
     0 => tr('phone_step_title'),
     1 => tr('otp_step_title'),
-    2 => tr('personal_info_step_title'),
-    3 => tr('selfie_step_title'),
-    _ => tr('location_step_title'),
+    _ => tr('personal_info_step_title'),
   };
 
   @override
@@ -468,25 +389,19 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
           // ປ່ຽນ _step ກ່ອນ callback ຂອງ request ນັ້ນເຮັດວຽກແລ້ວມາ setState
           // ຜິດ step
           onPressed: _loading ? null : () {
-            // 🔒 [AUDIT QA-2 / ME-AUTH-1] ເງື່ອນໄຂເກົ່າກວດ step ປັດຈຸບັນ ບໍ່ແມ່ນ
-            // step ປາຍທາງ — ຈາກ step 2 (2>0 && 2!=1 → true) ຈະ decrement ໄປ
-            // step 1 (ໜ້າ OTP) ພໍດີ, ຂັດກັບ comment ຂ້າງລຸ່ມທີ່ຕັ້ງໃຈຫ້າມ. ຕອນນີ້
-            // ແຍກ step 2 ໃຫ້ຍ້ອນກັບໄປ step 0 ໂດຍກົງ (ຂໍ OTP ໃໝ່ຖ້າຈະແກ້ເບີ),
-            // ບໍ່ໃຫ້ຄ້າງຢູ່ step 1 ດ້ວຍ verificationId ເກົ່າ.
+            // 🔒 [AUDIT QA-2 / ME-AUTH-1] ບໍ່ໃຫ້ກັບຄືນຫາ OTP step ຫຼັງຢືນຢັນ
+            // ສຳເລັດແລ້ວ — ຈາກ step 2 (ຂໍ້ມູນສ່ວນຕົວ) ຍ້ອນກັບໄປ step 0 ໂດຍກົງ
+            // (ຂໍ OTP ໃໝ່ຖ້າຈະແກ້ເບີ), ບໍ່ໃຫ້ຄ້າງຢູ່ step 1 ດ້ວຍ verificationId ເກົ່າ.
             if (_step == 2) {
               _resendTimer?.cancel();
               setState(() {
                 _step = 0; _error = null; _showLoginLink = false;
                 _verificationId = null; _resendCooldown = 0;
                 _otpCtrl.clear();
-                // ✅ [FIX Medium-6] ລຶບ selfie/GPS ທີ່ເຄີຍຖ່າຍ/ຈັບໄວ້ ເພື່ອບໍ່ໃຫ້
-                // ຂໍ້ມູນຂອງເບີໂທເກົ່າຫຼຸດຕິດໄປກັບເບີໂທໃໝ່ທີ່ຈະລົງທະບຽນ
-                _selfieFile = null; _lat = null; _lng = null;
-                _locationDeniedForever = false;
+                // ✅ [FIX Medium-6] ລຶບ GPS ທີ່ເຄີຍຈັບໄວ້ ເພື່ອບໍ່ໃຫ້ຂໍ້ມູນຂອງເບີໂທ
+                // ເກົ່າຫຼຸດຕິດໄປກັບເບີໂທໃໝ່ທີ່ຈະລົງທະບຽນ
+                _lat = null; _lng = null;
               });
-            } else if (_step > 0 && _step != 1) {
-              // ✅ ບໍ່ໃຫ້ກັບຄືນຫາ OTP step ຫຼັງຢືນຢັນສຳເລັດແລ້ວ
-              setState(() { _step -= 1; _error = null; });
             } else {
               Navigator.pop(context);
             }
@@ -506,12 +421,12 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
           ]),
           const SizedBox(height: 20),
 
-          // ✅ [FIX ME-AUTH-3] progress indicator — flow ນີ້ມີ 5 step (0-4),
+          // ✅ [FIX ME-AUTH-3] progress indicator — flow ນີ້ມີ 3 step (0-2),
           // ກ່ອນໜ້ານີ້ບໍ່ມີວິທີໃດບອກຜູ້ໃຊ້ວ່າຍັງເຫຼືອອີກຈັກ step
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              value: (_step + 1) / 5,
+              value: (_step + 1) / 3,
               minHeight: 6,
               backgroundColor: C.border,
               valueColor: const AlwaysStoppedAnimation(C.primary),
@@ -632,25 +547,19 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
   VoidCallback _primaryAction() => switch (_step) {
     0 => _sendOtp,
     1 => _verifyOtp,
-    2 => _submitPersonalInfo,
-    3 => _continueAfterSelfie,
-    _ => _finish,
+    _ => _submitPersonalInfo,
   };
 
   String _primaryLabel() => switch (_step) {
     0 => tr('get_otp'),
     1 => tr('verify_otp'),
-    2 => tr('next'),
-    3 => tr('next'),
     _ => tr('enter_app'),
   };
 
   List<Widget> _buildStepBody() => switch (_step) {
     0 => _buildPhoneStep(),
     1 => _buildOtpStep(),
-    2 => _buildPersonalInfoStep(),
-    3 => _buildSelfieStep(),
-    _ => _buildLocationStep(),
+    _ => _buildPersonalInfoStep(),
   };
 
   List<Widget> _buildPhoneStep() => [
@@ -726,91 +635,6 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
         onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
       ),
     ),
-  ];
-
-  List<Widget> _buildSelfieStep() => [
-    Text(tr('selfie_hint'), style: const TextStyle(color: C.muted, fontSize: 13)),
-    const SizedBox(height: 16),
-    Center(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(100),
-          onTap: _takeSelfie,
-          child: Container(
-            width: 160, height: 160,
-            decoration: BoxDecoration(
-              color:  Colors.white,
-              shape:  BoxShape.circle,
-              border: Border.all(color: C.border, width: 2),
-            ),
-            child: _selfieFile == null
-                ? const Icon(Icons.camera_alt_outlined, size: 48, color: C.muted)
-                : ClipOval(child: Image.file(_selfieFile!, fit: BoxFit.cover,
-                    cacheWidth: 320, cacheHeight: 320)),
-          ),
-        ),
-      ),
-    ),
-    const SizedBox(height: 16),
-    Center(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: _takeSelfie,
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Text(
-              _selfieFile == null ? tr('take_selfie') : tr('retake_selfie'),
-              style: const TextStyle(color: C.sky, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ),
-      ),
-    ),
-  ];
-
-  List<Widget> _buildLocationStep() => [
-    Text(tr('location_hint'), style: const TextStyle(color: C.muted, fontSize: 13)),
-    const SizedBox(height: 20),
-    Center(child: Icon(Icons.location_on_outlined,
-        size: 64, color: _lat != null ? C.green : C.muted)),
-    const SizedBox(height: 12),
-    if (_lat != null)
-      Center(child: Text(tr('location_acquired'), style: const TextStyle(
-          color: C.green, fontWeight: FontWeight.w700))),
-    const SizedBox(height: 16),
-    SizedBox(
-      width: double.infinity, height: 50,
-      child: OutlinedButton.icon(
-        onPressed: _loading ? null : _useCurrentLocation,
-        icon: const Icon(Icons.my_location, color: C.teal),
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: C.border),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        ),
-        label: Text(tr('use_current_location'), style: const TextStyle(
-            color: C.text, fontWeight: FontWeight.w700)),
-      ),
-    ),
-    // ✅ [FIX Medium-5] ຖ້າ user ປະຕິເສດ GPS "ຖາວອນ" (deniedForever),
-    // ບໍ່ມີການສະແດງ dialog ຂໍສິດອີກ — ຕ້ອງພາໄປ Settings ໂດຍກົງ
-    if (_locationDeniedForever) ...[
-      const SizedBox(height: 12),
-      SizedBox(
-        width: double.infinity, height: 46,
-        child: OutlinedButton(
-          onPressed: () => Geolocator.openAppSettings(),
-          style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: C.teal),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-          child: Text(tr('open_settings'), style: const TextStyle(
-              color: C.teal, fontWeight: FontWeight.w700)),
-        ),
-      ),
-    ],
   ];
 
   Widget _fieldLabel(String text) => Text(text, style: const TextStyle(
