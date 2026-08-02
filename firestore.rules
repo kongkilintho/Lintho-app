@@ -309,7 +309,12 @@ service cloud.firestore {
            request.resource.data.additionalCharges <= 50000000)) &&
         (!('additionalChargesNote' in request.resource.data.diff(resource.data).affectedKeys()) ||
           request.resource.data.additionalChargesNote == null ||
-          request.resource.data.additionalChargesNote is string);
+          request.resource.data.additionalChargesNote is string) &&
+        // 🔒 [AUDIT BE-1 / 2026-08-02] round counter — requestAdditionalCharges()
+        // (booking_repository.dart) ເພີ່ມຂຶ້ນ 1 ທຸກຄັ້ງທີ່ຮ້ອງຂໍໃໝ່, ໃຫ້ Cloud
+        // Function ແຍກແຕ່ລະຮອບ (ບໍ່ໃຫ້ boolean ດຽວບລັອກຮອບທີ 2 ຂຶ້ນໄປ).
+        (!('additionalChargesRound' in request.resource.data.diff(resource.data).affectedKeys()) ||
+          request.resource.data.additionalChargesRound is number);
     }
 
     // 🔒 [AUDIT PROV-2 / 2026-07-30] ຊ່າງທີ່ຮັບງານໄປແລ້ວ (accepted/onTheWay/
@@ -325,7 +330,8 @@ service cloud.firestore {
         request.resource.data.cancelledBy == 'provider';
     }
 
-    // ADMIN — ອ່ານ/ຂຽນໄດ້ທັງໝົດ
+    // ADMIN — ອ່ານໄດ້ທັງໝົດ, ຂຽນໄດ້ສະເພາະ collection ທີ່ບໍ່ມີ tier-gated
+    // branch ຂອງຕົນເອງຢູ່ຂ້າງລຸ່ມ
     // 🔒 [AUDIT ADM-5 / 2026-07-30] Firestore ປະເມີນ match block ທຸກອັນທີ່ match
     // ກັບ path ດຽວກັນ ແລ້ວ OR ຜົນ allow ເຂົ້າກັນ (ບໍ່ມີ "ສະເພາະເຈາະຈົງກວ່າຊະນະ") —
     // ໝາຍຄວາມວ່າ blanket write ນີ້ຈະ grant write ໃສ່ bookings/{id} ໂດຍອັດຕະໂນມັດ
@@ -335,13 +341,35 @@ service cloud.firestore {
     // (ROLE_PERMISSIONS) ຢູ່ rule ຊັ້ນນີ້ເລີຍ. ຕອນນີ້ຍົກເວັ້ນ write ໃສ່ bookings/**
     // ອອກຈາກ blanket bypass ນີ້ໂດຍສະເພາະ — ບັງຄັບໃຫ້ໄປຜ່ານ branch ລະອຽດ
     // (isAdminRefund/isAdminCancel/isAdminEditNonCritical) ໃນ match /bookings
-    // ແທນ. read ບໍ່ຖືກແຕະ (ບໍ່ແມ່ນຈຸດອ່ອນທີ່ກວດພົບ) — ທຸກ collection ອື່ນນອກ
-    // bookings ບໍ່ຖືກກະທົບ (request.path[3] ຄືຊື່ collection ທຳອິດ, index ຫຼັງ
-    // /databases/{db}/documents/).
+    // ແທນ.
+    // 🔒 [AUDIT SEC-1/SEC-2/ADM-1 / 2026-08-02 — Critical, fresh re-audit]
+    // ຄໍາເຫັນຂ້າງເທິງແກ້ສະເພາະ 'bookings' — collection ອື່ນທີ່ ROLE_PERMISSIONS
+    // (lintho-admin src/constants/index.ts) ຈຳກັດເປັນ tier ສະເພາະ (ບໍ່ແມ່ນ admin
+    // ໃດກໍໄດ້) ຄື users(role escalation)/wallets/withdrawalRequests/
+    // topupRequests/providers/settings/coupons/transactions/reviews ຍັງຄົງຕົກ
+    // ໃສ່ blanket bypass ນີ້ຢູ່ — ໝາຍຄວາມວ່າ admin tier ໃດກໍໄດ້ (ເຊັ່ນ
+    // marketing_admin) ສາມາດ: (1) ຂຽນ users/{uid}.role='admin' +
+    // adminRole='super_admin' ໃສ່ຕົນເອງ/ຄົນອື່ນໄດ້ໂດຍກົງ (ຂ້າມ
+    // createAdminUser Cloud Function ແລະ _assertSuperAdmin() ທັງໝົດ — privilege
+    // escalation ເຕັມຮູບແບບ), (2) ອະນຸມັດການຖອນ/ຕື່ມເງິນ ຫຼື ປັບຍອດ wallet
+    // ຂອງໃຜກໍໄດ້ ທັງທີ່ ROLE_PERMISSIONS ຈຳກັດ withdrawals:approve/
+    // topups:approve/wallet:adjust ໄວ້ສະເພາະ super_admin/finance_admin,
+    // (3) ອະນຸມັດ/ປະຕິເສດ provider ຫຼືລຶບບັນຊີລູກຄ້າທັງທີ່ບໍ່ມີ providers:approve/
+    // customers:delete. lintho-admin ຝັ່ງ UI (RequireRole/hasPermission) ອ່ານຈາກ
+    // localStorage ເທົ່ານັ້ນ (ບໍ່ເຄີຍ re-verify ກັບ Firestore) ຈຶ່ງແກ້ໄຂ/ຂ້າມໄດ້ງ່າຍ
+    // ຝັ່ງ client — rules ຊັ້ນນີ້ຕ້ອງເປັນຕົວບັງຄັບຈິງ. ຕອນນີ້ຍົກເວັ້ນ collection
+    // ເຫຼົ່ານີ້ອອກຈາກ blanket write ນຳ, ບັງຄັບໃຫ້ໄປຜ່ານ getAdminRole()-gated
+    // branch ຂອງແຕ່ລະ collection ເອງ (ເບິ່ງ match ຂອງແຕ່ລະອັນຂ້າງລຸ່ມ) — ຄືກັນກັບ
+    // pattern ທີ່ໃຊ້ກັບ bookings ຢູ່ແລ້ວ. read ບໍ່ຖືກແຕະ (ບໍ່ແມ່ນຈຸດອ່ອນທີ່ກວດ
+    // ພົບ — admin ທຸກ tier ຍັງອ່ານໄດ້ທັງໝົດຄືເກົ່າ). services/banners/
+    // serviceAreas ຍັງບໍ່ຖືກຍົກເວັ້ນ (ບໍ່ມີ dedicated permission ໃນ
+    // ROLE_PERMISSIONS ໃຫ້ອ້າງອີງ — admin ໃດກໍໄດ້ຂຽນໄດ້ຄືເກົ່າ, ບໍ່ແມ່ນຈຸດອ່ອນ
+    // Critical ທີ່ກວດພົບຮອບນີ້).
     match /{document=**} {
       allow read: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
-        && request.path[3] != 'bookings';
+        && !(request.path[3] in ['bookings', 'users', 'wallets', 'withdrawalRequests',
+          'topupRequests', 'providers', 'settings', 'coupons', 'transactions']);
     }
 
     match /users/{uid} {
@@ -376,7 +404,19 @@ service cloud.firestore {
         !('rewardPoints' in request.resource.data.diff(resource.data).affectedKeys()) &&
         !('role' in request.resource.data.diff(resource.data).affectedKeys()) &&
         !('status' in request.resource.data.diff(resource.data).affectedKeys());
-      allow delete: if false;
+      // 🔒 [AUDIT SEC-1/ADM-1 / 2026-08-02] Admin ຂຽນ status/suspendReason/
+      // banReason (useSuspendCustomer/useBanCustomer/useDeleteCustomer,
+      // lintho-admin) — ຕ້ອງເປັນ customers:write tier (super_admin,
+      // operations_admin) ເທົ່ານັ້ນ. 'role' ແລະ 'adminRole' ຫ້າມຢູ່ໃນ branch
+      // ນີ້ເດັດຂາດ (hasAny denylist ຂ້າງລຸ່ມ) — ການປ່ຽນ role ເປັນ 'admin'/ຍົກລະດັບ
+      // adminRole ຕ້ອງຜ່ານ createAdminUser Cloud Function (_assertSuperAdmin())
+      // ເທົ່ານັ້ນ, ບໍ່ດັ່ງນັ້ນ admin tier ໃດກໍໄດ້ຈະສາມາດຍົກລະດັບຕົນເອງເປັນ
+      // super_admin ໄດ້ໂດຍກົງຜ່ານ path ນີ້ (ນີ້ຄືຊ່ອງໂຫວ່ຕົ້ນຕໍທີ່ພົບ).
+      allow update: if getAdminRole() in ['super_admin', 'operations_admin'] &&
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['role', 'adminRole', 'rewardPoints']);
+      // customers:delete → super_admin ເທົ່ານັ້ນ (ROLE_PERMISSIONS)
+      allow delete: if getAdminRole() == 'super_admin';
 
       match /addresses/{addrId} {
         allow read, create, delete: if isAuth() && isOwner(uid);
@@ -388,9 +428,18 @@ service cloud.firestore {
     // settings/rewards = earn/redeem rates). Customer/Provider apps ຕ້ອງອ່ານໄດ້
     // ເພື່ອກວດ maintenanceMode ແບບ live — ຂຽນໄດ້ສະເພາະ admin (explicit ຢູ່ນີ້
     // ນອກເໜືອຈາກ blanket bypass rule ຂ້າງເທິງ, ເພື່ອໃຫ້ intent ຊັດເຈນ).
+    // 🔒 [AUDIT SEC-1/ADM-1/ADM-5 / 2026-08-02] isAdmin() ບໍ່ຮູ້ຈັກ tier — admin
+    // ໃດກໍໄດ້ (ລວມທັງ support_admin/marketing_admin ທີ່ບໍ່ມີ settings:write ໃນ
+    // ROLE_PERMISSIONS) ຂຽນ settings ໄດ້ໝົດ. settings/rewards ຕ້ອງການ
+    // rewards:write (super_admin, marketing_admin — ໜ້າ Rewards ຂອງ
+    // lintho-admin) — settings/{general,payment_config,legal} ອື່ນໆຕ້ອງການ
+    // settings:write (super_admin ເທົ່ານັ້ນ, ບໍ່ມີ tier ອື່ນຖືກມອບໝາຍ permission
+    // ນີ້ໃນ ROLE_PERMISSIONS).
     match /settings/{docId} {
       allow read: if isAuth();
-      allow write: if isAdmin();
+      allow write: if docId == 'rewards'
+        ? getAdminRole() in ['super_admin', 'marketing_admin']
+        : getAdminRole() == 'super_admin';
     }
 
     // 🔒 [AUDIT M-3 / 2026-07-27] settings/legal (ເນື້ອຫາ Terms & Privacy,
@@ -507,7 +556,7 @@ service cloud.firestore {
               'providerRating', 'providerJobs', 'providerPhoto', 'acceptedAt',
               'completedAt', 'cancelReason', 'cancelledBy', 'beforePhotoUrl', 'afterPhotoUrl',
               'additionalCharges', 'additionalChargesNote', 'additionalChargesApproved',
-              'paymentStatus', 'updatedAt'])) ||
+              'additionalChargesRound', 'paymentStatus', 'updatedAt'])) ||
         // 🔒 [AUDIT H7] "ປະຕິເສດ" ວຽກທີ່ຍັງບໍ່ມີ providerId (ຢູ່ໃນ open job
         // board — ບໍ່ໄດ້ຖືກມອບໝາຍໃຫ້ໃຜສະເພາະ) ບໍ່ຄວນປ່ຽນ status ເປັນ terminal
         // 'rejected' ເລີຍ — ນັ້ນຈະເຮັດໃຫ້ provider ອື່ນທີ່ຍັງບໍ່ທັນເຫັນ/ຕັດສິນໃຈ
@@ -578,10 +627,14 @@ service cloud.firestore {
       // providers/{uid} ອ່ານໄດ້ໂດຍ user login ໃດກໍໄດ້ (line ຂ້າງເທິງ), ຖ້າ URL
       // ຮູບບັດປະຈຳຕົວ/selfie ຢູ່ນີ້ຈະຮົ່ວອອກໄປໃຫ້ທຸກຄົນອ່ານໄດ້. ຮູບ KYC ຕ້ອງເກັບ
       // ໄວ້ໃນ kyc/{uid} ເທົ່ານັ້ນ (ອ່ານໄດ້ສະເພາະເຈົ້າຂອງ/admin).
+      // 🔒 [AUDIT SEC-3 / 2026-08-02] 'phone' ຫ້າມຢູ່ doc ນີ້ນຳ pattern ດຽວກັນ —
+      // ເບີໂທຢູ່ users/{uid} ເທົ່ານັ້ນ (owner+admin ອ່ານໄດ້), acceptBooking()
+      // ອ່ານຈາກນັ້ນແທນ (booking_repository.dart).
       allow create: if isAuth() && isOwner(providerId) && isValidLatLngIfChanged() &&
         !('kycDocUrl' in request.resource.data) &&
         !('kycIdUrl' in request.resource.data) &&
         !('kycSelfieUrl' in request.resource.data) &&
+        !('phone' in request.resource.data) &&
         (!('kycStatus' in request.resource.data) ||
           request.resource.data.kycStatus in ['none', 'pending']) &&
         (!('isVerified' in request.resource.data) ||
@@ -607,7 +660,20 @@ service cloud.firestore {
         !request.resource.data.diff(resource.data).affectedKeys()
           .hasAny(['kycStatus', 'isVerified', 'rejectReason', 'suspendReason',
             'rating', 'totalJobs', 'completionRate',
-            'kycDocUrl', 'kycIdUrl', 'kycSelfieUrl']);
+            'kycDocUrl', 'kycIdUrl', 'kycSelfieUrl', 'phone']);
+
+      // 🔒 [AUDIT SEC-1/ADM-1 / 2026-08-02] Admin approve/reject/suspend
+      // (useApproveProvider/useRejectProvider/useSuspendProvider — writes
+      // kycStatus/rejectReason/suspendReason/isOnline) ແລະ generic edit
+      // (useUpdateProvider) — ຕ້ອງເປັນ providers:write/providers:approve tier
+      // (super_admin, operations_admin) ເທົ່ານັ້ນ. rating/totalJobs/
+      // completionRate ຍັງຄົງຄິດໄລ່ໄດ້ສະເພາະ Cloud Function ເທົ່ານັ້ນ (ບໍ່ໃຫ້
+      // admin ຂຽນທັບໂດຍກົງ), ແລະ kycDocUrl/kycIdUrl/kycSelfieUrl ຍັງຄົງຫ້າມຢູ່
+      // doc ນີ້ເລີຍ (ຄືກັນກັບ owner branch — KYC-1).
+      allow update: if getAdminRole() in ['super_admin', 'operations_admin'] &&
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['rating', 'totalJobs', 'completionRate',
+            'kycDocUrl', 'kycIdUrl', 'kycSelfieUrl', 'phone']);
 
       allow delete: if false;
 
@@ -639,7 +705,16 @@ service cloud.firestore {
         allow update: if isProvider() &&
           resource.data.providerId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['providerReply']);
-        allow delete: if false;
+
+        // 🔒 [AUDIT SEC-1/ADM-1 / 2026-08-02] Admin hide/restore/delete
+        // (useHideReview/useRestoreReview/useDeleteReview, lintho-admin) —
+        // ຕ້ອງເປັນ reviews:delete tier (super_admin, operations_admin,
+        // support_admin) ເທົ່ານັ້ນ. ກ່ອນໜ້ານີ້ອາໄສ blanket admin bypass ຢ່າງດຽວ
+        // (admin ໃດກໍໄດ້ເຮັດໄດ້) — ຕອນນີ້ path ນີ້ຢູ່ໃຕ້ providers/{id} ຈຶ່ງຖືກ
+        // ຍົກເວັ້ນອອກຈາກ blanket write ດ້ວຍ, ຕ້ອງມີ branch ຂອງຕົນເອງ.
+        allow update: if getAdminRole() in ['super_admin', 'operations_admin', 'support_admin'] &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'hideReason']);
+        allow delete: if getAdminRole() in ['super_admin', 'operations_admin', 'support_admin'];
       }
     }
 
@@ -659,6 +734,17 @@ service cloud.firestore {
       allow update: if isAuth() && isOwner(uid) &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['bankName', 'bankAccount', 'bankHolder', 'updatedAt']);
+
+      // 🔒 [AUDIT SEC-1/SEC-2/ADM-1 / 2026-08-02] Admin top-up approval
+      // (useApproveTopup) ແລະ manual wallet adjustment (useAdjustWalletBalance)
+      // ຂຽນ balance/totalEarnings ໂດຍກົງ — ROLE_PERMISSIONS ຈຳກັດ wallet:adjust/
+      // topups:approve ໄວ້ສະເພາະ super_admin/finance_admin, ແຕ່ blanket bypass
+      // ເກົ່າອະນຸຍາດ admin tier ໃດກໍໄດ້. ຈຳກັດ field ໃຫ້ຂຽນໄດ້ສະເພາະ
+      // balance/totalEarnings (ບໍ່ແຕະ bankName/bankAccount/bankHolder ຂອງ
+      // ຊ່າງ, ຄືກັນກັບ owner branch ຂ້າງເທິງທີ່ຈຳກັດກົງກັນຂ້າມ).
+      allow update: if getAdminRole() in ['super_admin', 'finance_admin'] &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['balance', 'totalEarnings', 'updatedAt']);
       allow delete: if false;
 
       // Voucher ອອກໂດຍ Cloud Function (Admin SDK) ເທົ່ານັ້ນ — client ອ່ານໄດ້
@@ -681,6 +767,12 @@ service cloud.firestore {
       // ກໍໄດ້ສາມາດ inject ລາຍການ earning/bonus ປອມໃສ່ ledger ຂອງຕົນເອງໄດ້ໂດຍກົງ.
       // ຜູ້ຂຽນທີ່ຖືກຕ້ອງມີແຕ່ onBookingStatusChange (Admin SDK) ເທົ່ານັ້ນ.
       allow create: if false;
+      // 🔒 [AUDIT SEC-1/SEC-2/ADM-1 / 2026-08-02] useApproveTopup ແລະ
+      // useAdjustWalletBalance (lintho-admin) ຂຽນ ledger entry ປະເພດ
+      // 'topup'/'adjustment' ພ້ອມກັນກັບການປັບ wallets.balance ຂ້າງເທິງ (ໃນ
+      // transaction ດຽວກັນ) — ຕ້ອງເປັນ tier ດຽວກັນ (super_admin, finance_admin)
+      // ຄືກັບ wallet:adjust/topups:approve.
+      allow create: if getAdminRole() in ['super_admin', 'finance_admin'];
       allow update, delete: if false;
     }
 
@@ -696,7 +788,13 @@ service cloud.firestore {
         request.resource.data.providerId == request.auth.uid &&
         request.resource.data.amount is number && request.resource.data.amount > 0;
       allow read: if isAuth() && resource.data.providerId == request.auth.uid;
-      allow update, delete: if false;
+      // 🔒 [AUDIT SEC-1/SEC-2/ADM-1 / 2026-08-02] Admin approve/reject
+      // (useApproveWithdrawal/useRejectWithdrawal/useUpdateWithdrawal,
+      // lintho-admin) — ຕ້ອງເປັນ withdrawals:approve tier (super_admin,
+      // finance_admin) ເທົ່ານັ້ນ. ກ່ອນໜ້ານີ້ admin tier ໃດກໍໄດ້ອະນຸມັດການຖອນເງິນ
+      // ໄດ້ໂດຍກົງຜ່ານ blanket bypass.
+      allow update: if getAdminRole() in ['super_admin', 'finance_admin'];
+      allow delete: if false;
     }
 
     // 🔒 [Top-up] ຄຳຂໍຕື່ມເງິນ — pattern ດຽວກັນກັບ withdrawalRequests ຂ້າງເທິງ.
@@ -711,7 +809,11 @@ service cloud.firestore {
         request.resource.data.amount is number && request.resource.data.amount > 0 &&
         request.resource.data.status == 'pending';
       allow read: if isAuth() && resource.data.providerId == request.auth.uid;
-      allow update, delete: if false;
+      // 🔒 [AUDIT SEC-1/SEC-2/ADM-1 / 2026-08-02] Admin approve/reject
+      // (useApproveTopup/useRejectTopup, lintho-admin) — ຕ້ອງເປັນ
+      // topups:approve tier (super_admin, finance_admin) ເທົ່ານັ້ນ.
+      allow update: if getAdminRole() in ['super_admin', 'finance_admin'];
+      allow delete: if false;
     }
 
     match /services/{serviceId} {
@@ -745,6 +847,14 @@ service cloud.firestore {
         (!('ownerId' in resource.data) || resource.data.ownerId == null ||
           resource.data.ownerId == request.auth.uid);
       allow create, delete: if false;
+
+      // 🔒 [AUDIT SEC-1/ADM-1 / 2026-08-02] Admin create/edit/delete coupon
+      // (useCreateCoupon/useUpdateCoupon (via generic update)/useDeleteCoupon,
+      // lintho-admin Promotions page) — ຕ້ອງເປັນ promotions:write/
+      // promotions:delete tier (super_admin, marketing_admin) ເທົ່ານັ້ນ.
+      allow create: if getAdminRole() in ['super_admin', 'marketing_admin'];
+      allow update: if getAdminRole() in ['super_admin', 'marketing_admin'];
+      allow delete: if getAdminRole() in ['super_admin', 'marketing_admin'];
     }
 
     // ລູກຄ້າສ້າງ request ແລກແຕ້ມ — onRewardRedemptionRequested (Cloud Function,

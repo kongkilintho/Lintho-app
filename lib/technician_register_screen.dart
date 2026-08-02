@@ -33,11 +33,23 @@ import 'lao_phone.dart';
 import 'main.dart' show LoginPage;
 import 'widgets/app_text_field.dart';
 
+// 🔒 [AUDIT PROV-1 / 2026-08-02 — Critical, fresh re-audit] ກ່ອນໜ້ານີ້ id
+// ເຫຼົ່ານີ້ ('aircon'/'maid'/'electrician'/'plumber') ຖືກຂຽນລົງ
+// providers/{uid}.serviceTypes ໂດຍກົງ (ເບິ່ງ _finish() ຂ້າງລຸ່ມ) — ແຕ່ booking
+// ຈິງທຸກອັນ (ທັງ booking_form_screen.dart ແລະ quick_booking_provider.dart) ໃຊ້
+// ສະເພາະ ServiceCategoryKey.key ('ac_clean'/'house_clean', ເບິ່ງ
+// booking_form_screen.dart) ເປັນ category — ບໍ່ມີ overlap ກັນເລີຍ. ຜົນຄື
+// isJobVisibleToProvider() (booking_provider.dart) ແລະ match_screen.dart's
+// top-3 query (arrayContains: category) ບໍ່ເຄີຍພົບຊ່າງທີ່ຫາກໍລົງທະບຽນຈັກເທື່ອ —
+// ຊ່າງໃໝ່ບໍ່ໄດ້ວຽກເລີຍຈົນກວ່າຈະໄປພົບ ແລະ ດັດແປງ Profile → My Services ເອງ (ບໍ່
+// ແມ່ນສ່ວນໜຶ່ງຂອງ onboarding). ຕອນນີ້ໃຊ້ id ດຽວກັນກັບ ServiceCategoryKey.key
+// (ຄືກັນກັບ profile_tab.dart's ServicesScreen._all, ຫຼັງແກ້ໄຂ) ແລະ label key
+// ດຽວກັນກັບ card ໜ້າ Home ຂອງລູກຄ້າ (svc_ac_clean/svc_house_clean,
+// main.dart:1048/1060) ເພື່ອຮັບປະກັນວ່າ 3 ບ່ອນນີ້ (ລົງທະບຽນ/ຕັ້ງຄ່າ/booking)
+// ໃຊ້ vocabulary ດຽວກັນສະເໝີ.
 const _serviceCategories = <(String id, String labelKey)>[
-  ('aircon',       'service_aircon'),
-  ('maid',         'service_maid'),
-  ('electrician',  'service_electrician'),
-  ('plumber',      'service_plumber'),
+  ('ac_clean',    'svc_ac_clean'),
+  ('house_clean', 'svc_house_clean'),
 ];
 
 class TechnicianRegisterScreen extends StatefulWidget {
@@ -503,9 +515,16 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
       }, SetOptions(merge: true));
 
       final expYears = int.tryParse(_experienceCtrl.text.trim()) ?? 0;
+      // 🔒 [AUDIT SEC-3 / 2026-08-02 — High, fresh re-audit] providers/{uid}
+      // ອ່ານໄດ້ໂດຍ user login ໃດກໍໄດ້ (isAuth() ຢ່າງດຽວ, ບໍ່ຕ້ອງມີ booking ຮ່ວມກັນ
+      // ເລີຍ — ຈຳເປັນສຳລັບ match_screen.dart's top-3 query ທີ່ browse ຫຼາຍຊ່າງ
+      // ພ້ອມກັນ). ບໍ່ຂຽນ 'phone' ໃສ່ doc ນີ້ອີກຕໍ່ໄປ — ເບີໂທຢູ່ users/{uid} ຢູ່ແລ້ວ
+      // (ຂ້າງເທິງ, owner+admin ອ່ານໄດ້ເທົ່ານັ້ນ), ແລະ acceptBooking()
+      // (booking_repository.dart) ອ່ານຈາກນັ້ນແທນຕອນ denormalize providerPhone
+      // ໃສ່ booking. firestore.rules ຫ້າມ field ນີ້ຢູ່ doc ນີ້ນຳ (defense-in-depth
+      // ຄືກັນກັບ KYC-1).
       batch.set(FirebaseFirestore.instance.collection('providers').doc(uid), {
         'displayName':     name,
-        'phone':           _normalizedPhone,
         'isOnline':        false,
         'status':          'pending',
         'kycStatus':       'pending',
@@ -525,8 +544,10 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
       if (!mounted) return;
       setState(() => _loading = false);
 
-      // ✅ RoleRouter ຈະອ່ານ status == 'pending' ແລະ ພາໄປ PendingApprovalScreen
+      // ✅ [AUDIT ADM-2 / 2026-08-02] RoleRouter ຈະອ່ານ providers/{uid}.kycStatus
+      // (ບໍ່ແມ່ນ users/{uid}.status ອີກຕໍ່ໄປ) ແລະ ພາໄປ PendingApprovalScreen
       // ໂດຍອັດຕະໂນມັດ — ບໍ່ມີທາງກັບຄືນໄປ Home ໄດ້ ຈົນກວ່າ Admin ຈະ Approve
+      // (ຂຽນ kycStatus:'verified' ຜ່ານ lintho-admin)
       Navigator.of(context).popUntil((route) => route.isFirst);
     } on FirebaseException catch (e) {
       if (!mounted) return;

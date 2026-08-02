@@ -44,5 +44,12 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# 🔒 [AUDIT PERF-6 / 2026-08-02] Release signing credentials — never commit.
+# Copy android/key.properties.example to android/key.properties and fill in
+# real values (kept locally / in CI secrets only).
+/android/key.properties
+*.jks
+*.keystore
+
 # Claude Code harness runtime state — changes on every run, not project config
 .claude/scheduled_tasks.lock

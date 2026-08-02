@@ -678,15 +678,16 @@ class ServicesScreen extends ConsumerStatefulWidget {
 class _ServicesScreenState extends ConsumerState<ServicesScreen> {
   late Set<String> _selected;
 
+  // 🔒 [AUDIT PROV-1 / 2026-08-02 — Critical, fresh re-audit] ກ່ອນໜ້ານີ້ list ນີ້
+  // ມີ 8 category (ac_install/ac_repair/ac_clean/house_clean/maid/beauty/spa/
+  // massage) — ແຕ່ booking ຈິງ (booking_form_screen.dart's ServiceCategoryKey)
+  // ໃຊ້ສະເພາະ 'ac_clean'/'house_clean' ເທົ່ານັ້ນ. ຊ່າງທີ່ເລືອກ 6 category ອື່ນ
+  // (ບໍ່ວ່າຈາກໜ້ານີ້ ຫຼື ຈາກ technician_register_screen.dart ເກົ່າ) ຈະບໍ່ຖືກ
+  // match_screen.dart's top-3 query ຫຼື isJobVisibleToProvider() ຈັບຄູ່ວຽກໃຫ້
+  // ຈັກເທື່ອ — ຕັດອອກໃຫ້ເຫຼືອສະເພາະ category ທີ່ມີວຽກຈິງ.
   final _all = const [
-    {'emoji': '❄️', 'key': 'ac_install'},
-    {'emoji': '🔧', 'key': 'ac_repair'},
     {'emoji': '💧', 'key': 'ac_clean'},
     {'emoji': '🧹', 'key': 'house_clean'},
-    {'emoji': '👩', 'key': 'maid'},
-    {'emoji': '💄', 'key': 'beauty'},
-    {'emoji': '✨', 'key': 'spa'},
-    {'emoji': '💆', 'key': 'massage'},
   ];
 
   @override

@@ -43,6 +43,18 @@ class ProviderHomeTab extends ConsumerWidget {
     final profileAsync  = ref.watch(profileStreamProvider);
     final openJobs       = ref.watch(unassignedOpenJobsProvider);
 
+    // 🔒 [AUDIT PROV-4 / 2026-08-02 — High, fresh re-audit] ກ່ອນໜ້ານີ້ offline
+    // ຈະປ່ຽນທັງໜ້າ (ລວມທັງວຽກທີ່ຮັບໄປແລ້ວ/ກຳລັງເຮັດຢູ່) ໄປເປັນ _OfflineView
+    // ທັນທີ — ຊ່າງທີ່ຮັບວຽກໄປແລ້ວແລ້ວກົດອອບໄລນ໌ (ໂດຍບໍ່ໄດ້ຕັ້ງໃຈ ຫຼື ຢາກຢຸດຮັບ
+    // ວຽກໃໝ່) ຈະບໍ່ເຫັນວຽກທີ່ຕົນເອງກຳລັງເຮັດຢູ່ເລີຍ, ບໍ່ມີທາງກັບໄປເບິ່ງ/ດຳເນີນການ
+    // ຕໍ່ໄດ້ນອກຈາກກົດອອນລາຍກັບຄືນ. ຕອນນີ້ ຖ້າມີວຽກທີ່ບໍ່ແມ່ນ 'pending' (ຮັບໄປແລ້ວ
+    // ຫຼືກຳລັງດຳເນີນການ) ຢູ່, ຍັງສະແດງໃຫ້ເຫັນ/ຈັດການໄດ້ຄືເກົ່າແມ່ນເວລາອອບໄລນ໌ —
+    // ຈຳກັດສະເພາະສ່ວນ "ວຽກໃໝ່"/"ວຽກເປີດ" (pending/openJobs) ທີ່ຖືກເຊື່ອງໄວ້
+    // ຕອນອອບໄລນ໌.
+    final activeJobsOffline = bookingsAsync.valueOrNull
+            ?.where((b) => b.status != JobStatus.pending).toList() ??
+        const <Booking>[];
+
     return Scaffold(
       backgroundColor: C.background,
       body: SafeArea(
@@ -54,7 +66,9 @@ class ProviderHomeTab extends ConsumerWidget {
           ),
           Expanded(
             child: !isOnline
-                ? const _OfflineView()
+                ? (activeJobsOffline.isNotEmpty
+                    ? _JobListView(bookings: activeJobsOffline, openJobs: const [])
+                    : const _OfflineView())
                 : bookingsAsync.when(
               loading: () => ListView.builder(
                 padding: const EdgeInsets.all(16),

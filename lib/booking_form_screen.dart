@@ -515,8 +515,13 @@ class BookingOrder {
       priceMode == PriceMode.room &&
       roomType == null;
 
+  // 🔒 [AUDIT CUST-1 / 2026-08-02 — High, fresh re-audit] ກ່ອນໜ້ານີ້ໃຊ້
+  // grandTotal (ລາຄາກ່ອນຫັກສ່ວນຫຼຸດ) — ຖ້າລູກຄ້າໃສ່ຄູປອງ, Bill Card ຂ້າງເທິງ
+  // (ໃຊ້ discountedTotal ຢູ່ແລ້ວ) ແລະ ຄ່າທີ່ບັນທຶກລົງ Firestore ('price':
+  // discountedTotal, ເບິ່ງ toFirestore() ຂ້າງລຸ່ມ) ຈະບໍ່ກົງກັບຈຳນວນທີ່ QR ນີ້ບອກ
+  // ໃຫ້ໂອນ — ລູກຄ້າຖືກບອກໃຫ້ໂອນຫຼາຍກວ່າລາຄາຈິງ. ໃຊ້ discountedTotal ດຽວກັນນຳ.
   String get bcelQrData =>
-      'BCEL|LINTHO|LAK|$grandTotal|LinTho Service';
+      'BCEL|LINTHO|LAK|${discountedTotal.round()}|LinTho Service';
 
   Map<String, dynamic> toFirestore(
       String userId, String userName, String phone) {
@@ -2586,7 +2591,9 @@ class _BcelQrBox extends ConsumerWidget {
         Text(
           order.isQuote
               ? tr('bcel_qr_confirm_note')
-              : '${AppPricing.fmt(order.grandTotal)} ${tr("kip_currency")}',
+              // 🔒 [AUDIT CUST-1 / 2026-08-02] discountedTotal ດຽວກັນກັບ
+              // bcelQrData ຂ້າງເທິງ ແລະ Bill Card — ບໍ່ໃຊ້ grandTotal ອີກຕໍ່ໄປ.
+              : '${AppPricing.fmt(order.discountedTotal.round())} ${tr("kip_currency")}',
           style: const TextStyle(
               fontSize: 13, fontWeight: FontWeight.w700,
               color: C.categoryAcAccent),

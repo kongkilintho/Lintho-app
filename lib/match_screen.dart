@@ -115,6 +115,18 @@ class _MatchScreenState extends State<MatchScreen>
   // re-used by every _findAndSendTop3() retry instead of re-fetching.
   String? _cachedCategory;
 
+  // 🔒 [AUDIT CUST-2 / 2026-08-02 — High, fresh re-audit] booking ທີ່ຖືກສ້າງ
+  // ຈາກ "ຈອງດຽວນີ້" ໃນໜ້າໂປຣໄຟລ໌ຊ່າງສະເພາະຄົນ (provider_details_screen.dart)
+  // ມີ providerId ຕັ້ງໄວ້ແລ້ວຕັ້ງແຕ່ສ້າງ — ແຕ່ _findAndSendTop3() ຂ້າງລຸ່ມ ບໍ່ເຄີຍ
+  // ຮູ້ຈັກຄ່ານີ້ເລີຍ, ແລ່ນ top-3 auto-match ຄືກັນທຸກ booking. ນອກຈາກຈະ "ບໍ່
+  // ຮັບປະກັນ" ວ່າຊ່າງທີ່ຖືກເລືອກຈະໄດ້ຮັບຄຳຂໍ, ຍັງເປັນຊ່ອງໂຫວ່ດ້ານຄວາມປອດໄພນຳ —
+  // _sendRequestToTop3() ຂຽນ sentTo=[3 ຄົນທີ່ oto-match ຫາໄດ້] ໂດຍກົງ, ເຮັດໃຫ້
+  // isOpenOrTargeted()/isValidSentToTargeting() (firestore.rules) ອະນຸຍາດ
+  // ຄົນອື່ນນອກຈາກຊ່າງທີ່ຖືກເລືອກ ອ່ານ/ຮັບ booking ນີ້ໄດ້ (ຂຽນທັບ providerId
+  // ຂອງຕົນເອງ). ຕອນນີ້ ຖ້າ booking ມີ providerId ມາແລ້ວ, ສົ່ງຄຳຂໍໃຫ້ຄົນນັ້ນ
+  // ຄົນດຽວເທົ່ານັ້ນ (ຂ້າມ top-3 search ທັງໝົດ) — ເບິ່ງ _findAndSendTop3().
+  String? _directProviderId;
+
   // ════════════════════════════════════════════════════════
   // LIFECYCLE
   // ════════════════════════════════════════════════════════
@@ -195,6 +207,8 @@ class _MatchScreenState extends State<MatchScreen>
         category = d['category']     as String? ?? category;
         _custLat ??= (d['lat'] as num?)?.toDouble();
         _custLng ??= (d['lng'] as num?)?.toDouble();
+        final pid = d['providerId'] as String?;
+        if (pid != null && pid.isNotEmpty) _directProviderId = pid;
       }
     } catch (e) {
       debugPrint('loadBookingMeta: $e');
@@ -223,6 +237,25 @@ class _MatchScreenState extends State<MatchScreen>
 
   Future<void> _findAndSendTop3({bool widen = false}) async {
     try {
+      // 🔒 [AUDIT CUST-2 / 2026-08-02] booking ນີ້ຖືກຈອງໃສ່ຊ່າງສະເພາະຄົນໂດຍກົງ —
+      // ຂ້າມ top-3 auto-match ທັງໝົດ, ສົ່ງຄຳຂໍໃຫ້ຄົນນັ້ນຄົນດຽວ. ດຶງໂປຣໄຟລ໌ຂອງ
+      // ຊ່າງຄົນນັ້ນມາໃສ່ _top3 (1 ຄົນ) ເພື່ອໃຫ້ໜ້າ "ກຳລັງລໍຖ້າ" ຂ້າງລຸ່ມສະແດງຊື່/
+      // ຮູບ/ຄະແນນຊ່າງທີ່ຖືກເລືອກໄດ້ຄືເກົ່າ (ແທນທີ່ຈະຫວ່າງເປົ່າ).
+      if (_directProviderId != null && _directProviderId!.isNotEmpty) {
+        try {
+          final pDoc = await _db.collection('providers').doc(_directProviderId!).get();
+          if (pDoc.exists) _top3 = [ProviderModel.fromDoc(pDoc)];
+        } catch (_) {}
+        final sent = await _sendRequestToIds([_directProviderId!]);
+        if (!mounted) return;
+        if (!sent) {
+          _scheduleRetry();
+          return;
+        }
+        setState(() => _state = _MatchState.waiting);
+        return;
+      }
+
       // 🔒 [AUDIT M-8 / 2026-07-27] ໃຊ້ _cachedCategory ທີ່ _loadBookingMeta()
       // ຕັ້ງໄວ້ແລ້ວ ແທນການ re-fetch booking doc ນີ້ຄືນທຸກຄັ້ງທີ່ retry —
       // category ບໍ່ເຄີຍປ່ຽນຫຼັງ booking ຖືກສ້າງ. Fallback ໄປ query ຄືນສະເພາະ
@@ -318,7 +351,7 @@ class _MatchScreenState extends State<MatchScreen>
       _top3 = providers.take(3).toList();
 
       // 6. ຂຽນ sentTo + ສົ່ງ notification ໃຫ້ Top 3
-      final sent = await _sendRequestToTop3(_top3);
+      final sent = await _sendRequestToIds(_top3.map((p) => p.uid).toList());
 
       if (!mounted) return;
       // 🔒 [AUDIT M-6 / 2026-07-27] ກ່ອນໜ້ານີ້ transition ໄປ 'waiting'
@@ -365,9 +398,12 @@ class _MatchScreenState extends State<MatchScreen>
   // ຮູ້ໄດ້ວ່າ write ນີ້ຈິງໆສຳເລັດ ຫຼື ບໍ່ — ກ່ອນໜ້ານີ້ error ຖືກ swallow ງຽບໆຢູ່
   // ນີ້, caller ຈຶ່ງສະແດງ UI "ສົ່ງແລ້ວ" ໂດຍບໍ່ຮູ້ຕົວວ່າ write ລົ້ມເຫຼວ. retry
   // ໜຶ່ງຄັ້ງເອງພາຍໃນ (transient ອິນເຕີເນັດຂາດຊົ່ວຄາວ) ກ່ອນຍອມແພ້.
-  Future<bool> _sendRequestToTop3(List<ProviderModel> top3) async {
-    if (top3.isEmpty) return false;
-    final ids = top3.map((p) => p.uid).toList();
+  // 🔒 [AUDIT CUST-2 / 2026-08-02] renamed from _sendRequestToTop3 — now takes
+  // raw provider IDs so it can serve both the top-3 auto-match list AND a
+  // single directly-chosen provider (_directProviderId) with the same
+  // atomic-write/retry logic.
+  Future<bool> _sendRequestToIds(List<String> ids) async {
+    if (ids.isEmpty) return false;
 
     Future<bool> attempt() async {
       try {

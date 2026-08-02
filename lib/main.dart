@@ -228,12 +228,38 @@ class _RoleRouterState extends State<RoleRouter> {
         if (snapshot.data?.exists != true) {
           return const _IncompleteRegistrationScreen();
         }
-        final data   = snapshot.data?.data() as Map<String, dynamic>?;
-        final role   = data?['role'] as String? ?? 'customer';
-        final status = data?['status'] as String? ?? 'active';
+        final data = snapshot.data?.data() as Map<String, dynamic>?;
+        final role = data?['role'] as String? ?? 'customer';
+        // 🔒 [AUDIT ADM-2 / 2026-08-02 — High, fresh re-audit] users/{uid}.status
+        // ('pending' ຕັ້ງຄັ້ງດຽວຕອນລົງທະບຽນ ໂດຍ technician_register_screen.dart —
+        // ບໍ່ມີບ່ອນໃດອື່ນຂຽນທັບຄືນອີກ) ບໍ່ກົງກັບສິ່ງທີ່ lintho-admin (Approve/
+        // Reject/Suspend Provider) ຂຽນຈິງ — admin ຂຽນ providers/{uid}.kycStatus
+        // ເທົ່ານັ້ນ. ຜົນຄື ຊ່າງທີ່ຖືກອະນຸມັດແລ້ວຄ້າງຢູ່ PendingApprovalScreen
+        // ຕະຫຼອດໄປ (ບໍ່ມີຫຍັງໄປປ່ຽນ users.status ໃຫ້). ຕອນນີ້ອ່ານ
+        // providers/{uid}.kycStatus ໂດຍກົງແທນ — field ດຽວກັນກັບທີ່
+        // isVerifiedProvider() ຢູ່ firestore.rules ໃຊ້ຕັດສິນວ່າຊ່າງຮັບງານໄດ້ບໍ່
+        // ຢູ່ແລ້ວ (single source of truth ດຽວກັນ, ບໍ່ຕ້ອງເພິ່ງ 2 field ທີ່ອາດ
+        // drift ຈາກກັນ). ເປັນ bonus fix ນຳ: reject/suspend ຕອນນີ້ບັງຄັບແທ້
+        // (ກ່ອນໜ້ານີ້ status != 'pending' ໝາຍຄວາມວ່າຊ່າງທີ່ຖືກ reject/suspend
+        // ຍັງເຂົ້າ ProviderDashboard ໄດ້ຢູ່ດີ ເພາະ status ບໍ່ເຄີຍຖືກຂຽນເປັນຄ່າອື່ນ
+        // ນອກຈາກ 'pending' ເລີຍ).
         if (role == 'provider') {
-          if (status == 'pending') return const PendingApprovalScreen();
-          return const ProviderDashboard();
+          return StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('providers').doc(user.uid).snapshots(),
+            builder: (context, provSnapshot) {
+              if (provSnapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                  backgroundColor: C.background,
+                  body: _RoleRouterSkeleton(),
+                );
+              }
+              final kycStatus = (provSnapshot.data?.data()
+                  as Map<String, dynamic>?)?['kycStatus'] as String?;
+              if (kycStatus == 'verified') return const ProviderDashboard();
+              return const PendingApprovalScreen();
+            },
+          );
         }
         return const MainShell();
       },
@@ -434,7 +460,11 @@ class _LoginPageState extends State<LoginPage>
 
       final user = userCred.user;
       String role = 'customer';
-      String status = 'active';
+      // 🔒 [AUDIT ADM-2 / 2026-08-02] users/{uid}.status ບໍ່ກົງກັບສິ່ງທີ່ admin
+      // approve/reject/suspend ຂຽນຈິງ (providers/{uid}.kycStatus) — ເບິ່ງ
+      // ຄໍາເຫັນລະອຽດຢູ່ _RoleRouterState.build ຂ້າງເທິງ. ໃຊ້ kycStatus ດຽວກັນນຳ
+      // ບ່ອນນີ້ ເພື່ອບໍ່ໃຫ້ຊ່າງທີ່ login ຜ່ານ Google ຖືກຕັດສິນຜິດ.
+      String? kycStatus;
       if (user != null) {
         final doc = FirebaseFirestore.instance.collection('users').doc(user.uid);
         final snap = await doc.get();
@@ -449,8 +479,12 @@ class _LoginPageState extends State<LoginPage>
           });
         } else {
           final data = snap.data();
-          role   = data?['role'] as String? ?? 'customer';
-          status = data?['status'] as String? ?? 'active';
+          role = data?['role'] as String? ?? 'customer';
+          if (role == 'provider') {
+            final provSnap = await FirebaseFirestore.instance
+                .collection('providers').doc(user.uid).get();
+            kycStatus = provSnap.data()?['kycStatus'] as String?;
+          }
         }
       }
       if (!mounted) return;
@@ -460,9 +494,9 @@ class _LoginPageState extends State<LoginPage>
       if (role == 'provider') {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
-            builder: (_) => status == 'pending'
-                ? const PendingApprovalScreen()
-                : const ProviderDashboard(),
+            builder: (_) => kycStatus == 'verified'
+                ? const ProviderDashboard()
+                : const PendingApprovalScreen(),
           ),
           (route) => false,
         );

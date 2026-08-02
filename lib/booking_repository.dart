@@ -142,9 +142,25 @@ class BookingRepository {
   // ໃຫ້ກົງກັນແລ້ວ (ເບິ່ງ isValidSentToTargeting() ນຳ — H-2, ຮັບງານໄດ້ສະເພາະຖ້າ
   // ບໍ່ໄດ້ຖືກຈຳກັດ sentTo ຫຼື ຕົນເອງຢູ່ໃນ sentTo).
   Future<void> acceptBooking(String bookingId) async {
-    if (_uid.isEmpty) return; // ✅ [FIX-1] guard
+    // 🔒 [AUDIT EDGE-1 / 2026-08-02 — High, fresh re-audit] ກ່ອນໜ້ານີ້ `return;`
+    // ງຽບໆ (guard ນີ້ຖືກເພີ່ມມາເພື່ອກັນ crash ຈາກ _uid ວ່າງ, ບໍ່ແມ່ນເພື່ອລາຍງານຜົນ)
+    // — ຖ້າ session ໝົດອາຍຸກາງທາງ (Firebase Auth token invalidate ໃນຂະນະທີ່
+    // ໜ້າຈໍຍັງເປີດຢູ່), ການ await ນີ້ຈະສຳເລັດປົກກະຕິໂດຍບໍ່ throw ຫຍັງເລີຍ —
+    // BookingNotifier (booking_provider.dart) ຈຶ່ງລາຍງານ "ສຳເລັດ" (true) ໃສ່ UI
+    // ທັງທີ່ Firestore write ບໍ່ເຄີຍເກີດຂຶ້ນຈິງ (ເຊັ່ນ: ກົດ "ສຳເລັດວຽກ" ແລ້ວຂຶ້ນ
+    // "ວຽກສຳເລັດ, ໄດ້ຮັບເງິນແລ້ວ" ທັງທີ່ booking doc ບໍ່ເຄີຍປ່ຽນສະຖານະ). ຕອນນີ້
+    // throw ແທນ ເພື່ອໃຫ້ຜູ້ເອີ້ນ (BookingNotifier ແລະອື່ນໆ) ເຫັນ error ແທ້ ແລະ
+    // ສະແດງຂໍ້ຄວາມທີ່ຖືກຕ້ອງ ("ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່") ແທນທີ່ຈະບອກວ່າສຳເລັດ.
+    if (_uid.isEmpty) {
+      throw Exception('ເຊດຊັນໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່ (session expired, please log in again)');
+    }
     final ref = _db.collection('bookings').doc(bookingId);
     final providerRef = _db.collection('providers').doc(_uid);
+    // 🔒 [AUDIT SEC-3 / 2026-08-02] phone ບໍ່ໄດ້ເກັບຢູ່ providers/{uid} ອີກຕໍ່ໄປ
+    // (ອ່ານໄດ້ໂດຍ user login ໃດກໍໄດ້ — ຢ້ານເບີໂທຊ່າງຮົ່ວ) — ອ່ານຈາກ users/{uid}
+    // ຂອງຕົນເອງແທນ (owner-read, ບໍ່ໄດ້ເປີດເຜີຍຫຍັງໃໝ່, ຄືກັນກັບການອ່ານ
+    // providerRef ຂ້າງລຸ່ມທີ່ກໍ່ເປັນ self-read ຢູ່ແລ້ວ).
+    final userRef = _db.collection('users').doc(_uid);
     late Booking b;
 
     await _db.runTransaction((tx) async {
@@ -160,15 +176,22 @@ class BookingRepository {
       }
       final providerSnap = await tx.get(providerRef);
       final p = providerSnap.data() ?? const <String, dynamic>{};
+      final userSnap = await tx.get(userRef);
+      final u = userSnap.data() ?? const <String, dynamic>{};
       tx.update(ref, {
         'status':         JobStatus.accepted.name,
         'acceptedAt':     FieldValue.serverTimestamp(),
         'providerId':     _uid,
         'providerName':   p['displayName'] as String? ?? '',
-        'providerPhone':  p['phone']       as String? ?? '',
+        'providerPhone':  u['phone']       as String? ?? '',
         'providerRating': (p['rating']     as num?)?.toDouble() ?? 0.0,
         'providerJobs':   p['totalJobs']   as int?    ?? 0,
         'providerPhoto':  p['photoUrl']    as String? ?? '',
+        // 🔒 [AUDIT PROV-3 / 2026-08-02] updatedAt ຕ້ອງຖືກຂຽນທຸກຄັ້ງທີ່ status
+        // ປ່ຽນ — ໃຊ້ເປັນ "last activity" ໂດຍ cleanupStaleActiveBookings
+        // (functions/index.js) ເພື່ອກວດຫາ booking ທີ່ຊ່າງຮັບໄປແລ້ວ ແຕ່ຫາຍໄປ
+        // ງຽບໆ (ບໍ່ມີການເຄື່ອນໄຫວດົນເກີນໄປ).
+        'updatedAt':      FieldValue.serverTimestamp(),
       });
     }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
         'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
@@ -190,7 +213,18 @@ class BookingRepository {
   // ໂດຍກົງຜ່ານ provider_details_screen.dart) → ບໍ່ມີ "board" ໃຫ້ຖອຍໄປ, reject
   // ຈຶ່ງ terminal ແທ້ ຄືເກົ່າ.
   Future<void> rejectBooking(String bookingId, String reason) async {
-    if (_uid.isEmpty) return; // ✅ [FIX-1] guard
+    // 🔒 [AUDIT EDGE-1 / 2026-08-02 — High, fresh re-audit] ກ່ອນໜ້ານີ້ `return;`
+    // ງຽບໆ (guard ນີ້ຖືກເພີ່ມມາເພື່ອກັນ crash ຈາກ _uid ວ່າງ, ບໍ່ແມ່ນເພື່ອລາຍງານຜົນ)
+    // — ຖ້າ session ໝົດອາຍຸກາງທາງ (Firebase Auth token invalidate ໃນຂະນະທີ່
+    // ໜ້າຈໍຍັງເປີດຢູ່), ການ await ນີ້ຈະສຳເລັດປົກກະຕິໂດຍບໍ່ throw ຫຍັງເລີຍ —
+    // BookingNotifier (booking_provider.dart) ຈຶ່ງລາຍງານ "ສຳເລັດ" (true) ໃສ່ UI
+    // ທັງທີ່ Firestore write ບໍ່ເຄີຍເກີດຂຶ້ນຈິງ (ເຊັ່ນ: ກົດ "ສຳເລັດວຽກ" ແລ້ວຂຶ້ນ
+    // "ວຽກສຳເລັດ, ໄດ້ຮັບເງິນແລ້ວ" ທັງທີ່ booking doc ບໍ່ເຄີຍປ່ຽນສະຖານະ). ຕອນນີ້
+    // throw ແທນ ເພື່ອໃຫ້ຜູ້ເອີ້ນ (BookingNotifier ແລະອື່ນໆ) ເຫັນ error ແທ້ ແລະ
+    // ສະແດງຂໍ້ຄວາມທີ່ຖືກຕ້ອງ ("ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່") ແທນທີ່ຈະບອກວ່າສຳເລັດ.
+    if (_uid.isEmpty) {
+      throw Exception('ເຊດຊັນໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່ (session expired, please log in again)');
+    }
     final ref = _db.collection('bookings').doc(bookingId);
 
     await _db.runTransaction((tx) async {
@@ -235,7 +269,11 @@ class BookingRepository {
   // ຄິດໄລ່ completionRate ໃໝ່ໂດຍອັດຕະໂນມັດຢູ່ແລ້ວທຸກຄັ້ງທີ່ status ປ່ຽນເປັນ
   // cancelled — ບໍ່ຕ້ອງແກ້ໄຂຝັ່ງ Cloud Function ສຳລັບສ່ວນນີ້.
   Future<void> providerCancelBooking(String bookingId, String reason) async {
-    if (_uid.isEmpty) return;
+    // 🔒 [AUDIT EDGE-1 / 2026-08-02] ເບິ່ງຄໍາເຫັນລະອຽດຢູ່ guard ອື່ນໆໃນໄຟລ໌ນີ້ —
+    // throw ແທນ return ງຽບໆ ເພື່ອບໍ່ໃຫ້ BookingNotifier ລາຍງານຜົນ "ສຳເລັດ" ປອມ.
+    if (_uid.isEmpty) {
+      throw Exception('ເຊດຊັນໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່ (session expired, please log in again)');
+    }
     final ref = _db.collection('bookings').doc(bookingId);
 
     await _db.runTransaction((tx) async {
@@ -254,6 +292,7 @@ class BookingRepository {
         'status':       JobStatus.cancelled.name,
         'cancelReason': reason,
         'cancelledBy':  'provider',
+        'updatedAt':    FieldValue.serverTimestamp(), // 🔒 [AUDIT PROV-3 / 2026-08-02]
       });
     }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
         'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
@@ -269,7 +308,11 @@ class BookingRepository {
   // BookingNotifier.confirmPayment() (booking_provider.dart) ເປັນ step ກ່ອນ
   // "ສຳເລັດວຽກ" ຕອນ status == inProgress.
   Future<void> confirmPaymentReceived(String bookingId) async {
-    if (_uid.isEmpty) return;
+    // 🔒 [AUDIT EDGE-1 / 2026-08-02] ເບິ່ງຄໍາເຫັນລະອຽດຢູ່ guard ອື່ນໆໃນໄຟລ໌ນີ້ —
+    // throw ແທນ return ງຽບໆ ເພື່ອບໍ່ໃຫ້ BookingNotifier ລາຍງານຜົນ "ສຳເລັດ" ປອມ.
+    if (_uid.isEmpty) {
+      throw Exception('ເຊດຊັນໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່ (session expired, please log in again)');
+    }
     final ref = _db.collection('bookings').doc(bookingId);
 
     await _db.runTransaction((tx) async {
@@ -294,13 +337,27 @@ class BookingRepository {
       if (b.paymentMethod != 'cash' && !b.customerConfirmedPayment) {
         throw Exception('ລໍຖ້າລູກຄ້າຢືນຢັນການໂອນເງິນກ່ອນຈຶ່ງຈະປິດງານໄດ້');
       }
-      tx.update(ref, {'paymentStatus': 'paid'});
+      tx.update(ref, {
+        'paymentStatus': 'paid',
+        'updatedAt':     FieldValue.serverTimestamp(), // 🔒 [AUDIT PROV-3 / 2026-08-02]
+      });
     }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
         'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
   }
 
   Future<void> updateStatus(String bookingId, JobStatus status) async {
-    if (_uid.isEmpty) return; // ✅ [FIX-1] guard
+    // 🔒 [AUDIT EDGE-1 / 2026-08-02 — High, fresh re-audit] ກ່ອນໜ້ານີ້ `return;`
+    // ງຽບໆ (guard ນີ້ຖືກເພີ່ມມາເພື່ອກັນ crash ຈາກ _uid ວ່າງ, ບໍ່ແມ່ນເພື່ອລາຍງານຜົນ)
+    // — ຖ້າ session ໝົດອາຍຸກາງທາງ (Firebase Auth token invalidate ໃນຂະນະທີ່
+    // ໜ້າຈໍຍັງເປີດຢູ່), ການ await ນີ້ຈະສຳເລັດປົກກະຕິໂດຍບໍ່ throw ຫຍັງເລີຍ —
+    // BookingNotifier (booking_provider.dart) ຈຶ່ງລາຍງານ "ສຳເລັດ" (true) ໃສ່ UI
+    // ທັງທີ່ Firestore write ບໍ່ເຄີຍເກີດຂຶ້ນຈິງ (ເຊັ່ນ: ກົດ "ສຳເລັດວຽກ" ແລ້ວຂຶ້ນ
+    // "ວຽກສຳເລັດ, ໄດ້ຮັບເງິນແລ້ວ" ທັງທີ່ booking doc ບໍ່ເຄີຍປ່ຽນສະຖານະ). ຕອນນີ້
+    // throw ແທນ ເພື່ອໃຫ້ຜູ້ເອີ້ນ (BookingNotifier ແລະອື່ນໆ) ເຫັນ error ແທ້ ແລະ
+    // ສະແດງຂໍ້ຄວາມທີ່ຖືກຕ້ອງ ("ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່") ແທນທີ່ຈະບອກວ່າສຳເລັດ.
+    if (_uid.isEmpty) {
+      throw Exception('ເຊດຊັນໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່ (session expired, please log in again)');
+    }
     final ref = _db.collection('bookings').doc(bookingId);
     final doc = await ref.get().timeout(kNetworkOpTimeout,
         onTimeout: () => throw Exception(
@@ -311,7 +368,10 @@ class BookingRepository {
       throw Exception('ກະລຸນາຢືນຢັນການຮັບເງິນກ່ອນປິດງານ');
     }
 
-    final data = <String, dynamic>{'status': status.name};
+    final data = <String, dynamic>{
+      'status':    status.name,
+      'updatedAt': FieldValue.serverTimestamp(), // 🔒 [AUDIT PROV-3 / 2026-08-02]
+    };
     if (status == JobStatus.completed) {
       data['completedAt'] = FieldValue.serverTimestamp();
     }
@@ -345,7 +405,18 @@ class BookingRepository {
       double amount,
       String note,
       ) async {
-    if (_uid.isEmpty) return; // ✅ [FIX-1] guard
+    // 🔒 [AUDIT EDGE-1 / 2026-08-02 — High, fresh re-audit] ກ່ອນໜ້ານີ້ `return;`
+    // ງຽບໆ (guard ນີ້ຖືກເພີ່ມມາເພື່ອກັນ crash ຈາກ _uid ວ່າງ, ບໍ່ແມ່ນເພື່ອລາຍງານຜົນ)
+    // — ຖ້າ session ໝົດອາຍຸກາງທາງ (Firebase Auth token invalidate ໃນຂະນະທີ່
+    // ໜ້າຈໍຍັງເປີດຢູ່), ການ await ນີ້ຈະສຳເລັດປົກກະຕິໂດຍບໍ່ throw ຫຍັງເລີຍ —
+    // BookingNotifier (booking_provider.dart) ຈຶ່ງລາຍງານ "ສຳເລັດ" (true) ໃສ່ UI
+    // ທັງທີ່ Firestore write ບໍ່ເຄີຍເກີດຂຶ້ນຈິງ (ເຊັ່ນ: ກົດ "ສຳເລັດວຽກ" ແລ້ວຂຶ້ນ
+    // "ວຽກສຳເລັດ, ໄດ້ຮັບເງິນແລ້ວ" ທັງທີ່ booking doc ບໍ່ເຄີຍປ່ຽນສະຖານະ). ຕອນນີ້
+    // throw ແທນ ເພື່ອໃຫ້ຜູ້ເອີ້ນ (BookingNotifier ແລະອື່ນໆ) ເຫັນ error ແທ້ ແລະ
+    // ສະແດງຂໍ້ຄວາມທີ່ຖືກຕ້ອງ ("ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່") ແທນທີ່ຈະບອກວ່າສຳເລັດ.
+    if (_uid.isEmpty) {
+      throw Exception('ເຊດຊັນໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່ (session expired, please log in again)');
+    }
     if (amount <= 0) throw Exception('ຈຳນວນເງິນຕ້ອງຫຼາຍກວ່າ 0');
     final ref = _db.collection('bookings').doc(bookingId);
     final doc = await ref.get().timeout(kNetworkOpTimeout,
@@ -357,6 +428,11 @@ class BookingRepository {
       'additionalCharges':         amount,
       'additionalChargesNote':     note,
       'additionalChargesApproved': false,
+      // 🔒 [AUDIT BE-1 / 2026-08-02] ຮອບໃໝ່ຂອງການຮ້ອງຂໍຄ່າໃຊ້ຈ່າຍເພີ່ມ — Cloud
+      // Function (grantAdditionalChargesWalletCredit, functions/index.js) ໃຊ້
+      // field ນີ້ປຽບທຽບກັບ additionalChargesCreditedRound ເພື່ອຮູ້ວ່າຮອບນີ້
+      // ຍັງບໍ່ທັນຈ່າຍ (ບໍ່ຄືກັບ boolean ດຽວທີ່ບລັອກທຸກຮອບຫຼັງຈາກຮອບທຳອິດ).
+      'additionalChargesRound':    FieldValue.increment(1),
     }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
         'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
 
@@ -573,7 +649,18 @@ class EarningsRepository {
   }
 
   Future<void> requestWithdrawal(double amount) async {
-    if (_uid.isEmpty) return; // ✅ [FIX-1] guard
+    // 🔒 [AUDIT EDGE-1 / 2026-08-02 — High, fresh re-audit] ກ່ອນໜ້ານີ້ `return;`
+    // ງຽບໆ (guard ນີ້ຖືກເພີ່ມມາເພື່ອກັນ crash ຈາກ _uid ວ່າງ, ບໍ່ແມ່ນເພື່ອລາຍງານຜົນ)
+    // — ຖ້າ session ໝົດອາຍຸກາງທາງ (Firebase Auth token invalidate ໃນຂະນະທີ່
+    // ໜ້າຈໍຍັງເປີດຢູ່), ການ await ນີ້ຈະສຳເລັດປົກກະຕິໂດຍບໍ່ throw ຫຍັງເລີຍ —
+    // BookingNotifier (booking_provider.dart) ຈຶ່ງລາຍງານ "ສຳເລັດ" (true) ໃສ່ UI
+    // ທັງທີ່ Firestore write ບໍ່ເຄີຍເກີດຂຶ້ນຈິງ (ເຊັ່ນ: ກົດ "ສຳເລັດວຽກ" ແລ້ວຂຶ້ນ
+    // "ວຽກສຳເລັດ, ໄດ້ຮັບເງິນແລ້ວ" ທັງທີ່ booking doc ບໍ່ເຄີຍປ່ຽນສະຖານະ). ຕອນນີ້
+    // throw ແທນ ເພື່ອໃຫ້ຜູ້ເອີ້ນ (BookingNotifier ແລະອື່ນໆ) ເຫັນ error ແທ້ ແລະ
+    // ສະແດງຂໍ້ຄວາມທີ່ຖືກຕ້ອງ ("ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່") ແທນທີ່ຈະບອກວ່າສຳເລັດ.
+    if (_uid.isEmpty) {
+      throw Exception('ເຊດຊັນໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່ (session expired, please log in again)');
+    }
     final walletDoc = await _db.collection('wallets').doc(_uid).get()
         .timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
             'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
@@ -621,7 +708,18 @@ class EarningsRepository {
   // ໂດຍບໍ່ຕ້ອງໂອນເງິນຈິງເລີຍ. slipUrl ບັງຄັບ (upload ກ່ອນຢູ່ UI, ເບິ່ງ
   // earnings_tab.dart) — ບໍ່ມີຮູບ = admin ບໍ່ມີທາງກວດການໂອນໄດ້ເລີຍ.
   Future<void> requestTopup(double amount, {required String slipUrl}) async {
-    if (_uid.isEmpty) return; // ✅ [FIX-1] guard
+    // 🔒 [AUDIT EDGE-1 / 2026-08-02 — High, fresh re-audit] ກ່ອນໜ້ານີ້ `return;`
+    // ງຽບໆ (guard ນີ້ຖືກເພີ່ມມາເພື່ອກັນ crash ຈາກ _uid ວ່າງ, ບໍ່ແມ່ນເພື່ອລາຍງານຜົນ)
+    // — ຖ້າ session ໝົດອາຍຸກາງທາງ (Firebase Auth token invalidate ໃນຂະນະທີ່
+    // ໜ້າຈໍຍັງເປີດຢູ່), ການ await ນີ້ຈະສຳເລັດປົກກະຕິໂດຍບໍ່ throw ຫຍັງເລີຍ —
+    // BookingNotifier (booking_provider.dart) ຈຶ່ງລາຍງານ "ສຳເລັດ" (true) ໃສ່ UI
+    // ທັງທີ່ Firestore write ບໍ່ເຄີຍເກີດຂຶ້ນຈິງ (ເຊັ່ນ: ກົດ "ສຳເລັດວຽກ" ແລ້ວຂຶ້ນ
+    // "ວຽກສຳເລັດ, ໄດ້ຮັບເງິນແລ້ວ" ທັງທີ່ booking doc ບໍ່ເຄີຍປ່ຽນສະຖານະ). ຕອນນີ້
+    // throw ແທນ ເພື່ອໃຫ້ຜູ້ເອີ້ນ (BookingNotifier ແລະອື່ນໆ) ເຫັນ error ແທ້ ແລະ
+    // ສະແດງຂໍ້ຄວາມທີ່ຖືກຕ້ອງ ("ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່") ແທນທີ່ຈະບອກວ່າສຳເລັດ.
+    if (_uid.isEmpty) {
+      throw Exception('ເຊດຊັນໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່ (session expired, please log in again)');
+    }
     if (amount < 10000) throw Exception('ຂັ້ນຕ່ຳ ₭10,000');
     await _db.collection('topupRequests').add({
       'providerId': _uid,
@@ -638,7 +736,18 @@ class EarningsRepository {
     required String bankAccount,
     required String bankHolder,
   }) async {
-    if (_uid.isEmpty) return; // ✅ [FIX-1] guard
+    // 🔒 [AUDIT EDGE-1 / 2026-08-02 — High, fresh re-audit] ກ່ອນໜ້ານີ້ `return;`
+    // ງຽບໆ (guard ນີ້ຖືກເພີ່ມມາເພື່ອກັນ crash ຈາກ _uid ວ່າງ, ບໍ່ແມ່ນເພື່ອລາຍງານຜົນ)
+    // — ຖ້າ session ໝົດອາຍຸກາງທາງ (Firebase Auth token invalidate ໃນຂະນະທີ່
+    // ໜ້າຈໍຍັງເປີດຢູ່), ການ await ນີ້ຈະສຳເລັດປົກກະຕິໂດຍບໍ່ throw ຫຍັງເລີຍ —
+    // BookingNotifier (booking_provider.dart) ຈຶ່ງລາຍງານ "ສຳເລັດ" (true) ໃສ່ UI
+    // ທັງທີ່ Firestore write ບໍ່ເຄີຍເກີດຂຶ້ນຈິງ (ເຊັ່ນ: ກົດ "ສຳເລັດວຽກ" ແລ້ວຂຶ້ນ
+    // "ວຽກສຳເລັດ, ໄດ້ຮັບເງິນແລ້ວ" ທັງທີ່ booking doc ບໍ່ເຄີຍປ່ຽນສະຖານະ). ຕອນນີ້
+    // throw ແທນ ເພື່ອໃຫ້ຜູ້ເອີ້ນ (BookingNotifier ແລະອື່ນໆ) ເຫັນ error ແທ້ ແລະ
+    // ສະແດງຂໍ້ຄວາມທີ່ຖືກຕ້ອງ ("ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່") ແທນທີ່ຈະບອກວ່າສຳເລັດ.
+    if (_uid.isEmpty) {
+      throw Exception('ເຊດຊັນໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່ (session expired, please log in again)');
+    }
     await _db.collection('wallets').doc(_uid).set({
       'bankName':    bankName,
       'bankAccount': bankAccount,
@@ -661,9 +770,15 @@ class ProfileRepository {
   // ✅ [FIX-1] ?? '' ແທນ !
   String get _uid => _auth.currentUser?.uid ?? '';
 
+  // 🔒 [AUDIT SEC-3 / 2026-08-02] phone ບໍ່ຢູ່ໃນ providers/{uid} ອີກຕໍ່ໄປ
+  // (ອ່ານໄດ້ໂດຍ user login ໃດກໍໄດ້) — ດຶງມາຈາກ users/{uid} (owner-only)
+  // ແລ້ວ overlay ໃສ່ ProviderProfile ເພື່ອໃຫ້ໜ້າແກ້ໄຂ profile ຍັງສະແດງເບີເດີມ
+  // ໄດ້ຄືເກົ່າ (ບໍ່ດັ່ງນັ້ນຊ່ອງເບີໂທຈະຫວ່າງທຸກຄັ້ງທີ່ເປີດ EditProfileScreen).
   Stream<ProviderProfile> watchProfile() {
     return _db.collection('providers').doc(_uid).snapshots()
         .asyncMap((doc) async {
+      final userSnap = await _db.collection('users').doc(_uid).get();
+      final phone = userSnap.data()?['phone'] as String?;
       if (!doc.exists) {
         final user = _auth.currentUser;
         await _db.collection('providers').doc(_uid).set({
@@ -682,9 +797,10 @@ class ProfileRepository {
           uid:         _uid,
           displayName: user?.displayName ?? '',
           email:       user?.email       ?? '',
+          phone:       phone,
         );
       }
-      return ProviderProfile.fromFirestore(doc);
+      return ProviderProfile.fromFirestore(doc).copyWith(phone: phone);
     });
   }
 
@@ -692,12 +808,33 @@ class ProfileRepository {
   // ຂັ້ນຕອນ upload ຮູບແລ້ວ, ແຕ່ call ນີ້ (ຂຽນ url ກັບຄືນ providers/{uid}) ຢູ່
   // ທ້າຍ method ທັງສອງບໍ່ມີ timeout — ຍັງຄ້າງໄດ້ຢູ່ຂັ້ນຕອນສຸດທ້າຍນີ້.
   Future<void> updateProfile(Map<String, dynamic> data) async {
-    if (_uid.isEmpty) return; // ✅ [FIX-1] guard
+    // 🔒 [AUDIT EDGE-1 / 2026-08-02 — High, fresh re-audit] ກ່ອນໜ້ານີ້ `return;`
+    // ງຽບໆ (guard ນີ້ຖືກເພີ່ມມາເພື່ອກັນ crash ຈາກ _uid ວ່າງ, ບໍ່ແມ່ນເພື່ອລາຍງານຜົນ)
+    // — ຖ້າ session ໝົດອາຍຸກາງທາງ (Firebase Auth token invalidate ໃນຂະນະທີ່
+    // ໜ້າຈໍຍັງເປີດຢູ່), ການ await ນີ້ຈະສຳເລັດປົກກະຕິໂດຍບໍ່ throw ຫຍັງເລີຍ —
+    // BookingNotifier (booking_provider.dart) ຈຶ່ງລາຍງານ "ສຳເລັດ" (true) ໃສ່ UI
+    // ທັງທີ່ Firestore write ບໍ່ເຄີຍເກີດຂຶ້ນຈິງ (ເຊັ່ນ: ກົດ "ສຳເລັດວຽກ" ແລ້ວຂຶ້ນ
+    // "ວຽກສຳເລັດ, ໄດ້ຮັບເງິນແລ້ວ" ທັງທີ່ booking doc ບໍ່ເຄີຍປ່ຽນສະຖານະ). ຕອນນີ້
+    // throw ແທນ ເພື່ອໃຫ້ຜູ້ເອີ້ນ (BookingNotifier ແລະອື່ນໆ) ເຫັນ error ແທ້ ແລະ
+    // ສະແດງຂໍ້ຄວາມທີ່ຖືກຕ້ອງ ("ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່") ແທນທີ່ຈະບອກວ່າສຳເລັດ.
+    if (_uid.isEmpty) {
+      throw Exception('ເຊດຊັນໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່ (session expired, please log in again)');
+    }
+    // 🔒 [AUDIT SEC-3 / 2026-08-02] 'phone' ຫ້າມຢູ່ providers/{uid} (ອ່ານໄດ້ໂດຍ
+    // user login ໃດກໍໄດ້) — ຂຽນໄປ users/{uid} ແທນ (owner+admin ອ່ານໄດ້ເທົ່ານັ້ນ).
+    final providerData = Map<String, dynamic>.from(data)..remove('phone');
     await _db.collection('providers').doc(_uid).set(
-      {...data, 'updatedAt': FieldValue.serverTimestamp()},
+      {...providerData, 'updatedAt': FieldValue.serverTimestamp()},
       SetOptions(merge: true),
     ).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
         'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
+    if (data.containsKey('phone')) {
+      await _db.collection('users').doc(_uid).set(
+        {'phone': data['phone']},
+        SetOptions(merge: true),
+      ).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+          'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
+    }
     if (data.containsKey('displayName')) {
       await _auth.currentUser
           ?.updateDisplayName(data['displayName'] as String)
@@ -771,7 +908,18 @@ class ProfileRepository {
   }
 
   Future<void> saveSchedule(WorkSchedule schedule) async {
-    if (_uid.isEmpty) return; // ✅ [FIX-1] guard
+    // 🔒 [AUDIT EDGE-1 / 2026-08-02 — High, fresh re-audit] ກ່ອນໜ້ານີ້ `return;`
+    // ງຽບໆ (guard ນີ້ຖືກເພີ່ມມາເພື່ອກັນ crash ຈາກ _uid ວ່າງ, ບໍ່ແມ່ນເພື່ອລາຍງານຜົນ)
+    // — ຖ້າ session ໝົດອາຍຸກາງທາງ (Firebase Auth token invalidate ໃນຂະນະທີ່
+    // ໜ້າຈໍຍັງເປີດຢູ່), ການ await ນີ້ຈະສຳເລັດປົກກະຕິໂດຍບໍ່ throw ຫຍັງເລີຍ —
+    // BookingNotifier (booking_provider.dart) ຈຶ່ງລາຍງານ "ສຳເລັດ" (true) ໃສ່ UI
+    // ທັງທີ່ Firestore write ບໍ່ເຄີຍເກີດຂຶ້ນຈິງ (ເຊັ່ນ: ກົດ "ສຳເລັດວຽກ" ແລ້ວຂຶ້ນ
+    // "ວຽກສຳເລັດ, ໄດ້ຮັບເງິນແລ້ວ" ທັງທີ່ booking doc ບໍ່ເຄີຍປ່ຽນສະຖານະ). ຕອນນີ້
+    // throw ແທນ ເພື່ອໃຫ້ຜູ້ເອີ້ນ (BookingNotifier ແລະອື່ນໆ) ເຫັນ error ແທ້ ແລະ
+    // ສະແດງຂໍ້ຄວາມທີ່ຖືກຕ້ອງ ("ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່") ແທນທີ່ຈະບອກວ່າສຳເລັດ.
+    if (_uid.isEmpty) {
+      throw Exception('ເຊດຊັນໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່ (session expired, please log in again)');
+    }
     await _db.collection('schedules').doc(_uid).set(
       {...schedule.toMap(), 'updatedAt': FieldValue.serverTimestamp()},
       SetOptions(merge: true),

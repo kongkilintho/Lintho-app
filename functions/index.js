@@ -91,7 +91,8 @@ exports.onBookingStatusChange = functions.firestore
         after.paymentStatus === 'paid' && after.additionalCharges > 0) {
       const svcLabelForCharges = after.serviceType || after.category || 'ບໍລິການ';
       queue.push(grantAdditionalChargesWalletCredit(
-        after.providerId, bookingId, svcLabelForCharges, after.additionalCharges, change.after.ref));
+        after.providerId, bookingId, svcLabelForCharges, after.additionalCharges, change.after.ref,
+        after.paymentMethod));
       queue.push(db.collection('fcm_queue').add({
         targetUserId: after.providerId, targetRole: 'provider',
         type: 'payment', bookingId,
@@ -141,7 +142,7 @@ exports.onBookingStatusChange = functions.firestore
         // Functions ອາດຖືກ trigger ຊ້ຳ (at-least-once) ແລ້ວຝາກເງິນຊ້ຳສອງເທື່ອ.
         // ຕອນນີ້ໃຊ້ walletCredited flag ໃນ transaction ດຽວກັນ (pattern ດຽວກັນ
         // ກັບ grantRewardPoints).
-        queue.push(grantWalletCredit(providerId, bookingId, svcLabel, total, change.after.ref));
+        queue.push(grantWalletCredit(providerId, bookingId, svcLabel, total, change.after.ref, after.paymentMethod));
 
         // ✅ Referral: ໝູ່ໃຊ້ບໍລິການສຳເລັດ → ຜູ້ແນະນຳໄດ້ voucher
         // referralRewardIssued ກັນ trigger ຍິງຊໍ້າ/ໂບນັດອອກຊໍ້າ
@@ -317,6 +318,70 @@ exports.cleanupExpiredBookings = functions.pubsub
     return Promise.all(notifications);
   });
 
+// 🔒 [AUDIT PROV-3 / 2026-08-02 — High, fresh re-audit] cleanupExpiredBookings
+// ຂ້າງເທິງກວດແຕ່ status=='pending' (ຍັງບໍ່ຖືກຮັບ) — booking ທີ່ຊ່າງຮັບໄປແລ້ວ
+// (accepted/onTheWay/arrived/inProgress) ແຕ່ຫາຍໄປງຽບໆ (ອອບໄລນ໌/ບໍ່ເປີດແອັບອີກ,
+// ບໍ່ໄດ້ກົດຍົກເລີກຢ່າງເປັນທາງການ) ບໍ່ມີ safety net ໃດເລີຍ — booking ຄ້າງຢູ່
+// status ນັ້ນຕະຫຼອດໄປ, ລູກຄ້າບໍ່ມີທາງຮູ້/ອອກຈາກສະຖານະນັ້ນນອກຈາກຍົກເລີກເອງ.
+// ຕອນນີ້ກວດທຸກ 30 ນາທີ — booking ໃດຄ້າງຢູ່ status ບໍ່-terminal ໂດຍບໍ່ມີການ
+// ອັບເດດ (updatedAt, ຕອນນີ້ຖືກຂຽນທຸກຄັ້ງທີ່ status ປ່ຽນ — ເບິ່ງ
+// booking_repository.dart) ເກີນ 24 ຊົ່ວໂມງ ຈະຖືກຍົກເລີກອັດຕະໂນມັດ ພ້ອມແຈ້ງທັງ
+// ລູກຄ້າ ແລະ ຊ່າງ. ບໍ່ມີ reassignment (feature ນີ້ບໍ່ມີຢູ່ໃນລະບົບເລີຍ, ຢືນຢັນແລ້ວ
+// ຈາກ admin-panel audit — ນອກຂອບເຂດ fix ນີ້). ຮູບແບບ chunk/batch ດຽວກັນກັບ
+// cleanupExpiredBookings ຂ້າງເທິງ.
+exports.cleanupStaleActiveBookings = functions.pubsub
+  .schedule('every 30 minutes')
+  .onRun(async () => {
+    const threshold = admin.firestore.Timestamp.fromMillis(
+      Date.now() - 24 * 60 * 60 * 1000);
+    const snap = await db.collection('bookings')
+      .where('status', 'in', ['accepted', 'onTheWay', 'arrived', 'inProgress'])
+      .where('updatedAt', '<', threshold)
+      .get();
+    if (snap.empty) return null;
+    const CHUNK_SIZE = 500;
+    const chunks = [];
+    for (let i = 0; i < snap.docs.length; i += CHUNK_SIZE) {
+      chunks.push(snap.docs.slice(i, i + CHUNK_SIZE));
+    }
+    const notifications = [];
+    await Promise.all(chunks.map((chunk) => {
+      const batch = db.batch();
+      chunk.forEach((doc) => {
+        batch.update(doc.ref, {
+          status: 'cancelled',
+          cancelReason: 'stale_no_progress',
+          cancelledBy: 'system',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        const { customerId, providerId, serviceType, category } = doc.data();
+        const svcLabel = serviceType || category || 'ການຈອງ';
+        if (customerId) {
+          notifications.push(db.collection('fcm_queue').add({
+            targetUserId: customerId, targetRole: 'customer',
+            type: 'booking_update', bookingId: doc.id,
+            title: '⏰ ການຈອງຖືກຍົກເລີກ',
+            body: `${svcLabel} ຖືກຍົກເລີກ · ຊ່າງບໍ່ມີການເຄື່ອນໄຫວດົນເກີນໄປ`,
+            data: { type: 'booking_update', bookingId: doc.id },
+            createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
+          }));
+        }
+        if (providerId) {
+          notifications.push(db.collection('fcm_queue').add({
+            targetUserId: providerId, targetRole: 'provider',
+            type: 'booking_update', bookingId: doc.id,
+            title: '⏰ ວຽກຖືກລະບົບຍົກເລີກ',
+            body: `${svcLabel} ຖືກຍົກເລີກອັດຕະໂນມັດ · ບໍ່ມີການອັບເດດດົນເກີນໄປ`,
+            data: { type: 'booking_update', bookingId: doc.id },
+            createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
+          }));
+        }
+      });
+      return batch.commit();
+    }));
+    return Promise.all(notifications);
+  });
+
 exports.onNewBooking = functions.firestore
   .document('bookings/{bookingId}')
   .onCreate(async (snap, context) => {
@@ -408,21 +473,38 @@ async function grantSignupVoucher(referralCode, customerId, bookingId, bookingRe
 // walletCredited "ໃນ" transaction ດຽວກັນກັບການຂຽນ balance/totalEarnings ແລະ
 // transaction record, pattern ດຽວກັນກັບ grantRewardPoints ຂ້າງລຸ່ມ. ປ້ອງກັນ
 // Cloud Functions at-least-once retry ຝາກເງິນຊ້ຳສອງເທື່ອສຳລັບ booking ດຽວ.
-async function grantWalletCredit(providerId, bookingId, serviceLabel, total, bookingRef) {
+//
+// 🔒 [AUDIT PROV-2 / 2026-08-02 — Critical, fresh re-audit] ກ່ອນໜ້ານີ້ `total`
+// ຖືກເພີ່ມເຂົ້າ `balance` (ຍອດເງິນທີ່ຖອນໄດ້) ໂດຍບໍ່ສົນ paymentMethod ເລີຍ —
+// ສຳລັບ booking ທີ່ paymentMethod=='cash' (ລູກຄ້າຈ່າຍເປັນເງິນສົດໃສ່ມືຊ່າງໂດຍກົງ,
+// self-attested, ບໍ່ມີ payment gateway ແທ້), LinTho ບໍ່ເຄີຍໄດ້ຮັບເງິນນັ້ນເລີຍ —
+// ຊ່າງຈຶ່ງໄດ້ຮັບເງິນສົດຈາກລູກຄ້າມືແລ້ວ "ແລະ" ຍັງຖອນຈຳນວນດຽວກັນນັ້ນອອກຈາກລະບົບໄດ້
+// ອີກ (ຈ່າຍຊ້ຳ). ຕອນນີ້ແຍກ: `balance` (ຖອນໄດ້) ເພີ່ມສະເພາະ booking ທີ່ LinTho
+// ຖືເງິນໄວ້ຈິງ (ບໍ່ແມ່ນ 'cash', ເຊັ່ນ 'bcel') — `totalEarnings` (ສະຖິຕິລາຍຮັບ
+// ລວມ, ບໍ່ໄດ້ຖອນໄດ້) ຍັງເພີ່ມທຸກ booking ຄືເກົ່າ (cash ກໍ່ຖືວ່າເປັນລາຍຮັບແທ້ຂອງ
+// ຊ່າງ, ພຽງແຕ່ບໍ່ຢູ່ໃນລະບົບໃຫ້ຖອນ) ເພື່ອໃຫ້ສະຖິຕິ "ລາຍຮັບລວມ" ຍັງຖືກຕ້ອງ.
+// ບັນທຶກ transaction ledger ໄວ້ຄືເກົ່າສະເໝີ (ໃຫ້ຊ່າງເຫັນປະຫວັດວຽກ), ພຽງແຕ່ລະບຸ
+// ໃນ description ວ່າເປັນ cash (ບໍ່ນັບເຂົ້າຍອດຖອນ) ເພື່ອບໍ່ໃຫ້ສັບສົນກັບ balance
+// ທີ່ບໍ່ປ່ຽນ.
+async function grantWalletCredit(providerId, bookingId, serviceLabel, total, bookingRef, paymentMethod) {
   const walletRef = db.collection('wallets').doc(providerId);
   const txnRef = db.collection('transactions').doc();
+  const isWithdrawable = paymentMethod !== 'cash';
   return db.runTransaction(async (tx) => {
     const bookingSnap = await tx.get(bookingRef);
     if (bookingSnap.data()?.walletCredited) return; // ✅ idempotent guard
 
     tx.set(walletRef, {
-      balance: admin.firestore.FieldValue.increment(total),
+      ...(isWithdrawable ? { balance: admin.firestore.FieldValue.increment(total) } : {}),
       totalEarnings: admin.firestore.FieldValue.increment(total),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
     tx.set(txnRef, {
       providerId, bookingId, type: 'earning', amount: total,
-      description: `ລາຍຮັບ: ${serviceLabel}`,
+      description: isWithdrawable
+        ? `ລາຍຮັບ: ${serviceLabel}`
+        : `ລາຍຮັບ (ເງິນສົດ, ບໍ່ນັບຍອດຖອນ): ${serviceLabel}`,
+      withdrawable: isWithdrawable,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     tx.update(bookingRef, { walletCredited: true });
@@ -436,24 +518,52 @@ async function grantWalletCredit(providerId, bookingId, serviceLabel, total, boo
 // ອະນຸມັດຊ້າຈຶ່ງບໍ່ເຄີຍຜ່ານ block ນັ້ນອີກ. ຟັງຊັນນີ້ແມ່ນ grantWalletCredit() ຮູບ
 // ດຽວກັນເປັກໆ ແຕ່ໃຊ້ flag ແຍກຕ່າງຫາກ (additionalChargesWalletCredited) — ຖ້າໃຊ້
 // walletCredited ຊ້ຳ ຈະ no-op ທັນທີເພາະຄ່ານັ້ນເປັນ true ແລ້ວຈາກການຄິດໄລ່ຄັ້ງທຳອິດ.
-async function grantAdditionalChargesWalletCredit(providerId, bookingId, serviceLabel, amount, bookingRef) {
+// 🔒 [AUDIT PROV-2 / 2026-08-02] ຄ່າໃຊ້ຈ່າຍເພີ່ມບໍ່ມີຊ່ອງທາງຈ່າຍແຍກຕ່າງຫາກເລີຍ
+// (ບໍ່ມີ BCEL QR/customerConfirmedPayment ຂອງຕົນເອງ, ເບິ່ງ requestAdditionalCharges()
+// ໃນ booking_repository.dart) — ຖືວ່າເກັບເງິນຊ່ອງທາງດຽວກັນກັບ booking ຫຼັກ
+// (paymentMethod ຂອງ booking ນັ້ນ) ຈຶ່ງໃຊ້ logic withdrawable ດຽວກັນກັບ
+// grantWalletCredit() ຂ້າງເທິງ.
+// 🔒 [AUDIT BE-1 / 2026-08-02 — High, fresh re-audit] `additionalChargesWalletCredited`
+// ເປັນ boolean ດຽວຕໍ່ booking ຕະຫຼອດການ — ຖືກອອກແບບເປັນ idempotency guard
+// ສຳລັບການ retry ຂອງ *ເຫດການອະນຸມັດອັນດຽວ* (Cloud Functions at-least-once),
+// ແຕ່ຫຼັງຈາກຮອບທຳອິດຖືກ credit ໄປແລ້ວ, flag ນີ້ຄ້າງ true ຕະຫຼອດໄປ — ຖ້າຊ່າງ
+// ຮ້ອງຂໍຄ່າໃຊ້ຈ່າຍເພີ່ມຮອບທີ 2 (ໃນ booking ດຽວກັນ, ຫຼັງຮອບທຳອິດຖືກອະນຸມັດ+
+// ຈ່າຍໄປແລ້ວ) ແລະ ລູກຄ້າອະນຸມັດອີກ, ການຈ່າຍຮອບທີ 2 ຈະຖືກ guard ນີ້ບລັອກງຽບໆ
+// (return ທັນທີ, ບໍ່ມີ error/log) — ບໍ່ມີການແຈ້ງເຕືອນ, ບໍ່ມີ transaction record,
+// ຍອດເງິນຊ່າງບໍ່ກົງກັບສິ່ງທີ່ລູກຄ້າຈ່າຍ. ຕອນນີ້ໃຊ້ "round counter" ແທນ boolean
+// ດຽວ — requestAdditionalCharges() (booking_repository.dart) ເພີ່ມ
+// additionalChargesRound ຂຶ້ນ 1 ທຸກຄັ້ງທີ່ຮ້ອງຂໍໃໝ່, ແລະ guard ນີ້ປຽບທຽບ
+// round ປັດຈຸບັນກັບ round ທີ່ credit ໄປແລ້ວຄັ້ງລ້າສຸດ — ປ້ອງກັນທັງການຈ່າຍຊ້ຳ
+// (retry ຂອງ round ດຽວກັນ) ແລະ ອະນຸຍາດໃຫ້ round ຕໍ່ໆໄປຈ່າຍໄດ້ຈິງ.
+async function grantAdditionalChargesWalletCredit(providerId, bookingId, serviceLabel, amount, bookingRef, paymentMethod) {
   const walletRef = db.collection('wallets').doc(providerId);
   const txnRef = db.collection('transactions').doc();
+  const isWithdrawable = paymentMethod !== 'cash';
   return db.runTransaction(async (tx) => {
     const bookingSnap = await tx.get(bookingRef);
-    if (bookingSnap.data()?.additionalChargesWalletCredited) return; // ✅ idempotent guard
+    const data = bookingSnap.data() || {};
+    // ບັນທຶກ additionalChargesRound ຫາກໍ່ຖືກເພີ່ມມາຫຼັງ fix ນີ້ — booking ເກົ່າ
+    // ທີ່ຍັງບໍ່ເຄີຍມີ field ນີ້ (ຫຼືກຳລັງຢູ່ຮອບທຳອິດ) ນັບເປັນ round 1 ໂດຍ default.
+    const round = data.additionalChargesRound || 1;
+    if ((data.additionalChargesCreditedRound || 0) >= round) return; // ✅ idempotent guard (per-round)
 
     tx.set(walletRef, {
-      balance: admin.firestore.FieldValue.increment(amount),
+      ...(isWithdrawable ? { balance: admin.firestore.FieldValue.increment(amount) } : {}),
       totalEarnings: admin.firestore.FieldValue.increment(amount),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
     tx.set(txnRef, {
       providerId, bookingId, type: 'earning', amount,
-      description: `ຄ່າໃຊ້ຈ່າຍເພີ່ມ: ${serviceLabel}`,
+      description: isWithdrawable
+        ? `ຄ່າໃຊ້ຈ່າຍເພີ່ມ: ${serviceLabel}`
+        : `ຄ່າໃຊ້ຈ່າຍເພີ່ມ (ເງິນສົດ, ບໍ່ນັບຍອດຖອນ): ${serviceLabel}`,
+      withdrawable: isWithdrawable,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    tx.update(bookingRef, { additionalChargesWalletCredited: true });
+    tx.update(bookingRef, {
+      additionalChargesWalletCredited: true,
+      additionalChargesCreditedRound: round,
+    });
   });
 }
 

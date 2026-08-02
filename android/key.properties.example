@@ -1,0 +1,19 @@
+# 🔒 [AUDIT PERF-6 / 2026-08-02] Release signing config template.
+#
+# 1. Generate a real release keystore (ONE TIME — back it up somewhere safe,
+#    losing it means you can never publish an update to the same Play Store
+#    listing again):
+#      keytool -genkey -v -keystore lintho-release.jks -keyalg RSA -keysize 2048 \
+#        -validity 10000 -alias lintho
+#
+# 2. Copy this file to android/key.properties (same folder) and fill in the
+#    real values below. android/key.properties and *.jks/*.keystore are
+#    already gitignored — never commit them.
+#
+# 3. storeFile is resolved relative to the android/app/ directory, so either
+#    put the .jks file there or use an absolute path.
+
+storePassword=REPLACE_ME
+keyPassword=REPLACE_ME
+keyAlias=lintho
+storeFile=lintho-release.jks
