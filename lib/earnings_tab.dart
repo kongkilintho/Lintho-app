@@ -16,6 +16,9 @@ import 'booking_provider.dart';
 import 'payment_config_provider.dart';
 import 'widgets/error_state_view.dart';
 
+// ✅ [UI Polish] ຍອດຕ່ຳກວ່ານີ້ຈະສະແດງ banner ເຕືອນໃຫ້ຕື່ມເງິນ
+const double kLowBalanceThreshold = 20000;
+
 class ProviderEarningsTab extends ConsumerWidget {
   const ProviderEarningsTab({super.key});
 
@@ -26,18 +29,12 @@ class ProviderEarningsTab extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: C.background,
+      // ✅ [UI Polish] ປຸ່ມ "ຖອນ" ຢູ່ header ຖືກເອົາອອກ — ຊ້ຳກັບປຸ່ມ "ຖອນ →"
+      // ຢູ່ໃນ Card ຍອດຄົງເຫຼືອຂ້າງລຸ່ມແລ້ວ (ສອງທາງໄປບ່ອນດຽວກັນ, ບໍ່ຈຳເປັນ)
       appBar: AppBar(
         elevation: 0, centerTitle: true,
         title: Text(tr('earnings_wallet'), style: const TextStyle(
             color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),
-        actions: [
-          TextButton.icon(
-            onPressed: () => _showWithdrawalSheet(context, ref),
-            icon:  const Icon(Icons.upload_outlined, color: C.navy, size: 18),
-            label: Text(tr('withdraw'), style: const TextStyle(
-                color: C.navy, fontWeight: FontWeight.w700)),
-          ),
-        ],
       ),
       body: RefreshIndicator(
         // ✅ [Brand color audit 2026-07-27] C.blue → C.primary
@@ -59,6 +56,12 @@ class ProviderEarningsTab extends ConsumerWidget {
               _WalletCards(wallet: wallet,
                   onWithdraw: () => _showWithdrawalSheet(context, ref),
                   onTopUp: () => _showTopUpSheet(context, ref)),
+              // ✅ [UI Polish] Low balance alert — ເຕືອນຊ່າງໃຫ້ຕື່ມເງິນ ຖ້າຍອດ
+              // ຄົງເຫຼືອຕ່ຳກວ່າ kLowBalanceThreshold, ແຕະໄດ້ເພື່ອຕື່ມທັນທີ
+              if (wallet.balance < kLowBalanceThreshold) ...[
+                const SizedBox(height: 12),
+                _LowBalanceBanner(onTopUp: () => _showTopUpSheet(context, ref)),
+              ],
               const SizedBox(height: 20),
               _WeeklyChart(txAsync: txAsync),
               const SizedBox(height: 20),
@@ -729,7 +732,10 @@ class _WalletCards extends StatelessWidget {
         icon:   Icons.account_balance_wallet_outlined,
         color:  C.navy,
         actions: [
-          _CardAction('+ ${tr("top_up")}', onTopUp),
+          // ✅ [UI Polish] "ຕື່ມເງິນ" ໃຊ້ soft accent (gold) ໃຫ້ເດັ່ນກວ່າ "ຖອນ"
+          // (ຍັງເປັນ pill ໂປ່ງໃສແບບເກົ່າ) — ຕື່ມເງິນຄືການກະທຳທີ່ຢາກໃຫ້ຊ່າງເຫັນ
+          // ກ່ອນ, ໂດຍສະເພາະຕອນຍອດເງິນຕ່ຳ
+          _CardAction('+ ${tr("top_up")}', onTopUp, accent: C.gold),
           _CardAction('${tr("withdraw")} →', onWithdraw),
         ],
       ),
@@ -751,7 +757,8 @@ class _WalletCards extends StatelessWidget {
 class _CardAction {
   final String        label;
   final VoidCallback? onTap;
-  const _CardAction(this.label, this.onTap);
+  final Color?         accent;
+  const _CardAction(this.label, this.onTap, {this.accent});
 }
 
 class _Card extends StatelessWidget {
@@ -769,8 +776,10 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ [UI Polish] Card ທີ່ມີ action pill (ຍອດຄົງເຫຼືອ) ໄດ້ padding ລຸ່ມ
+    // ຫຼາຍກວ່າເລັກນ້ອຍ — ບໍ່ໃຫ້ pill ຮູ້ສຶກຕິດຂອບລຸ່ມເກີນໄປ
     return Expanded(child: Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, actions.isNotEmpty ? 18 : 16),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(18),
@@ -795,7 +804,7 @@ class _Card extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.75),
                 fontSize: 11)),
             if (actions.isNotEmpty) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Wrap(spacing: 6, runSpacing: 6, children: actions.map((a) =>
                   // ✅ GestureDetector → Material + InkWell (ແຍກແຕ່ລະ pill ໃຫ້
                   // ກົດໄດ້ເອກະລາດຈາກກັນ — card ນີ້ອາດມີ 2 ຄຳສັ່ງ, ບໍ່ໃຫ້ pill
@@ -807,21 +816,56 @@ class _Card extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                            horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          // ✅ withOpacity → withValues
-                          color: Colors.white.withValues(alpha: 0.2),
+                          // ✅ [UI Polish] soft accent (ຖ້າມີ) ໃຫ້ pill ນັ້ນເດັ່ນ
+                          // ຂຶ້ນມາ — ບໍ່ດັ່ງນັ້ນໃຊ້ pill ໂປ່ງໃສແບບເກົ່າ
+                          color: a.accent ?? Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(a.label, style: const TextStyle(
-                            color: Colors.white, fontSize: 11,
-                            fontWeight: FontWeight.w700)),
+                        child: Text(a.label, style: TextStyle(
+                            color: a.accent != null ? C.navy : Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800)),
                       ),
                     ),
                   )).toList()),
             ],
           ]),
     ));
+  }
+}
+
+// ── LOW BALANCE ALERT ────────────────────────────────────────
+
+class _LowBalanceBanner extends StatelessWidget {
+  final VoidCallback onTopUp;
+  const _LowBalanceBanner({required this.onTopUp});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTopUp,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: C.orange.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: C.orange.withValues(alpha: 0.3)),
+          ),
+          child: Row(children: [
+            const Icon(Icons.error_outline_rounded, color: C.orange, size: 18),
+            const SizedBox(width: 10),
+            Expanded(child: Text(tr('low_balance_alert'), style: const TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w700, color: C.orange))),
+            const Icon(Icons.chevron_right_rounded, color: C.orange, size: 18),
+          ]),
+        ),
+      ),
+    );
   }
 }
 
