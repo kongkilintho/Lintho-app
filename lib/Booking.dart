@@ -544,7 +544,10 @@ class ProviderProfile {
     fcmTokens: fcmTokens, createdAt: createdAt,
   );
 
-  String get avatarLetter        => displayName.isNotEmpty ? displayName[0].toUpperCase() : '🔧';
+  // 🔒 [AUDIT UI-3 / 2026-08-02 — Low, fresh re-audit] emoji fallback glyph
+  // replaced with '?' — matches the same avatar-initial fallback pattern
+  // already used in chat_screen.dart's ChatListTile.
+  String get avatarLetter        => displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
   String get ratingLabel         => rating.toStringAsFixed(1);
   String get completionRateLabel => '${completionRate.toStringAsFixed(0)}%';
 }

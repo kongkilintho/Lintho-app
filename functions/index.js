@@ -223,6 +223,21 @@ exports.onBookingStatusChange = functions.firestore
         // targetUserId ວ່າງ, ແຕ່ບໍ່ຄວນ notify provider ທີ່ບໍ່ມີໂຕຕົນຈິງ
         notify(providerId, 'provider', '❌ ຍົກເລີກ', `${svcLabel} ຖືກຍົກເລີກ`, 'booking_update');
       }
+
+      // 🔒 [AUDIT BE-5 / 2026-08-02 — Low, fresh re-audit] previously flagged
+      // as an ambiguous, undocumented product decision — usedCount was never
+      // reverted when a customer cancelled a coupon-discounted booking
+      // before any provider accepted it (no service was ever rendered, so
+      // charging the redemption permanently is the less defensible default).
+      // Scoped to before.status === 'pending' only — once a provider has
+      // accepted, the coupon is treated as spent regardless of a later
+      // cancellation, matching how the cancellation-fee grace window itself
+      // only applies pre-acceptance. Server-side (not a client Firestore
+      // write) so it doesn't need a new client-writable rules branch on
+      // coupons/{id} beyond the existing +1-on-redeem one.
+      if (before.status === 'pending' && after.couponCode) {
+        queue.push(revertCouponUsageIfPending(after.couponCode, bookingId, change.after.ref));
+      }
     }
 
     // 🔒 [AUDIT H6] ກ່ອນໜ້ານີ້ providers/{id}.totalJobs/completionRate ຖືກ
@@ -430,6 +445,38 @@ exports.cleanupStaleActiveBookings = functions.pubsub
     return Promise.all(notifications);
   });
 
+// 🔒 [AUDIT BE-4 / 2026-08-02 — Low, fresh re-audit] fcm_queue accumulates
+// forever — processFCMQueue marks a doc sent:true but nothing ever deletes
+// it, unlike every other collection in this file that has some lifecycle
+// bound (bookings terminate, transactions are an intentional ledger). Runs
+// daily, deletes sent:true docs older than 7 days (kept briefly for support/
+// debugging, not indefinitely). Chat records are intentionally left alone —
+// unlike a push-notification outbox, chat history has support/dispute value
+// and deleting it is a product decision, not a cleanup bug; out of scope
+// here.
+exports.cleanupOldFcmQueue = functions.pubsub
+  .schedule('every 24 hours')
+  .onRun(async () => {
+    const threshold = admin.firestore.Timestamp.fromMillis(
+      Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const snap = await db.collection('fcm_queue')
+      .where('sent', '==', true)
+      .where('createdAt', '<', threshold)
+      .get();
+    if (snap.empty) return null;
+    const CHUNK_SIZE = 500;
+    const chunks = [];
+    for (let i = 0; i < snap.docs.length; i += CHUNK_SIZE) {
+      chunks.push(snap.docs.slice(i, i + CHUNK_SIZE));
+    }
+    await Promise.all(chunks.map((chunk) => {
+      const batch = db.batch();
+      chunk.forEach((doc) => batch.delete(doc.ref));
+      return batch.commit();
+    }));
+    return null;
+  });
+
 exports.onNewBooking = functions.firestore
   .document('bookings/{bookingId}')
   .onCreate(async (snap, context) => {
@@ -555,6 +602,26 @@ async function grantWalletCredit(providerId, bookingId, serviceLabel, total, boo
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     tx.update(bookingRef, { walletCredited: true });
+  });
+}
+
+// 🔒 [AUDIT BE-5 / 2026-08-02 — Low, fresh re-audit] mirrors the
+// walletCredited idempotency pattern above — couponUsageReverted guards
+// against Cloud Functions at-least-once retry decrementing usedCount more
+// than once for the same cancelled booking.
+async function revertCouponUsageIfPending(couponCode, bookingId, bookingRef) {
+  const couponRef = db.collection('coupons').doc(couponCode);
+  return db.runTransaction(async (tx) => {
+    const bookingSnap = await tx.get(bookingRef);
+    if (bookingSnap.data()?.couponUsageReverted) return; // ✅ idempotent guard
+    const couponSnap = await tx.get(couponRef);
+    if (!couponSnap.exists) {
+      tx.update(bookingRef, { couponUsageReverted: true });
+      return;
+    }
+    const usedCount = (couponSnap.data().usedCount || 0);
+    tx.update(couponRef, { usedCount: Math.max(0, usedCount - 1) });
+    tx.update(bookingRef, { couponUsageReverted: true });
   });
 }
 

@@ -7,6 +7,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' show NumberFormat;
 import 'Booking.dart' show serviceIconForCategory;
 import 'app_colors.dart';
 import 'app_locale.dart';
@@ -311,12 +312,29 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
               if (status == 'cancelled' &&
                   (b['cancelReason'] as String? ?? '').isNotEmpty) ...[
                 const SizedBox(height: 12),
-                _card(child: Row(crossAxisAlignment: CrossAxisAlignment.start,
+                _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                  const Icon(Icons.info_outline_rounded, size: 16, color: C.red),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(b['cancelReason'] as String,
-                      style: const TextStyle(fontSize: 13, color: C.muted))),
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Icon(Icons.info_outline_rounded, size: 16, color: C.red),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(b['cancelReason'] as String,
+                        style: const TextStyle(fontSize: 13, color: C.muted))),
+                  ]),
+                  // 🔒 [AUDIT CUST-7 / 2026-08-02 — Low, fresh re-audit]
+                  // cancelFeeAmount was computed/persisted by
+                  // CustomerBookingRepository.cancelBooking() but never
+                  // rendered anywhere — the customer had no way to see
+                  // whether/how much a cancellation fee was assessed.
+                  if ((b['cancelFeeAmount'] as num? ?? 0) > 0) ...[
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      const SizedBox(width: 24),
+                      Expanded(child: Text(
+                          '${tr("cancel_fee_label")}: ₭ ${NumberFormat('#,###').format(b['cancelFeeAmount'])}',
+                          style: const TextStyle(fontSize: 13, color: C.red,
+                              fontWeight: FontWeight.w700))),
+                    ]),
+                  ],
                 ])),
               ],
 

@@ -13,6 +13,7 @@
 //   ✅ mounted check
 // ============================================================
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -20,6 +21,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
 import 'fcm_service.dart';
+import 'widgets/skeleton_box.dart';
+import 'widgets/error_state_view.dart';
 
 // ════════════════════════════════════════════════════════════
 // MODEL
@@ -58,8 +61,19 @@ class ChatMessage {
 // CHAT LIST SCREEN
 // ════════════════════════════════════════════════════════════
 
-class ChatListScreen extends StatelessWidget {
+class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
+
+  @override
+  State<ChatListScreen> createState() => _ChatListScreenState();
+}
+
+class _ChatListScreenState extends State<ChatListScreen> {
+  // 🔒 [AUDIT EDGE-4 / 2026-08-02 — Low, fresh re-audit] bumped by the retry
+  // button below to force the StreamBuilder to resubscribe — this screen has
+  // no Riverpod provider to invalidate() (raw Firestore stream), so a
+  // ValueKey change is the mechanism.
+  int _retryTick = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -75,6 +89,7 @@ class ChatListScreen extends StatelessWidget {
         )),
       ),
       body: StreamBuilder<QuerySnapshot>(
+        key: ValueKey(_retryTick),
         // 🔒 [AUDIT PERF-2 / 2026-08-02 — Medium, fresh re-audit] ບໍ່ເຄີຍມີ
         // .limit() ຢູ່ນີ້ — ຕ່າງຈາກ query ອື່ນທຸກອັນໃນແອັບທີ່ຈຳກັດຂອບເຂດໝົດ
         // (booking_repository.dart ໃຊ້ .limit(30/50) ທົ່ວໄປ). ຜູ້ໃຊ້ທີ່ມີ
@@ -88,6 +103,14 @@ class ChatListScreen extends StatelessWidget {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const _SkeletonChatList();
+          }
+          // 🔒 [AUDIT EDGE-4 / 2026-08-02 — Low, fresh re-audit] previously
+          // an error fell into the same branch as "no chats yet" below —
+          // indistinguishable to the user, and no way to retry a real
+          // failure (offline, permission change) short of leaving the screen.
+          if (snapshot.hasError) {
+            return ErrorStateView(
+                onRetry: () => setState(() => _retryTick++));
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const _EmptyChatList();
@@ -280,6 +303,23 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _sending = false;
 
+  // 🔒 [AUDIT EDGE-5 / 2026-08-02 — Low, fresh re-audit] the messages
+  // StreamBuilder below showed _SkeletonMessages() for as long as
+  // ConnectionState stayed 'waiting' with no timeout — a device stuck
+  // offline (RTDB doesn't quickly emit a connectivity error the way
+  // Firestore does) saw an infinite skeleton with no way to tell something
+  // was wrong or retry.
+  Timer? _msgTimeoutTimer;
+  bool   _msgLoadTimedOut = false;
+
+  void _startMsgTimeoutTimer() {
+    _msgTimeoutTimer?.cancel();
+    _msgLoadTimedOut = false;
+    _msgTimeoutTimer = Timer(const Duration(seconds: 15), () {
+      if (mounted) setState(() => _msgLoadTimedOut = true);
+    });
+  }
+
   // 🔒 [AUDIT CUST-5 / 2026-08-02] ດຶງໄວ້ຄັ້ງດຽວຕອນເປີດໜ້າ (ຈາກ Firestore
   // chats/{id} doc — ChatService.createOrGetChat() ຂຽນ bookingId/customerId/
   // providerId ໄວ້ຢູ່ນັ້ນ) ເພື່ອໃຫ້ _sendMessage() ຮູ້ຈັກ targetRole ຂອງອີກຝ່າຍ
@@ -304,6 +344,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _chatMetaRef = FirebaseDatabase.instance.ref('chats/$_chatId/meta');
     _ensureIdentitySeeded();
     _loadChatMeta();
+    _startMsgTimeoutTimer();
   }
 
   Future<void> _loadChatMeta() async {
@@ -352,6 +393,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _msgTimeoutTimer?.cancel();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -466,9 +508,19 @@ class _ChatScreenState extends State<ChatScreen> {
       // ຊ່ອງພິມ (_msgCtrl.clear() ຂ້າງເທິງ) ກ່ອນຮູ້ວ່າສົ່ງລົ້ມເຫລວ ເຮັດໃຫ້
       // ຂໍ້ຄວາມຫາຍໄປງຽບໆ. ຕອນນີ້ຄືນຂໍ້ຄວາມກັບຄືນຊ່ອງພິມ ແລະ ແຈ້ງເຕືອນຜູ້ໃຊ້.
       _msgCtrl.text = text;
+      // 🔒 [AUDIT EDGE-6 / 2026-08-02 — Low, fresh re-audit] every failure
+      // (offline, timeout, a real permission-denied from database.rules.json
+      // — e.g. this chat's meta was seeded with a different pair of
+      // participants than expected) previously showed the same generic
+      // "send failed, please retry" with the raw exception appended —
+      // technically accurate but misleading for permission-denied, which
+      // retrying can never fix. Distinguish it with a clearer message.
+      final isPermissionDenied = e is FirebaseException && e.code == 'permission-denied';
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('ສົ່ງຂໍ້ຄວາມລົ້ມເຫລວ, ກະລຸນາລອງໃໝ່: $e'),
+          content: Text(isPermissionDenied
+              ? tr('chat_send_permission_denied')
+              : 'ສົ່ງຂໍ້ຄວາມລົ້ມເຫລວ, ກະລຸນາລອງໃໝ່: $e'),
           backgroundColor: C.red,
         ));
       }
@@ -522,7 +574,17 @@ class _ChatScreenState extends State<ChatScreen> {
             stream: _msgsRef.orderByChild('timestamp').limitToLast(50).onValue,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
+                if (_msgLoadTimedOut) {
+                  return ErrorStateView(
+                      onRetry: () => setState(_startMsgTimeoutTimer));
+                }
                 return const _SkeletonMessages();
+              }
+              // stream produced data or an error — no longer "loading"
+              _msgTimeoutTimer?.cancel();
+              if (snapshot.hasError) {
+                return ErrorStateView(
+                    onRetry: () => setState(_startMsgTimeoutTimer));
               }
               final data = snapshot.data?.snapshot.value;
               if (data == null) return const _EmptyChat();
@@ -852,123 +914,66 @@ class _EmptyChat extends StatelessWidget {
   );
 }
 
-class _SkeletonChatList extends StatefulWidget {
+// 🔒 [AUDIT UI-5 / 2026-08-02 — Medium, fresh re-audit] previously each of
+// these hand-rolled its own AnimationController+Tween+dispose() shimmer —
+// now built on the shared SkeletonBox (which already wraps PulsingFade).
+class _SkeletonChatList extends StatelessWidget {
   const _SkeletonChatList();
-  @override
-  State<_SkeletonChatList> createState() => _SkeletonChatListState();
-}
-
-class _SkeletonChatListState extends State<_SkeletonChatList>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double>   _anim;
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this,
-        duration: const Duration(milliseconds: 1000))
-      ..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.3, end: 0.7).animate(
-        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
-  }
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) => ListView.builder(
-        padding:     const EdgeInsets.all(16),
-        itemCount:   5,
-        itemBuilder: (_, __) => Container(
-          margin:  const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color:        Colors.white,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(children: [
-            _Shimmer(w: 50, h: 50, r: 16, op: _anim.value),
-            const SizedBox(width: 12),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _Shimmer(w: 120, h: 13, r: 4, op: _anim.value),
-                const SizedBox(height: 6),
-                _Shimmer(w: 80,  h: 10, r: 4, op: _anim.value),
-                const SizedBox(height: 5),
-                _Shimmer(w: 160, h: 10, r: 4, op: _anim.value),
-              ],
-            )),
-          ]),
+    return ListView.builder(
+      padding:     const EdgeInsets.all(16),
+      itemCount:   5,
+      itemBuilder: (_, __) => Container(
+        margin:  const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color:        Colors.white,
+          borderRadius: BorderRadius.circular(18),
         ),
+        child: Row(children: [
+          const SkeletonBox(width: 50, height: 50, radius: 16),
+          const SizedBox(width: 12),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              SkeletonBox(width: 120, height: 13, radius: 4),
+              SizedBox(height: 6),
+              SkeletonBox(width: 80,  height: 10, radius: 4),
+              SizedBox(height: 5),
+              SkeletonBox(width: 160, height: 10, radius: 4),
+            ],
+          )),
+        ]),
       ),
     );
   }
 }
 
-class _SkeletonMessages extends StatefulWidget {
+class _SkeletonMessages extends StatelessWidget {
   const _SkeletonMessages();
-  @override
-  State<_SkeletonMessages> createState() => _SkeletonMessagesState();
-}
-
-class _SkeletonMessagesState extends State<_SkeletonMessages>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double>   _anim;
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this,
-        duration: const Duration(milliseconds: 1000))
-      ..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.3, end: 0.7).animate(
-        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
-  }
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     final widths = [160.0, 200.0, 120.0, 180.0, 140.0];
     final rights = [false, true, false, true, false];
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) => ListView.builder(
-        padding:   const EdgeInsets.all(16),
-        itemCount: 5,
-        itemBuilder: (_, i) => Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Row(
-            mainAxisAlignment: rights[i]
-                ? MainAxisAlignment.end
-                : MainAxisAlignment.start,
-            children: [
-              _Shimmer(w: widths[i], h: 40, r: 14, op: _anim.value),
-            ],
-          ),
+    return ListView.builder(
+      padding:   const EdgeInsets.all(16),
+      itemCount: 5,
+      itemBuilder: (_, i) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          mainAxisAlignment: rights[i]
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
+          children: [
+            SkeletonBox(width: widths[i], height: 40, radius: 14),
+          ],
         ),
       ),
     );
   }
-}
-
-class _Shimmer extends StatelessWidget {
-  final double w, h, r, op;
-  const _Shimmer({
-    required this.w, required this.h,
-    required this.r, required this.op,
-  });
-  @override
-  Widget build(BuildContext context) => Container(
-    width: w, height: h,
-    decoration: BoxDecoration(
-      color:        C.border.withValues(alpha: op),
-      borderRadius: BorderRadius.circular(r),
-    ),
-  );
 }
 
 // ════════════════════════════════════════════════════════════

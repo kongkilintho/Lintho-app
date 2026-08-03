@@ -21,6 +21,7 @@ import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'app_colors.dart';
 import 'provider_model.dart';
 import 'fcm_service.dart';
+import 'widgets/pulsing_fade.dart';
 
 // ════════════════════════════════════════════════════════════
 //  REVIEW SCREEN
@@ -461,37 +462,17 @@ class _ReviewScreenState extends State<ReviewScreen>
 //  BUTTON LOADING SKELETON
 // ════════════════════════════════════════════════════════════
 
-class _BtnLoadingSkeleton extends StatefulWidget {
+// 🔒 [AUDIT UI-5 / 2026-08-02 — Medium, fresh re-audit] previously its own
+// AnimationController+Tween+dispose() (identical 600ms/0.4-1.0 pattern
+// duplicated in job_workflow_Screen.dart and main.dart) — now built on the
+// shared PulsingFade primitive.
+class _BtnLoadingSkeleton extends StatelessWidget {
   const _BtnLoadingSkeleton();
 
   @override
-  State<_BtnLoadingSkeleton> createState() => _BtnLoadingSkeletonState();
-}
-
-class _BtnLoadingSkeletonState extends State<_BtnLoadingSkeleton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _anim;
-  late final Animation<double>   _fade;
-
-  @override
-  void initState() {
-    super.initState();
-    _anim = AnimationController(
-      vsync:    this,
-      duration: const Duration(milliseconds: 600),
-    )..repeat(reverse: true);
-    _fade = Tween<double>(begin: 0.4, end: 1.0).animate(_anim);
-  }
-
-  @override
-  void dispose() {
-    _anim.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => FadeTransition(
-    opacity: _fade,
+  Widget build(BuildContext context) => PulsingFade(
+    duration: const Duration(milliseconds: 600),
+    begin: 0.4, end: 1.0,
     child: Row(
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize:      MainAxisSize.min,

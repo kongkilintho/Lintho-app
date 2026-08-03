@@ -49,6 +49,7 @@ import 'referral_screen.dart';
 import 'package:intl/intl.dart';
 import 'lao_phone.dart';
 import 'widgets/pulsing_fade.dart';
+import 'widgets/error_state_view.dart';
 import 'theme/app_theme.dart';
 import 'app_navigation_state.dart';
 import 'phone_verification.dart';
@@ -64,19 +65,40 @@ const firebaseOptions = FirebaseOptions(
   appId:             "1:759333413622:web:48e4cd177bf4f215a842d7",
 );
 
+// 🔒 [AUDIT PERF-7 / 2026-08-02 — Low, fresh re-audit] previously no
+// FlutterError.onError/runZonedGuarded anywhere — a framework build error or
+// an uncaught async error outside any try/catch was invisible in production
+// (default behavior dumps to stderr, which nobody sees on a real device).
+// This installs the standard Flutter hooks and centralizes every such error
+// through one function. NOTE: this alone does not give the team remote crash
+// visibility — _reportError() below only debugPrints. Wiring a real reporter
+// (Crashlytics/Sentry) needs adding that package plus native Android/iOS
+// build config, which wasn't done here as it can't be verified without a
+// full native build; _reportError() is the single point to plug one in.
+void _reportError(Object error, StackTrace stack, {String? context}) {
+  debugPrint('UNCAUGHT ERROR${context != null ? ' [$context]' : ''}: $error\n$stack');
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // firebaseOptions ແມ່ນ web config — Android/iOS ຕ້ອງໃຊ້ native
-  // google-services.json / GoogleService-Info.plist ແທນ ບໍ່ດັ່ງນັ້ນ
-  // Firebase.initializeApp() ຈະ throw ແລະ ເຮັດໃຫ້ໜ້າຈໍດຳ.
-  if (kIsWeb) {
-    await Firebase.initializeApp(options: firebaseOptions);
-  } else {
-    await Firebase.initializeApp();
-  }
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  await AppLocale.loadSaved();
-  runApp(const ProviderScope(child: LinThoApp()));
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    _reportError(details.exception, details.stack ?? StackTrace.empty,
+        context: 'FlutterError');
+  };
+  runZonedGuarded(() async {
+    // firebaseOptions ແມ່ນ web config — Android/iOS ຕ້ອງໃຊ້ native
+    // google-services.json / GoogleService-Info.plist ແທນ ບໍ່ດັ່ງນັ້ນ
+    // Firebase.initializeApp() ຈະ throw ແລະ ເຮັດໃຫ້ໜ້າຈໍດຳ.
+    if (kIsWeb) {
+      await Firebase.initializeApp(options: firebaseOptions);
+    } else {
+      await Firebase.initializeApp();
+    }
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    await AppLocale.loadSaved();
+    runApp(const ProviderScope(child: LinThoApp()));
+  }, (error, stack) => _reportError(error, stack, context: 'runZonedGuarded'));
 }
 
 class LinThoApp extends StatelessWidget {
@@ -203,6 +225,10 @@ class RoleRouter extends StatefulWidget {
 }
 
 class _RoleRouterState extends State<RoleRouter> {
+  // 🔒 [AUDIT PERF-7b / 2026-08-02 — Low, fresh re-audit] bumped by the
+  // retry button below to force the StreamBuilder to resubscribe.
+  int _retryTick = 0;
+
   @override
   void initState() {
     super.initState();
@@ -216,6 +242,7 @@ class _RoleRouterState extends State<RoleRouter> {
     if (user.email == 'admin@sabee.la') return const _AdminRedirectScreen();
 
     return StreamBuilder<DocumentSnapshot>(
+      key: ValueKey(_retryTick),
       stream: FirebaseFirestore.instance
           .collection('users').doc(user.uid).snapshots(),
       builder: (context, snapshot) {
@@ -223,6 +250,18 @@ class _RoleRouterState extends State<RoleRouter> {
           return const Scaffold(
             backgroundColor: C.background,
             body: _RoleRouterSkeleton(),
+          );
+        }
+        // 🔒 [AUDIT PERF-7b / 2026-08-02] a transient stream error (network
+        // blip, momentary rules hiccup) previously fell into the
+        // `!exists` branch below, misleadingly showing "incomplete
+        // registration" — with a sign-out button — to a fully-registered
+        // user, instead of a retryable error state.
+        if (snapshot.hasError) {
+          return Scaffold(
+            backgroundColor: C.background,
+            body: ErrorStateView(
+                onRetry: () => setState(() => _retryTick++)),
           );
         }
         if (snapshot.data?.exists != true) {
@@ -312,8 +351,9 @@ class _IncompleteRegistrationScreen extends StatelessWidget {
 
 // ✅ [lib/widgets/ ExAMPLE] ປ່ຽນຈາກ StatefulWidget ທີ່ຂຽນ AnimationController
 // ເອງ (46 ແຖວ) ໄປໃຊ້ PulsingFade ຈາກ lib/widgets/pulsing_fade.dart ແທນ —
-// ຮູບແບບດຽວກັນນີ້ສາມາດໃຊ້ແທນ _ButtonLoadingSkeleton ແລະ skeleton loader
-// ອື່ນໆທີ່ຊ້ຳກັນຢູ່ໃນ main.dart, booking_form_screen.dart, ແລະອື່ນໆ
+// ຮູບແບບດຽວກັນນີ້ໄດ້ຖືກໃຊ້ແທນ skeleton loader ອື່ນໆທີ່ຊ້ຳກັນຢູ່ໃນ main.dart,
+// booking_form_screen.dart, ແລະອື່ນໆແລ້ວ (ເບິ່ງ AUDIT UI-5 2026-08-02);
+// _ButtonLoadingSkeleton ທີ່ເຄີຍຢູ່ໄຟລ໌ນີ້ຖືກລຶບອອກ — ບໍ່ມີບ່ອນໃດເອີ້ນໃຊ້ເລີຍ.
 class _RoleRouterSkeleton extends StatelessWidget {
   const _RoleRouterSkeleton();
 
@@ -580,10 +620,19 @@ class _LoginPageState extends State<LoginPage>
                       .sendPasswordResetEmail(email: email);
                   if (ctx.mounted) Navigator.pop(ctx, true);
                 } on FirebaseAuthException catch (e) {
+                  // 🔒 [AUDIT SEC-5 / 2026-08-02 — Low, fresh re-audit]
+                  // 'user-not-found' previously showed a distinct
+                  // reset_password_not_found message, letting anyone probe
+                  // whether an email is registered. Treated the same as
+                  // success (silent pop) — the account holder gets nothing
+                  // extra to click, and a prober can't tell the difference.
+                  if (e.code == 'user-not-found') {
+                    if (ctx.mounted) Navigator.pop(ctx, true);
+                    return;
+                  }
                   setDialogState(() {
                     sending = false;
                     dialogError = switch (e.code) {
-                      'user-not-found' => tr('reset_password_not_found'),
                       'invalid-email'  => tr('reset_password_invalid_email'),
                       _ => '${tr("error")} (${e.code})',
                     };
@@ -834,48 +883,6 @@ class _LoginPageState extends State<LoginPage>
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ButtonLoadingSkeleton extends StatefulWidget {
-  const _ButtonLoadingSkeleton();
-  @override
-  State<_ButtonLoadingSkeleton> createState() => _ButtonLoadingSkeletonState();
-}
-
-class _ButtonLoadingSkeletonState extends State<_ButtonLoadingSkeleton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _anim;
-  late final Animation<double> _fade;
-
-  @override
-  void initState() {
-    super.initState();
-    _anim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    )..repeat(reverse: true);
-    _fade = Tween<double>(begin: 0.4, end: 1.0).animate(_anim);
-  }
-
-  @override
-  void dispose() {
-    _anim.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fade,
-      child: Container(
-        width: 100, height: 14,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.6),
-          borderRadius: BorderRadius.circular(6),
         ),
       ),
     );
@@ -1217,17 +1224,23 @@ class HomeScreen extends StatelessWidget {
     },
   ];
 
+  // 🔒 [AUDIT CUST-8 / 2026-08-02 — Low, fresh re-audit] 'rating' previously
+  // hardcoded 4.9/4.8 as static literals unrelated to any real aggregate —
+  // these cards represent a whole service *category*, not one provider, and
+  // no category-level rating aggregate is computed anywhere in this app
+  // (only per-provider ratings exist). Removed rather than fabricated;
+  // _PopularCard no longer renders a rating.
   static List<Map<String, Object>> get _popular => [
     {
       'icon': Icons.ac_unit_rounded, 'name': tr('svc_ac_general_full'),
-      'price': '${tr('starting_from')} 300,000', 'rating': 4.9,
+      'price': '${tr('starting_from')} 300,000',
       'time': '45–60 ${tr('minutes_unit')}',
       'color': C.categoryAcBg, 'accent': C.categoryAcAccent,
       'category': ServiceCategory.acCleaning,
     },
     {
       'icon': Icons.cleaning_services_rounded, 'name': tr('svc_house_general_full'),
-      'price': '${tr('starting_from')} 180,000', 'rating': 4.8,
+      'price': '${tr('starting_from')} 180,000',
       'time': '1–3 ${tr('hours_unit')}',
       'color': C.categoryCleanBg, 'accent': C.categoryCleanAccent,
       'category': ServiceCategory.homeCleaning,
@@ -1465,12 +1478,6 @@ class _PopularCard extends StatelessWidget {
                     color: C.text)),
                 const SizedBox(height: 4),
                 Row(children: [
-                  const Icon(Icons.star_rounded, color: C.yellow, size: 14),
-                  const SizedBox(width: 3),
-                  Text('${s['rating']}', style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w600,
-                      color: C.muted)),
-                  const SizedBox(width: 10),
                   const Icon(Icons.access_time, color: C.muted, size: 13),
                   const SizedBox(width: 3),
                   Text(s['time'] as String,
@@ -2107,11 +2114,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         SliverToBoxAdapter(child: Padding(
           padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 120),
           child: Column(children: [
+            // 🔒 [AUDIT CUST-6 / 2026-08-02 — Low, fresh re-audit] "Favorite
+            // Providers" entry point removed — FavoriteProvidersScreen always
+            // rendered an empty state with no real feature behind it (no
+            // heart affordance or Firestore write path existed anywhere in
+            // the app). Removed rather than half-implemented; the screen
+            // class stays in case the feature is built for real later.
             _group(tr('manage_account'), [
-              _tile(Icons.favorite_outline,
-                  tr('favorite_providers'), tr('favorite_providers_sub'), iconColor: C.red,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => const FavoriteProvidersScreen()))),
               _tile(Icons.receipt_long,
                   tr('payment_history'), tr('payment_history_sub'), iconColor: C.blue,
                   onTap: () => Navigator.push(context, MaterialPageRoute(
@@ -3409,8 +3418,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ]),
                 if (sub.isNotEmpty)
-                  Text(sub, style: TextStyle(
-                      fontSize: 11, color: Colors.grey[600])),
+                  // 🔒 [AUDIT UI-9 / 2026-08-02 — Low, fresh re-audit] raw
+                  // Colors.grey[600] → C.muted design-system token.
+                  Text(sub, style: const TextStyle(
+                      fontSize: 11, color: C.muted)),
               ],
             )),
             const SizedBox(width: 4),

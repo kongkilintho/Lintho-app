@@ -135,7 +135,8 @@ class _CodeCard extends StatelessWidget {
             onPressed: () {
               Clipboard.setData(ClipboardData(text: code));
               ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('ສຳເນົາແລ້ວ')));
+                  // 🔒 [AUDIT UI-10 / 2026-08-02]
+                  SnackBar(content: Text(tr('copied_to_clipboard'))));
             },
           ),
         ]),

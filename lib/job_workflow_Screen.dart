@@ -18,6 +18,7 @@ import 'booking_repository.dart';
 import 'chat_screen.dart';
 import 'widgets/app_icon_button.dart';
 import 'widgets/status_stepper.dart' as shared;
+import 'widgets/pulsing_fade.dart';
 
 // ── SINGLE BOOKING STREAM ────────────────────────────────────
 
@@ -118,15 +119,21 @@ class JobWorkflowScreen extends ConsumerWidget {
         ],
       ),
       actions: [
+        // 🔒 [AUDIT UI-14 / 2026-08-02 — Low, fresh re-audit] these two
+        // IconButtons previously had no tooltip/Semantics label — unlike the
+        // identical call/navigate actions duplicated lower on this same
+        // screen (AppIconButton, ~line 442), which already enforce this.
         IconButton(
           icon: const Icon(Icons.phone_outlined,
               color: Colors.white, size: 22),
+          tooltip: tr('call_semantic'),
           onPressed: () =>
               launchUrl(Uri.parse('tel:${b.contactPhone}')),
         ),
         IconButton(
           icon: const Icon(Icons.navigation_outlined,
               color: Colors.white, size: 22),
+          tooltip: tr('navigate_semantic'),
           onPressed: () => launchUrl(Uri.parse(
               'https://www.google.com/maps/dir/?api=1'
                   '&destination=${b.location.latitude},'
@@ -1362,44 +1369,21 @@ class _CancelJobButton extends ConsumerWidget {
   }
 }
 
-/// ✅ RULE: Skeleton loading ສຳລັບ button loading state
-class _BtnLoadingSkeleton extends StatefulWidget {
+// 🔒 [AUDIT UI-5 / 2026-08-02 — Medium, fresh re-audit] previously its own
+// AnimationController+Tween+dispose() (identical 600ms/0.4-1.0 pattern
+// duplicated in review_screen.dart and main.dart) — now built on the shared
+// PulsingFade primitive.
+class _BtnLoadingSkeleton extends StatelessWidget {
   const _BtnLoadingSkeleton();
 
   @override
-  State<_BtnLoadingSkeleton> createState() => _BtnLoadingSkeletonState();
-}
-
-class _BtnLoadingSkeletonState extends State<_BtnLoadingSkeleton>
-    with SingleTickerProviderStateMixin {
-  // ✅ RULE: dispose() ທຸກ controller
-  late final AnimationController _anim;
-  late final Animation<double> _fade;
-
-  @override
-  void initState() {
-    super.initState();
-    _anim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    )..repeat(reverse: true);
-    _fade = Tween<double>(begin: 0.4, end: 1.0).animate(_anim);
-  }
-
-  @override
-  void dispose() {
-    _anim.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fade,
+    return PulsingFade(
+      duration: const Duration(milliseconds: 600),
+      begin: 0.4, end: 1.0,
       child: Container(
         width: 18, height: 18,
         decoration: BoxDecoration(
-          // ✅ RULE: withValues(alpha:) ແທນ withOpacity
           color: Colors.white.withValues(alpha: 0.7),
           borderRadius: BorderRadius.circular(5),
         ),

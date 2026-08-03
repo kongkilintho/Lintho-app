@@ -1134,7 +1134,8 @@ class _TopUpDetailRow extends StatelessWidget {
               onTap: () {
                 Clipboard.setData(ClipboardData(text: value));
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('✅ ຄັດລອກແລ້ວ'), duration: Duration(seconds: 1)),
+                  // 🔒 [AUDIT UI-10 / 2026-08-02]
+                  SnackBar(content: Text(tr('copied_to_clipboard')), duration: const Duration(seconds: 1)),
                 );
               },
               child: Text(value, textAlign: TextAlign.right, style: TextStyle(

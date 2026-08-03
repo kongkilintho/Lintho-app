@@ -29,6 +29,7 @@ import 'booking_repository.dart';
 import 'geohash_util.dart';
 import 'provider_model.dart';
 import 'tracking_screen.dart';
+import 'widgets/pulsing_fade.dart';
 
 // ════════════════════════════════════════════════════════════
 // MATCH STATE
@@ -1989,7 +1990,14 @@ class _SearchingDotsState extends State<_SearchingDots> {
 // SHIMMER
 // ════════════════════════════════════════════════════════════
 
-class _Shimmer extends StatefulWidget {
+// 🔒 [AUDIT UI-5 / 2026-08-02 — Medium, fresh re-audit] previously its own
+// AnimationController+Tween+dispose() — now built on the shared PulsingFade
+// primitive. Kept as its own widget (rather than switching to widgets/
+// skeleton_box.dart's SkeletonBox) because this screen's shimmer is a subtle
+// white overlay on a colored background (opacity 0.04-0.12), not
+// SkeletonBox's gray-box-on-white-card look (opacity 0.35-0.85) — PulsingFade
+// is the lower-level primitive both are built from.
+class _Shimmer extends StatelessWidget {
   final double width, height, radius;
   const _Shimmer({
     required this.width,
@@ -1998,37 +2006,16 @@ class _Shimmer extends StatefulWidget {
   });
 
   @override
-  State<_Shimmer> createState() => _ShimmerState();
-}
-
-class _ShimmerState extends State<_Shimmer>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double>   _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync:    this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.04, end: 0.12)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _anim,
-    builder: (_, __) => Container(
-      width:  widget.width,
-      height: widget.height,
+  Widget build(BuildContext context) => PulsingFade(
+    duration: const Duration(milliseconds: 1200),
+    begin: 0.04,
+    end: 0.12,
+    child: Container(
+      width:  width,
+      height: height,
       decoration: BoxDecoration(
-        color:        Colors.white.withValues(alpha: _anim.value),
-        borderRadius: BorderRadius.circular(widget.radius),
+        color:        Colors.white,
+        borderRadius: BorderRadius.circular(radius),
       ),
     ),
   );

@@ -299,8 +299,18 @@ service cloud.firestore {
     // (isValidNewBookingShape() ຂ້າງເທິງ ຈຳກັດ 0-50000000 ຢູ່ແລ້ວ) — provider
     // client ຄົນໃດກໍໄດ້ຈຶ່ງສາມາດຮ້ອງຂໍຄ່າໃຊ້ຈ່າຍເພີ່ມເປັນຄ່າລົບ ຫຼື ຈຳນວນບໍ່ມີເຫດຜົນ
     // ໄດ້. ໃຊ້ຂອບເຂດດຽວກັນກັບ price (0-50000000) ເມື່ອ field ນີ້ຖືກຂຽນ.
+    // 🔒 [AUDIT BE-6 / 2026-08-02 — Low, fresh re-audit] previously not
+    // conditioned on resource.data.status at all — unlike the sibling
+    // admin-edit branch below (line ~607, !(status in [completed, cancelled,
+    // rejected])) a provider could still write additionalCharges/Note fields
+    // on a booking they own after it was cancelled/rejected. Not financially
+    // exploitable (the only payout path additionally requires
+    // status=='completed' — see grantAdditionalChargesWalletCredit() in
+    // functions/index.js), just a data-hygiene gap; matches the sibling
+    // pattern for consistency.
     function isValidProviderChargesRequest() {
-      return (!('additionalChargesApproved' in request.resource.data.diff(resource.data).affectedKeys()) ||
+      return !(resource.data.status in ['completed', 'cancelled', 'rejected']) &&
+        (!('additionalChargesApproved' in request.resource.data.diff(resource.data).affectedKeys()) ||
         request.resource.data.additionalChargesApproved == false) &&
         (!('additionalCharges' in request.resource.data.diff(resource.data).affectedKeys()) ||
           request.resource.data.additionalCharges == null ||

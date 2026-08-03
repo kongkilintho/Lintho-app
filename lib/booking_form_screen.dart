@@ -12,7 +12,10 @@
 //   ✅ _SqmInput uses TextEditingController (no state loss)
 //   ✅ _BcelQrBox uses qr_flutter real QR
 //   ✅ _TravelFeeBox shows note when manual address
-//   ✅ Skeleton loading ແທນ CircularProgressIndicator
+//   ✅ Skeleton loading ແທນ CircularProgressIndicator ສະເພາະ full-page/list
+//      load state — inline button/upload-progress spinners (still
+//      CircularProgressIndicator by design, see AUDIT UI-6 2026-08-02) are a
+//      different UX moment and were never meant to be covered by this fix
 //   ✅ withValues(alpha:) ທຸກ instance
 //   ✅ InkWell + Material ທຸກ tap target
 //   ✅ dispose() ທຸກ controller
@@ -2657,8 +2660,8 @@ class _BcelAccountRow extends StatelessWidget {
             onTap: !copyable ? null : () {
               Clipboard.setData(ClipboardData(text: value));
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('✅ ຄັດລອກແລ້ວ'),
-                    duration: Duration(seconds: 1)),
+                SnackBar(content: Text(tr('copied_to_clipboard')), // 🔒 [AUDIT UI-10 / 2026-08-02]
+                    duration: const Duration(seconds: 1)),
               );
             },
             child: Row(mainAxisSize: MainAxisSize.min, children: [

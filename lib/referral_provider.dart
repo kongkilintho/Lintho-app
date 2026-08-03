@@ -49,15 +49,31 @@ final referralInfoProvider = StreamProvider<ReferralInfo?>((ref) {
   });
 });
 
+// 🔒 [AUDIT BE-7 / 2026-08-02 — Low, fresh re-audit] referralCodes/{code} has
+// no uniqueness pre-check — firestore.rules' `allow update, delete: if false`
+// safely rejects a genuine collision (no silent overwrite of another user's
+// code), but that rejection previously surfaced as a raw permission-denied
+// exception straight to the caller, with no retry. At ~39M possible codes
+// (33 chars ^ 5) a collision is rare but not impossible as the user base
+// grows. Bounded retry with a freshly generated code on each collision.
 Future<String> _ensureReferralCode(String uid) async {
   final db = FirebaseFirestore.instance;
-  final code = 'LINTHO${_randomSuffix()}';
-  await db.runTransaction((tx) async {
-    tx.set(db.collection('users').doc(uid), {'referralCode': code},
-        SetOptions(merge: true));
-    tx.set(db.collection('referralCodes').doc(code), {'ownerUid': uid});
-  });
-  return code;
+  const maxAttempts = 5;
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    final code = 'LINTHO${_randomSuffix()}';
+    try {
+      await db.runTransaction((tx) async {
+        tx.set(db.collection('users').doc(uid), {'referralCode': code},
+            SetOptions(merge: true));
+        tx.set(db.collection('referralCodes').doc(code), {'ownerUid': uid});
+      });
+      return code;
+    } on FirebaseException catch (e) {
+      if (e.code != 'permission-denied' || attempt == maxAttempts) rethrow;
+      // collision — loop again with a new random suffix
+    }
+  }
+  throw Exception('ບໍ່ສາມາດສ້າງລະຫັດແນະນຳໄດ້, ກະລຸນາລອງໃໝ່');
 }
 
 String _randomSuffix() {

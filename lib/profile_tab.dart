@@ -28,6 +28,7 @@ import 'support_provider.dart';
 import 'widgets/stat_card.dart';
 import 'widgets/empty_state_view.dart';
 import 'widgets/error_state_view.dart';
+import 'widgets/skeleton_box.dart';
 
 // ════════════════════════════════════════════════════════════
 // PROFILE TAB
@@ -263,7 +264,7 @@ class _ProfileCard extends StatelessWidget {
               ),
             )
                 : Center(child: Text(
-                p?.avatarLetter ?? '🔧',
+                p?.avatarLetter ?? '?',
                 style: const TextStyle(
                   fontSize: 36, color: Colors.white,
                   fontWeight: FontWeight.w800,
@@ -447,7 +448,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         ),
                       )
                           : Center(child: Text(
-                          p?.avatarLetter ?? '🔧',
+                          p?.avatarLetter ?? '?',
                           style: const TextStyle(
                             fontSize: 40, color: Colors.white,
                             fontWeight: FontWeight.w800,
@@ -1270,9 +1271,11 @@ class _MenuItem extends StatelessWidget {
                     color: danger ? C.red : C.text,
                   )),
                   if (subtitle != null)
+                    // 🔒 [AUDIT UI-9 / 2026-08-02 — Low, fresh re-audit] raw
+                    // Colors.grey[600] → C.muted design-system token.
                     Text(subtitle!, style: TextStyle(
                       fontSize: 11,
-                      color: danger ? C.red.withValues(alpha: 0.7) : Colors.grey[600],
+                      color: danger ? C.red.withValues(alpha: 0.7) : C.muted,
                     )),
                 ],
               )),
@@ -1499,121 +1502,47 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
 // SKELETON WIDGETS
 // ════════════════════════════════════════════════════════════
 
-class _SkeletonProfile extends StatefulWidget {
+// 🔒 [AUDIT UI-5 / 2026-08-02 — Medium, fresh re-audit] previously each of
+// these hand-rolled its own AnimationController+Tween+dispose() — identical
+// 0.3-0.7/1000ms/C.border pattern to widgets/skeleton_box.dart's SkeletonBox,
+// now built on it directly instead of duplicating the boilerplate.
+class _SkeletonProfile extends StatelessWidget {
   const _SkeletonProfile();
 
   @override
-  State<_SkeletonProfile> createState() => _SkeletonProfileState();
-}
-
-class _SkeletonProfileState extends State<_SkeletonProfile>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double>   _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.3, end: 0.7).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) => SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(children: [
-          Container(
-            width: double.infinity, height: 180,
-            decoration: BoxDecoration(
-              color: C.border.withValues(alpha: _anim.value),
-              borderRadius: BorderRadius.circular(20),
-            ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(children: [
+        const SkeletonBox(width: double.infinity, height: 180, radius: 20),
+        const SizedBox(height: 14),
+        Row(children: List.generate(3, (_) => const Expanded(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4),
+            child: SkeletonBox(width: double.infinity, height: 70, radius: 14),
           ),
-          const SizedBox(height: 14),
-          Row(children: List.generate(3, (_) => Expanded(
-            child: Container(
-              margin:  const EdgeInsets.symmetric(horizontal: 4),
-              height:  70,
-              decoration: BoxDecoration(
-                color: C.border.withValues(alpha: _anim.value),
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ))),
-          const SizedBox(height: 14),
-          ...List.generate(6, (_) => Container(
-            margin:  const EdgeInsets.only(bottom: 8),
-            height:  64,
-            decoration: BoxDecoration(
-              color: C.border.withValues(alpha: _anim.value),
-              borderRadius: BorderRadius.circular(14),
-            ),
-          )),
-        ]),
-      ),
+        ))),
+        const SizedBox(height: 14),
+        ...List.generate(6, (_) => const Padding(
+          padding: EdgeInsets.only(bottom: 8),
+          child: SkeletonBox(width: double.infinity, height: 64, radius: 14),
+        )),
+      ]),
     );
   }
 }
 
-class _SkeletonList extends StatefulWidget {
+class _SkeletonList extends StatelessWidget {
   const _SkeletonList();
 
   @override
-  State<_SkeletonList> createState() => _SkeletonListState();
-}
-
-class _SkeletonListState extends State<_SkeletonList>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double>   _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.3, end: 0.7).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) => ListView.builder(
-        padding:     const EdgeInsets.all(16),
-        itemCount:   5,
-        itemBuilder: (_, __) => Container(
-          margin:  const EdgeInsets.only(bottom: 8),
-          height:  64,
-          decoration: BoxDecoration(
-            color: C.border.withValues(alpha: _anim.value),
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
+    return ListView.builder(
+      padding:     const EdgeInsets.all(16),
+      itemCount:   5,
+      itemBuilder: (_, __) => const Padding(
+        padding: EdgeInsets.only(bottom: 8),
+        child: SkeletonBox(width: double.infinity, height: 64, radius: 14),
       ),
     );
   }

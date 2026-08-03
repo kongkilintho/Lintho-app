@@ -133,7 +133,7 @@ class _Header extends ConsumerWidget {
             onForegroundImageError: p?.photoUrl != null
                 ? (_, __) {} : null,
             child: Text(
-              p?.avatarLetter ?? '🔧',
+              p?.avatarLetter ?? '?',
               style: const TextStyle(
                 fontSize:   20,
                 color:      Colors.white,
@@ -231,7 +231,14 @@ class _OnlineToggleState extends ConsumerState<_OnlineToggle> {
   @override
   Widget build(BuildContext context) {
     final isOnline = widget.isOnline;
-    return Material(
+    // 🔒 [AUDIT UI-13 / 2026-08-02 — Low, fresh re-audit] the pill's own
+    // padding (8px vertical + ~16px content) only reached ~30-32px tap
+    // height, under the app's own 44dp minimum-target rule (AppIconButton
+    // enforces this everywhere else). SizedBox+Center expands the tappable
+    // area to 44dp without growing the pill's visual size.
+    return SizedBox(
+      height: 44,
+      child: Center(child: Material(
       color:        Colors.transparent,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
@@ -279,6 +286,7 @@ class _OnlineToggleState extends ConsumerState<_OnlineToggle> {
           ]),
         ),
       ),
+      )),
     );
   }
 }

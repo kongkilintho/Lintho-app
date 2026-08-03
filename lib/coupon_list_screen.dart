@@ -105,7 +105,8 @@ class _CouponCard extends StatelessWidget {
             onTap: active ? () {
               Clipboard.setData(ClipboardData(text: coupon.code));
               ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('ສຳເນົາລະຫັດແລ້ວ')));
+                  // 🔒 [AUDIT UI-10 / 2026-08-02]
+                  SnackBar(content: Text(tr('copied_to_clipboard'))));
             } : null,
             borderRadius: BorderRadius.circular(8),
             child: Container(
