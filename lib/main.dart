@@ -1280,9 +1280,12 @@ class _HomeSearchBar extends StatelessWidget {
               child: Row(children: [
                 const Icon(Icons.search_rounded, color: C.muted, size: 20),
                 const SizedBox(width: 8),
-                Expanded(child: Text(tr('search_placeholder'),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: C.muted, fontSize: 13.5))),
+                Expanded(child: _RotatingSearchHint(hints: [
+                  tr('search_hint_1'),
+                  tr('search_hint_2'),
+                  tr('search_hint_3'),
+                  tr('search_hint_4'),
+                ])),
               ]),
             ),
           ),
@@ -1345,6 +1348,88 @@ class _HomeSearchBar extends StatelessWidget {
           )),
         ]),
       )),
+    );
+  }
+}
+
+// ── ROTATING SEARCH HINT (Fastwork-style vertical ticker) ────
+// ▸ ໝູນວຽນ hint text ພາຍໃນກ່ອງຄົ້ນຫາ — ໂຕເກົ່າເລື່ອນຂຶ້ນ+ຈາງຫາຍ, ໂຕໃໝ່ເລື່ອນ
+// ຂຶ້ນມາຈາກລຸ່ມ+ຈາງເຂົ້າ ພ້ອມກັນ (ທິດທາງດຽວກັນ — ຄືກັນກັບ ticker ຂອງ Fastwork).
+// ໄອຄອນຄົ້ນຫາ/ຕອງ ຂ້າງນອກ widget ນີ້ບໍ່ຖືກກະທົບ, ມີແຕ່ text ນີ້ທີ່ animate.
+class _RotatingSearchHint extends StatefulWidget {
+  final List<String> hints;
+  const _RotatingSearchHint({required this.hints});
+
+  @override
+  State<_RotatingSearchHint> createState() => _RotatingSearchHintState();
+}
+
+class _RotatingSearchHintState extends State<_RotatingSearchHint>
+    with SingleTickerProviderStateMixin {
+  static const _kHintHeight = 18.0;
+  late final AnimationController _ctrl;
+  Timer? _timer;
+  int _index = 0;
+  int _nextIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 450));
+    _nextIndex = widget.hints.length > 1 ? 1 : 0;
+    _timer = Timer.periodic(const Duration(milliseconds: 2800), (_) => _advance());
+  }
+
+  void _advance() {
+    if (!mounted || widget.hints.length < 2) return;
+    _nextIndex = (_index + 1) % widget.hints.length;
+    _ctrl.forward(from: 0).whenComplete(() {
+      if (!mounted) return;
+      setState(() {
+        _index = _nextIndex;
+        _ctrl.value = 0;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Widget _line(String text) => Align(
+      alignment: Alignment.centerLeft,
+      child: Text(text,
+          maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: C.muted, fontSize: 13.5)));
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.hints.isEmpty) return const SizedBox.shrink();
+    return ClipRect(
+      child: SizedBox(
+        height: _kHintHeight,
+        child: AnimatedBuilder(
+          animation: _ctrl,
+          builder: (context, _) {
+            final t = _ctrl.value;
+            return Stack(children: [
+              Transform.translate(
+                offset: Offset(0, -_kHintHeight * t),
+                child: Opacity(opacity: 1 - t, child: _line(widget.hints[_index])),
+              ),
+              if (widget.hints.length > 1)
+                Transform.translate(
+                  offset: Offset(0, _kHintHeight * (1 - t)),
+                  child: Opacity(opacity: t, child: _line(widget.hints[_nextIndex])),
+                ),
+            ]);
+          },
+        ),
+      ),
     );
   }
 }
