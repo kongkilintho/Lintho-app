@@ -26,6 +26,8 @@ import 'language_selector.dart';
 import 'support_help.dart';
 import 'support_provider.dart';
 import 'widgets/stat_card.dart';
+import 'widgets/empty_state_view.dart';
+import 'widgets/error_state_view.dart';
 
 // ════════════════════════════════════════════════════════════
 // PROFILE TAB
@@ -685,10 +687,10 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
   // (ບໍ່ວ່າຈາກໜ້ານີ້ ຫຼື ຈາກ technician_register_screen.dart ເກົ່າ) ຈະບໍ່ຖືກ
   // match_screen.dart's top-3 query ຫຼື isJobVisibleToProvider() ຈັບຄູ່ວຽກໃຫ້
   // ຈັກເທື່ອ — ຕັດອອກໃຫ້ເຫຼືອສະເພາະ category ທີ່ມີວຽກຈິງ.
-  final _all = const [
-    {'emoji': '💧', 'key': 'ac_clean'},
-    {'emoji': '🧹', 'key': 'house_clean'},
-  ];
+  // 🔒 [AUDIT UI-2 / 2026-08-02 — Medium, fresh re-audit] ໜ້ານີ້ຍັງໃຊ້ emoji
+  // ດິບ ຕ່າງຈາກ home_tab.dart/jobs_tab.dart ທີ່ຍ້າຍໄປໃຊ້ Icon() (serviceIcon
+  // getter, Booking.dart) ໝົດແລ້ວ — ໃຊ້ serviceIconForCategory() ດຽວກັນນຳ.
+  final _all = const ['ac_clean', 'house_clean'];
 
   @override
   void initState() {
@@ -715,8 +717,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
       body: Column(children: [
         Expanded(child: ListView(
           padding: const EdgeInsets.all(16),
-          children: _all.map((s) {
-            final key  = s['key']!;
+          children: _all.map((key) {
             final name = tr('svc_$key');
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
@@ -729,8 +730,8 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                 )],
               ),
               child: SwitchListTile(
-                secondary:   Text(s['emoji']!,
-                    style: const TextStyle(fontSize: 26)),
+                secondary:   Icon(serviceIconForCategory(key),
+                    color: C.navy, size: 26),
                 title:       Text(name, style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   color: C.text, fontSize: 14,
@@ -797,9 +798,12 @@ class ScheduleScreen extends ConsumerWidget {
       body: schedAsync.when(
         // ✅ CircularProgressIndicator → Skeleton
         loading: () => const _SkeletonList(),
+        // 🔒 [AUDIT UI-7 / 2026-08-02 — Medium, fresh re-audit] bare Text ບໍ່ມີ
+        // icon/retry — ໜ້າຈໍອື່ນທົ່ວແອັບ (home_tab.dart, jobs_tab.dart) ໃຊ້
+        // ErrorStateView ມາດຕະຖານດຽວກັນຢູ່ແລ້ວ.
         error:   (e, st) {
           debugPrint('scheduleProvider error: $e\n$st');
-          return Center(child: Text(tr('load_failed')));
+          return ErrorStateView(onRetry: () => ref.invalidate(scheduleProvider));
         },
         data:    (sched) => _ScheduleBody(sched: sched),
       ),
@@ -907,14 +911,19 @@ class ReviewsScreen extends ConsumerWidget {
       body: reviewsAsync.when(
         // ✅ CircularProgressIndicator → Skeleton
         loading: () => const _SkeletonList(),
+        // 🔒 [AUDIT UI-7 / 2026-08-02 — Medium, fresh re-audit] bare Text ບໍ່ມີ
+        // icon/retry (error) ຫຼື icon+title styling ມາດຕະຖານ (empty) — ໜ້າຈໍ
+        // ອື່ນທົ່ວແອັບໃຊ້ ErrorStateView/EmptyStateView ຢູ່ແລ້ວ.
         error:   (e, st) {
           debugPrint('reviewsProvider error: $e\n$st');
-          return Center(child: Text(tr('load_failed')));
+          return ErrorStateView(onRetry: () => ref.invalidate(reviewsProvider));
         },
         data: (reviews) => reviews.isEmpty
-            ? Center(child: Text(tr('no_reviews'),
-            style: const TextStyle(
-                color: C.muted, fontSize: 15)))
+            ? EmptyStateView(
+                icon: Icons.star_border_rounded,
+                title: tr('no_reviews'),
+                accent: C.muted,
+              )
             : ListView.builder(
           padding:     const EdgeInsets.all(16),
           itemCount:   reviews.length,
@@ -996,13 +1005,22 @@ class _KycScreenState extends ConsumerState<KycScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _uploading ? null : () async {
                     final picker = ImagePicker();
+                    // 🔒 [AUDIT PERF-4 / 2026-08-02 — Medium, fresh re-audit]
+                    // ຈຸດດຽວທີ່ຂາດ maxWidth/maxHeight ໃນທັງແອັບ (ບ່ອນອື່ນທຸກ
+                    // ບ່ອນ — booking_form_screen.dart, earnings_tab.dart,
+                    // job_workflow_Screen.dart, technician_register_screen.dart —
+                    // ຈຳກັດຂະໜາດພິກເຊວກ່ອນອັບໂຫລດ) — ຮູບບັດປະຈຳຕົວ/ເຊວຟີຈາກ
+                    // ກ້ອງ (ອາດ 12-48MP) ຖືກອັບໂຫລດເຕັມຄວາມລະອຽດ, ພຽງແຕ່ recompress
+                    // (imageQuality ຄວບຄຸມແຕ່ JPEG quality, ບໍ່ແມ່ນ dimension).
                     final id = await picker.pickImage(
                         source: ImageSource.gallery,
-                        imageQuality: 75);
+                        imageQuality: 75,
+                        maxWidth: 1600, maxHeight: 1600);
                     if (!mounted) return;
                     final selfie = await picker.pickImage(
                         source: ImageSource.camera,
-                        imageQuality: 75);
+                        imageQuality: 75,
+                        maxWidth: 1600, maxHeight: 1600);
                     if (id == null || selfie == null ||
                         !mounted) return;
 

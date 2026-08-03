@@ -88,9 +88,16 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
                   ),
                 );
               }
-              return Column(children: [
-                for (final txn in history) _HistoryRow(txn: txn),
-              ]);
+              // 🔒 [AUDIT PERF-3 / 2026-08-02 — Medium, fresh re-audit] ກ່ອນໜ້ານີ້
+              // Column+for ສ້າງທຸກແຖວທັນທີ ບໍ່ວ່າຈະເຫັນຢູ່ໜ້າຈໍຫຼືບໍ່ — ListView.builder
+              // (shrinkWrap ເພາະຢູ່ໃນ SingleChildScrollView ຂ້າງນອກຢູ່ແລ້ວ, ບໍ່ໃຫ້
+              // scroll ຊ້ອນກັນ) ສ້າງສະເພາະແຖວທີ່ເບິ່ງເຫັນ.
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: history.length,
+                itemBuilder: (_, i) => _HistoryRow(txn: history[i]),
+              );
             },
           ),
         ]),

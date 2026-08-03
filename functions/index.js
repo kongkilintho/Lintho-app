@@ -22,6 +22,59 @@ function _getChannelId(type) {
   return 'lintho_jobs';
 }
 
+// 🔒 [AUDIT CUST-4 / 2026-08-02 — Medium, fresh re-audit] users/{uid}.notifPrefs
+// (written by the "ການແຈ້ງເຕືອນ" settings sheet in main.dart — keys
+// 'newBooking'/'status'/'promo'/'news', all default true except promo/news)
+// was never read by ANY server-side notification path — toggling a
+// preference off had zero effect, since onBookingStatusChange/onNewBooking/
+// cleanupExpiredBookings all wrote directly to fcm_queue unconditionally.
+// Maps the fcm_queue `type` values this file actually sends to the
+// preference key that should gate them; a type with no mapping (e.g. 'chat')
+// is never preference-gated. Defaults to enabled if the user has never
+// touched the toggle or the doc/field doesn't exist, matching the same
+// default the client itself uses.
+const NOTIF_PREF_KEY_BY_TYPE = {
+  new_booking: 'newBooking',
+  booking_update: 'status',
+  payment: 'status',
+};
+
+// 🔒 [AUDIT BE-2 / 2026-08-02 — High, fresh re-audit] ທຸກ fcm_queue write ໃນ
+// ໄຟລ໌ນີ້ໃຊ້ .add() (random doc ID) — ຖ້າ Cloud Functions redeliver event ດຽວກັນ
+// ຊ້ຳ (documented at-least-once behavior), ແຕ່ລະ invocation ຂຽນ doc ໃໝ່ໆ
+// ຢູ່ສະເໝີ, ໄດ້ push ຊ້ຳ (ເຊັ່ນ "✅ ຊ່າງຮັບງານແລ້ວ!" 2-3 ຄັ້ງ). ຕອນນີ້
+// queueNotification() ຮັບ `dedupeKey` ເລືອກໄດ້ — ຖ້າມີ, ໃຊ້ເປັນ doc ID ແທນ
+// random (ບໍ່ຂຽນຊ້ຳຖ້າ doc ນັ້ນມີແລ້ວ). ຄ່າ dedupeKey ຕ້ອງເປັນສິ່ງທີ່ບົ່ງບອກ
+// "ເຫດການດຽວກັນ" ຢ່າງແທ້ຈິງ (ບໍ່ແມ່ນ "ປະເພດດຽວກັນ" ເປົ່າໆ — booking ໜຶ່ງອາດມີ
+// ຫຼາຍ 'booking_update' notification ຄົນລະ status ກັນ, ຈຶ່ງຕ້ອງລວມ status ເຂົ້າ
+// ໄປໃນ key ນຳ, ບໍ່ດັ່ງນັ້ນ notification ທີ່ 2 ຈະຖືກເຂົ້າໃຈຜິດວ່າເປັນ retry
+// ຂອງອັນທຳອິດ ແລະ ຖືກຂ້າມໄປ).
+async function queueNotification({ targetUserId, targetRole, type, bookingId, title, body, dedupeKey }) {
+  const prefKey = NOTIF_PREF_KEY_BY_TYPE[type];
+  if (prefKey) {
+    const userSnap = await db.collection('users').doc(targetUserId).get();
+    const enabled = userSnap.data()?.notifPrefs?.[prefKey];
+    if (enabled === false) return null; // user explicitly opted out
+  }
+  const payload = {
+    targetUserId, targetRole, type, bookingId,
+    title, body, data: { type, bookingId },
+    createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
+  };
+  if (!dedupeKey) return db.collection('fcm_queue').add(payload);
+
+  // targetUserId is part of the key too — a single event can legitimately
+  // notify two different people (e.g. both parties on a cancellation) with
+  // the same type/dedupeKey, and those must not collide with each other.
+  const docId = `${bookingId || 'na'}_${type}_${dedupeKey}_${targetUserId}`
+    .replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 300);
+  const ref = db.collection('fcm_queue').doc(docId);
+  const existing = await ref.get();
+  if (existing.exists) return null; // already queued for this exact event
+  await ref.set(payload);
+  return ref;
+}
+
 exports.processFCMQueue = functions.firestore
   .document('fcm_queue/{docId}')
   .onCreate(async (snap) => {
@@ -70,12 +123,11 @@ exports.onBookingStatusChange = functions.firestore
     if (newlySent.length > 0) {
       const svcLabelForSentTo = after.serviceType || after.category || 'ບໍລິການ';
       newlySent.forEach((providerUid) => {
-        queue.push(db.collection('fcm_queue').add({
+        queue.push(queueNotification({
           targetUserId: providerUid, targetRole: 'provider',
           type: 'new_booking', bookingId,
           title: '🔔 ງານໃໝ່!', body: `ມີວຽກ ${svcLabelForSentTo} ໃໝ່ໃຫ້ທ່ານ`,
-          data: { type: 'new_booking', bookingId },
-          createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
+          dedupeKey: 'sent', // each provider only ever added to sentTo once
         }));
       });
     }
@@ -93,12 +145,11 @@ exports.onBookingStatusChange = functions.firestore
       queue.push(grantAdditionalChargesWalletCredit(
         after.providerId, bookingId, svcLabelForCharges, after.additionalCharges, change.after.ref,
         after.paymentMethod));
-      queue.push(db.collection('fcm_queue').add({
+      queue.push(queueNotification({
         targetUserId: after.providerId, targetRole: 'provider',
         type: 'payment', bookingId,
         title: '💰 ລາຍຮັບເພີ່ມເຂົ້າ!', body: `₭${after.additionalCharges} ຄ່າໃຊ້ຈ່າຍເພີ່ມ`,
-        data: { type: 'payment', bookingId },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
+        dedupeKey: `charges_${after.additionalChargesRound || 1}`,
       }));
     }
 
@@ -109,12 +160,12 @@ exports.onBookingStatusChange = functions.firestore
     const svcLabel = serviceType || category || 'ບໍລິການ';
     const providerDoc = await db.collection('providers').doc(providerId).get();
     const providerName = providerDoc.data()?.displayName || 'ຊ່າງ';
+    // 🔒 [AUDIT BE-2 / 2026-08-02] dedupeKey = after.status — each of the
+    // if-blocks below fires for a distinct, one-time status transition
+    // (booking status only moves forward), so keying on it dedupes retries
+    // of the *same* transition without collapsing genuinely different ones.
     const notify = (targetUserId, targetRole, title, body, type) => {
-      queue.push(db.collection('fcm_queue').add({
-        targetUserId, targetRole, type, bookingId,
-        title, body, data: { type, bookingId },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
-      }));
+      queue.push(queueNotification({ targetUserId, targetRole, type, bookingId, title, body, dedupeKey: after.status }));
     };
     if (after.status === 'accepted') notify(customerId, 'customer', '✅ ຊ່າງຮັບງານແລ້ວ!', `${providerName} ກຳລັງກຽມໄປ`, 'booking_update');
     if (after.status === 'onTheWay') notify(customerId, 'customer', '🚗 ຊ່າງກຳລັງໄປ!', `${providerName} ກຳລັງເດີນທາງ`, 'booking_update');
@@ -303,13 +354,12 @@ exports.cleanupExpiredBookings = functions.pubsub
         });
         const { customerId, serviceType, category } = doc.data();
         if (customerId) {
-          notifications.push(db.collection('fcm_queue').add({
+          notifications.push(queueNotification({
             targetUserId: customerId, targetRole: 'customer',
             type: 'booking_update', bookingId: doc.id,
             title: '⏰ ບໍ່ມີຊ່າງຮັບງານ',
             body: `${serviceType || category || 'ການຈອງ'} ຖືກຍົກເລີກ · ບໍ່ມີຊ່າງຮັບໃນເວລາ`,
-            data: { type: 'booking_update', bookingId: doc.id },
-            createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
+            dedupeKey: 'expired', // a booking can only ever match this cron's query once
           }));
         }
       });
@@ -357,23 +407,21 @@ exports.cleanupStaleActiveBookings = functions.pubsub
         const { customerId, providerId, serviceType, category } = doc.data();
         const svcLabel = serviceType || category || 'ການຈອງ';
         if (customerId) {
-          notifications.push(db.collection('fcm_queue').add({
+          notifications.push(queueNotification({
             targetUserId: customerId, targetRole: 'customer',
             type: 'booking_update', bookingId: doc.id,
             title: '⏰ ການຈອງຖືກຍົກເລີກ',
             body: `${svcLabel} ຖືກຍົກເລີກ · ຊ່າງບໍ່ມີການເຄື່ອນໄຫວດົນເກີນໄປ`,
-            data: { type: 'booking_update', bookingId: doc.id },
-            createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
+            dedupeKey: 'stale', // a booking can only ever match this cron's query once
           }));
         }
         if (providerId) {
-          notifications.push(db.collection('fcm_queue').add({
+          notifications.push(queueNotification({
             targetUserId: providerId, targetRole: 'provider',
             type: 'booking_update', bookingId: doc.id,
             title: '⏰ ວຽກຖືກລະບົບຍົກເລີກ',
             body: `${svcLabel} ຖືກຍົກເລີກອັດຕະໂນມັດ · ບໍ່ມີການອັບເດດດົນເກີນໄປ`,
-            data: { type: 'booking_update', bookingId: doc.id },
-            createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
+            dedupeKey: 'stale',
           }));
         }
       });
@@ -402,12 +450,11 @@ exports.onNewBooking = functions.firestore
     if (providerId) {
       const customerDoc = await db.collection('users').doc(customerId).get();
       const customerName = customerDoc.data()?.displayName || 'ລູກຄ້າ';
-      queue.push(db.collection('fcm_queue').add({
+      queue.push(queueNotification({
         targetUserId: providerId, targetRole: 'provider',
         type: 'new_booking', bookingId,
         title: '🔔 ງານໃໝ່!', body: `${customerName} ຕ້ອງການ ${svcLabel}`,
-        data: { type: 'new_booking', bookingId },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(), sent: false,
+        dedupeKey: 'created', // fires once, at document creation
       }));
     }
 

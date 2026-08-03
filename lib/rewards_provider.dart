@@ -74,6 +74,12 @@ final rewardSettingsProvider = StreamProvider<RewardSettings>((ref) {
       .snapshots().map((s) => RewardSettings.fromMap(s.data()));
 });
 
+// 🔒 [AUDIT PERF-2 / 2026-08-02 — Medium, fresh re-audit] ບໍ່ເຄີຍມີ .limit()
+// ຢູ່ query ນີ້ — sort ຢູ່ client-side (list.sort()) ຫຼັງດຶງມາໝົດແລ້ວ. ລູກຄ້າ
+// ທີ່ມີປະຫວັດແຕ້ມຫຼາຍຮ້ອຍລາຍການຈະດາວໂຫຼດ/hold ໄວ້ໃນ memory ໝົດທຸກຄັ້ງ, ແລະ ຖືກ
+// sync ຄືນທຸກຄັ້ງທີ່ມີ doc ໃໝ່. ຍ້າຍ sort ໄປໃສ່ query ເອງ (orderBy + limit) —
+// ຕ້ອງການ composite index (userId Asc, createdAt Desc), ເບິ່ງ
+// firestore.indexes.json.
 /// ປະຫວັດແຕ້ມ (earn/redeem/manual) ຮຽງລຳດັບໃໝ່ສຸດກ່ອນ.
 final rewardHistoryProvider = StreamProvider<List<RewardTransaction>>((ref) {
   final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -81,12 +87,10 @@ final rewardHistoryProvider = StreamProvider<List<RewardTransaction>>((ref) {
   return FirebaseFirestore.instance
       .collection('rewardTransactions')
       .where('userId', isEqualTo: uid)
+      .orderBy('createdAt', descending: true)
+      .limit(50)
       .snapshots()
-      .map((snap) {
-    final list = snap.docs.map(RewardTransaction.fromDoc).toList();
-    list.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
-    return list;
-  });
+      .map((snap) => snap.docs.map(RewardTransaction.fromDoc).toList());
 });
 
 class RedeemResult {

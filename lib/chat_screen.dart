@@ -19,6 +19,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
+import 'fcm_service.dart';
 
 // ════════════════════════════════════════════════════════════
 // MODEL
@@ -74,10 +75,15 @@ class ChatListScreen extends StatelessWidget {
         )),
       ),
       body: StreamBuilder<QuerySnapshot>(
+        // 🔒 [AUDIT PERF-2 / 2026-08-02 — Medium, fresh re-audit] ບໍ່ເຄີຍມີ
+        // .limit() ຢູ່ນີ້ — ຕ່າງຈາກ query ອື່ນທຸກອັນໃນແອັບທີ່ຈຳກັດຂອບເຂດໝົດ
+        // (booking_repository.dart ໃຊ້ .limit(30/50) ທົ່ວໄປ). ຜູ້ໃຊ້ທີ່ມີ
+        // ຫ້ອງແຊັດຫຼາຍຮ້ອຍຫ້ອງຈະດາວໂຫຼດ/ hold ໄວ້ໃນ memory ໝົດທຸກຄັ້ງທີ່ເປີດໜ້ານີ້.
         stream: FirebaseFirestore.instance
             .collection('chats')
             .where('members', arrayContains: user?.uid)
             .orderBy('lastMessageAt', descending: true)
+            .limit(50)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -274,6 +280,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _sending = false;
 
+  // 🔒 [AUDIT CUST-5 / 2026-08-02] ດຶງໄວ້ຄັ້ງດຽວຕອນເປີດໜ້າ (ຈາກ Firestore
+  // chats/{id} doc — ChatService.createOrGetChat() ຂຽນ bookingId/customerId/
+  // providerId ໄວ້ຢູ່ນັ້ນ) ເພື່ອໃຫ້ _sendMessage() ຮູ້ຈັກ targetRole ຂອງອີກຝ່າຍ
+  // ແທ້ (ບໍ່ hardcode 'customer' ຄືເກົ່າ — ແຊັດແມ່ນສອງທິດທາງ) ແລະ bookingId ແທ້
+  // (ບໍ່ແມ່ນ chatId) ໃຫ້ notification tap-navigation ໃຊ້ໄດ້.
+  String? _bookingId;
+  String? _chatProviderId;
+
   String get _displayName => widget.receiverName ?? widget.otherName;
 
   // ✅ sorted key ປ້ອງກັນ A_B vs B_A duplicate room
@@ -289,6 +303,23 @@ class _ChatScreenState extends State<ChatScreen> {
     _msgsRef     = FirebaseDatabase.instance.ref('chats/$_chatId/messages');
     _chatMetaRef = FirebaseDatabase.instance.ref('chats/$_chatId/meta');
     _ensureIdentitySeeded();
+    _loadChatMeta();
+  }
+
+  Future<void> _loadChatMeta() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('chats').doc(_chatId).get()
+          .timeout(const Duration(seconds: 15));
+      final d = doc.data();
+      if (d == null || !mounted) return;
+      setState(() {
+        _bookingId      = d['bookingId'] as String?;
+        _chatProviderId = d['providerId'] as String?;
+      });
+    } catch (e) {
+      debugPrint('ChatScreen: _loadChatMeta failed: $e');
+    }
   }
 
   // 🔒 [AUDIT H5] database.rules.json ອະນຸຍາດອ່ານ/ຂຽນ meta/messages ສະເພາະ
@@ -377,6 +408,26 @@ class _ChatScreenState extends State<ChatScreen> {
               .timeout(const Duration(seconds: 15));
         } catch (e) {
           debugPrint('ChatScreen: unread increment failed: $e');
+        }
+
+        // 🔒 [AUDIT CUST-5 / 2026-08-02 — Medium, fresh re-audit]
+        // NotificationSender.chatMessage() ຖືກຂຽນໄວ້ (fcm_service.dart) ແຕ່
+        // ບໍ່ເຄີຍຖືກເອີ້ນຈາກຈຸດນີ້ຈັກເທື່ອ — ຝ່າຍທີ່ບໍ່ໄດ້ເປີດແອັບ/ຫ້ອງແຊັດຢູ່ ບໍ່ເຄີຍ
+        // ໄດ້ຮັບ push ຈາກຂໍ້ຄວາມແຊັດເລີຍ. best-effort — ຄວາມລົ້ມເຫຼວບໍ່ຄວນເຮັດໃຫ້
+        // ຂໍ້ຄວາມທີ່ສົ່ງແລ້ວ (ຂຽນ Firestore/RTDB ສຳເລັດແລ້ວຂ້າງເທິງ) ກາຍເປັນ error.
+        try {
+          final targetRole = widget.receiverId == _chatProviderId
+              ? 'provider'
+              : 'customer';
+          await NotificationSender.chatMessage(
+            targetUserId: widget.receiverId!,
+            targetRole:   targetRole,
+            bookingId:    _bookingId ?? _chatId,
+            senderName:   _user?.displayName ?? 'User',
+            message:      text,
+          );
+        } catch (e) {
+          debugPrint('ChatScreen: chat push notification failed: $e');
         }
       }
 

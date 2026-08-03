@@ -184,8 +184,21 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
     final time =
         await showTimePicker(context: context, initialTime: TimeOfDay.now());
     if (time == null || !mounted) return;
-    setState(() => _dateTime =
-        DateTime(date.year, date.month, date.day, time.hour, time.minute));
+    final picked =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    // 🔒 [AUDIT CUST-3 / 2026-08-02 — Medium, fresh re-audit] showDatePicker's
+    // firstDate blocks past dates, but showTimePicker has no such bound — if
+    // today's date is picked with a time already elapsed, this fix (already
+    // applied to the main booking flow — see booking_form_screen.dart's
+    // AUDIT CUST-1 comment) was never mirrored here, so Quick Booking could
+    // schedule a job in the past with no client or server check.
+    if (picked.isBefore(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr('past_scheduled_time_error')),
+          backgroundColor: C.red));
+      return;
+    }
+    setState(() => _dateTime = picked);
   }
 
   Future<void> _pickOnMap() async {

@@ -176,6 +176,16 @@ class BookingRepository {
       }
       final providerSnap = await tx.get(providerRef);
       final p = providerSnap.data() ?? const <String, dynamic>{};
+      // 🔒 [AUDIT PROV-6 / 2026-08-02 — Medium, fresh re-audit] ບໍ່ມີບ່ອນໃດ
+      // client-side re-check kycStatus ກ່ອນຮັບງານ — ຖ້າ admin ຫັກລ້າງ/ໂຈະ KYC
+      // ຂອງຊ່າງຫຼັງຈາກອະນຸມັດແລ້ວ (kycStatus ປ່ຽນຈາກ 'verified'), ຊ່ອງຫວ່າງນ້ອຍໆ
+      // ລະຫວ່າງນັ້ນກັບ Firestore listener ອັບເດດ UI ອາດຍັງໃຫ້ຮັບງານໄດ້.
+      // firestore.rules' isVerifiedProvider() ຍັງເປັນ boundary ແທ້ຢູ່ຝັ່ງ
+      // server ຢູ່ແລ້ວ — ນີ້ແມ່ນ defense-in-depth client-side, ໃຊ້ providerSnap
+      // ທີ່ອ່ານມາແລ້ວຢູ່ transaction ດຽວກັນ (ບໍ່ຕ້ອງອ່ານເພີ່ມ).
+      if (p['kycStatus'] != 'verified') {
+        throw Exception('ບັນຊີຂອງທ່ານຍັງບໍ່ໄດ້ຮັບການຢືນຢັນ ຫຼື ຖືກໂຈະ');
+      }
       final userSnap = await tx.get(userRef);
       final u = userSnap.data() ?? const <String, dynamic>{};
       tx.update(ref, {
@@ -363,6 +373,24 @@ class BookingRepository {
         onTimeout: () => throw Exception(
             'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
     final b   = Booking.fromFirestore(doc);
+
+    // 🔒 [AUDIT PROV-7 / 2026-08-02 — Medium, fresh re-audit] ກ່ອນໜ້ານີ້ method
+    // ນີ້ບໍ່ໄດ້ກວດວ່າ status ທີ່ຮ້ອງຂໍແມ່ນຂັ້ນຕອນຕໍ່ໄປທີ່ຖືກຕ້ອງແທ້ — ການລຳດັບຂັ້ນຕອນ
+    // ອາໄສແຕ່ວ່າ UI (job_workflow_Screen.dart's _ActionButton) ຈະສະແດງແຕ່ປຸ່ມທີ່
+    // ຖືກຕ້ອງເທົ່ານັ້ນ, ບໍ່ໄດ້ບັງຄັບຢູ່ data layer ນີ້ (firestore.rules'
+    // isValidBookingStatusTransition() ຍັງບັງຄັບຢູ່ຝັ່ງ server ຢູ່ແລ້ວ — ນີ້ແມ່ນ
+    // defense-in-depth ຄຽງຄູ່ກັນ, ບໍ່ແມ່ນຊ່ອງໂຫວ່ທີ່ຢືນຢັນວ່າ exploit ໄດ້ຈິງຜ່ານ
+    // UI ທີ່ shipped ຢູ່ປັດຈຸບັນ).
+    const validNextStatus = {
+      JobStatus.pending:    [JobStatus.accepted, JobStatus.cancelled, JobStatus.rejected],
+      JobStatus.accepted:   [JobStatus.onTheWay, JobStatus.cancelled],
+      JobStatus.onTheWay:   [JobStatus.arrived, JobStatus.cancelled],
+      JobStatus.arrived:    [JobStatus.inProgress, JobStatus.cancelled],
+      JobStatus.inProgress: [JobStatus.completed, JobStatus.cancelled],
+    };
+    if (!(validNextStatus[b.status]?.contains(status) ?? false)) {
+      throw Exception('ບໍ່ສາມາດປ່ຽນສະຖານະໄດ້: ລຳດັບຂັ້ນຕອນບໍ່ຖືກຕ້ອງ');
+    }
 
     if (status == JobStatus.completed && b.paymentStatus != 'paid') {
       throw Exception('ກະລຸນາຢືນຢັນການຮັບເງິນກ່ອນປິດງານ');
@@ -596,16 +624,23 @@ class CustomerBookingRepository {
   }
 
   // ── ອະນຸມັດ/ປະຕິເສດ ຄ່າໃຊ້ຈ່າຍເພີ່ມ (ຝັ່ງລູກຄ້າ) ──────────────
+  // 🔒 [AUDIT EDGE-3 / 2026-08-02 — Medium, fresh re-audit] ໜຶ່ງດຽວໃນ
+  // CustomerBookingRepository ທີ່ບໍ່ມີ .timeout() (cancelBooking()/
+  // confirmPaymentSent() ຂ້າງລຸ່ມມີໝົດ) — ຖ້າອອບໄລນ໌ຕອນລູກຄ້າອະນຸມັດ/ປະຕິເສດ
+  // ຄ່າໃຊ້ຈ່າຍເພີ່ມ, ຄ້າງໄດ້ບໍ່ຈຳກັດເວລາ.
   Future<void> respondToAdditionalCharges(String bookingId, bool approve) async {
     final ref = _db.collection('bookings').doc(bookingId);
     if (approve) {
-      await ref.update({'additionalChargesApproved': true});
+      await ref.update({'additionalChargesApproved': true})
+          .timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+              'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
     } else {
       await ref.update({
         'additionalChargesApproved': false,
         'additionalCharges':         null,
         'additionalChargesNote':     null,
-      });
+      }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
+          'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
     }
   }
 

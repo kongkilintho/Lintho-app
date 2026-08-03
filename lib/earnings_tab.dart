@@ -311,6 +311,7 @@ class ProviderEarningsTab extends ConsumerWidget {
                         ? Image.network(
                             cfg.qrImageUrl!,
                             width: 140, height: 140, fit: BoxFit.contain,
+                            cacheWidth: 280, cacheHeight: 280, // 🔒 [AUDIT PERF-5 / 2026-08-02]
                             errorBuilder: (_, __, ___) => QrImageView(
                               data: '${cfg.bankName}|${cfg.accountNumber}|REF:$ref6',
                               version: QrVersions.auto,

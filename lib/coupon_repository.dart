@@ -9,6 +9,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+// 🔒 [AUDIT EDGE-2 / 2026-08-02 — Medium, fresh re-audit] ດຽວກັນກັບ
+// kNetworkOpTimeout ໃນ booking_repository.dart — ໃຊ້ຄ່າດຽວກັນເພື່ອຄວາມສອດຄ່ອງ.
+const Duration _kCouponOpTimeout = Duration(seconds: 15);
+
 class MyCoupon {
   final String code;
   final String type; // 'percentage' | 'fixed'
@@ -89,7 +93,13 @@ class CouponRepository {
     if (normalized.isEmpty) return null;
 
     try {
-      final doc = await _db.collection('coupons').doc(normalized).get();
+      // 🔒 [AUDIT EDGE-2 / 2026-08-02] ບໍ່ເຄີຍມີ timeout ມາກ່ອນ — ຖ້າອອບໄລນ໌
+      // ຕອນກົດ "ກວດ" ຄູປອງ, get() ນີ້ຄ້າງໄດ້ບໍ່ຈຳກັດເວລາ (spinner ຄ້າງ, ປຸ່ມ
+      // ຄ້າງ disabled) ຕ່າງຈາກທຸກ network call ອື່ນໃນແອັບທີ່ມີ timeout ໝົດ.
+      // catch (_) ຂ້າງລຸ່ມຮັບ TimeoutException ໄດ້ຢູ່ແລ້ວ (ຄືນ null ຄືກັນກັບ
+      // error ອື່ນໆ) — ບໍ່ຕ້ອງການ onTimeout ແຍກຕ່າງຫາກ.
+      final doc = await _db.collection('coupons').doc(normalized).get()
+          .timeout(_kCouponOpTimeout);
       if (!doc.exists || doc.data() == null) return null;
       final d = doc.data()!;
 

@@ -27,8 +27,14 @@ class ProviderJobsTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final filters = [
-      tr('all'), tr('completed'), tr('cancelled'), tr('rejected'),
+    // 🔒 [AUDIT PROV-5 / 2026-08-02] (label, value) pairs — value is the
+    // stable JobStatus? compared against jobFilterProvider's state; label is
+    // still localized for display via tr().
+    final filters = <(String, JobStatus?)>[
+      (tr('all'), null),
+      (tr('completed'), JobStatus.completed),
+      (tr('cancelled'), JobStatus.cancelled),
+      (tr('rejected'), JobStatus.rejected),
     ];
 
     final filter       = ref.watch(jobFilterProvider);
@@ -52,12 +58,13 @@ class ProviderJobsTab extends ConsumerWidget {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: filters.map((f) {
-                final sel = filter == f;
+                final (label, value) = f;
+                final sel = filter == value;
                 return _FilterChip(
-                  label:    f,
+                  label:    label,
                   selected: sel,
                   onTap:    () =>
-                  ref.read(jobFilterProvider.notifier).state = f,
+                  ref.read(jobFilterProvider.notifier).state = value,
                 );
               }).toList(),
             ),

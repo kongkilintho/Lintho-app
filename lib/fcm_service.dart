@@ -407,11 +407,17 @@ class NotificationSender {
     body:  'ລູກຄ້າໃຫ້ $rating ດາວ · ກົດເພື່ອເບິ່ງ',
   );
 
+  // 🔒 [AUDIT CUST-5 / 2026-08-02 — Medium, fresh re-audit] ຟັງຊັນນີ້ຖືກຂຽນໄວ້
+  // ແຕ່ບໍ່ເຄີຍຖືກເອີ້ນຈາກ chat_screen.dart._sendMessage() ຈັກເທື່ອ — ຂໍ້ຄວາມແຊັດ
+  // ບໍ່ເຄີຍສົ່ງ push ຫາຝ່າຍທີ່ບໍ່ໄດ້ເປີດແອັບຢູ່ເລີຍ. `targetRole` ຖືກ hardcode
+  // ເປັນ 'customer' ຕະຫຼອດມາ — ຜິດເມື່ອຝ່າຍທີ່ຮັບເປັນຊ່າງ (chat ແມ່ນສອງທິດທາງ) —
+  // ຕອນນີ້ຮັບ targetRole ເປັນ parameter ແທນ.
   static Future<void> chatMessage({
-    required String targetUserId, required String bookingId,
+    required String targetUserId, required String targetRole,
+    required String bookingId,
     required String senderName, required String message,
   }) => _send(
-    targetUserId: targetUserId, targetRole: 'customer',
+    targetUserId: targetUserId, targetRole: targetRole,
     type: 'chat', bookingId: bookingId,
     title: '💬 $senderName', body: message,
   );

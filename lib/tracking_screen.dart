@@ -380,6 +380,9 @@ class _TrackingScreenState extends State<TrackingScreen>
     )));
   }
 
+  // 🔒 [AUDIT EDGE-3 / 2026-08-02 — Medium, fresh re-audit] catch block ກ່ອນ
+  // ໜ້ານີ້ debugPrint() ຢ່າງດຽວ — ຖ້າ write ລົ້ມເຫຼວ (ອອບໄລນ໌/timeout), ປຸ່ມ
+  // ອະນຸມັດ/ປະຕິເສດຄ່າໃຊ້ຈ່າຍເພີ່ມພຽງແຕ່ enable ຄືນໂດຍບໍ່ບອກຫຍັງລູກຄ້າເລີຍ.
   Future<void> _respondToCharges(bool approve) async {
     if (_respondingToCharges) return;
     setState(() => _respondingToCharges = true);
@@ -388,6 +391,10 @@ class _TrackingScreenState extends State<TrackingScreen>
           .respondToAdditionalCharges(widget.bookingId, approve);
     } catch (e) {
       debugPrint('respondToCharges: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('${tr("error")}: $e'), backgroundColor: C.red));
+      }
     } finally {
       if (mounted) setState(() => _respondingToCharges = false);
     }

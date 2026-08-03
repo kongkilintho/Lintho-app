@@ -271,11 +271,15 @@ class _ReviewScreenState extends State<ReviewScreen>
                       const Icon(Icons.star_rounded,
                           color: C.gold, size: 14),
                       const SizedBox(width: 4),
+                      // 🔒 [AUDIT UI-8 / 2026-08-02 — Medium, fresh re-audit]
+                      // C.gold ຄິດໄລ່ contrast ~1.7:1 ຕໍ່ພື້ນຫຼັງຂາວ, ຕ່ຳກວ່າ
+                      // WCAG AA ຫຼາຍ (4.5:1) — ໃຊ້ C.gold ສະເພາະ icon fill
+                      // (ຂ້າງເທິງ) ຄືເກົ່າ, ຂໍ້ຄວາມໃຊ້ C.text ແທນ.
                       Text(
                         widget.provider.ratingLabel,
                         style: const TextStyle(
                           fontSize: 12, fontWeight: FontWeight.w700,
-                          color: C.gold,
+                          color: C.text,
                         ),
                       ),
                       Text(

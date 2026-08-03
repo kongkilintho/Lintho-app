@@ -382,14 +382,23 @@ final customerBookingCountProvider = FutureProvider<int>((ref) async {
 
 // ── FILTER ───────────────────────────────────────────────────
 
-final jobFilterProvider = StateProvider<String>((_) => 'ທັງໝົດ');
+// 🔒 [AUDIT PROV-5 / 2026-08-02 — Medium, fresh re-audit] ກ່ອນໜ້ານີ້ state
+// ນີ້ເປັນ String ຄ່າ hardcoded ພາສາລາວ ('ທັງໝົດ'), ປຽບທຽບກັບ b.status.label
+// ທີ່ກໍ hardcode ພາສາລາວຄືກັນ (Booking.dart) — ຖ້າຜູ້ໃຊ້ປ່ຽນພາສາແອັບເປັນອື່ນ
+// (English/Thai/Chinese), ໜ້າ Jobs tab ຈະສະແດງ filter chip ເປັນພາສານັ້ນ
+// (ຜ່ານ tr() ໃນ jobs_tab.dart) ແຕ່ຄ່າທີ່ຂຽນລົງ state ນີ້ (f, ຄື tr() ຜົນ)
+// ບໍ່ເຄີຍກົງກັບ 'ທັງໝົດ' ຫຼື b.status.label ອີກຕໍ່ໄປ — filter ບໍ່ເຮັດວຽກ
+// (ລາຍການຫວ່າງເປົ່າ) ໃນທຸກພາສາທີ່ບໍ່ແມ່ນລາວ. ຕອນນີ້ໃຊ້ JobStatus? (null ='all')
+// ເປັນ state ແທນ — locale-independent, jobs_tab.dart ຍັງສະແດງ label ທີ່
+// localized ໄດ້ຄືເກົ່າ, ພຽງແຕ່ compare ດ້ວຍ enum ບໍ່ແມ່ນ display string.
+final jobFilterProvider = StateProvider<JobStatus?>((_) => null);
 
 final filteredHistoryProvider =
 Provider<AsyncValue<List<Booking>>>((ref) {
   final filter  = ref.watch(jobFilterProvider);
   final history = ref.watch(jobHistoryProvider);
   return history.whenData((list) {
-    if (filter == 'ທັງໝົດ') return list;
-    return list.where((b) => b.status.label == filter).toList();
+    if (filter == null) return list;
+    return list.where((b) => b.status == filter).toList();
   });
 });

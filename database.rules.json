@@ -20,7 +20,13 @@
 
         "messages": {
           ".read": "auth != null && (auth.uid == root.child('chats').child($chatId).child('meta').child('customerId').val() || auth.uid == root.child('chats').child($chatId).child('meta').child('providerId').val())",
-          ".write": "auth != null && (auth.uid == root.child('chats').child($chatId).child('meta').child('customerId').val() || auth.uid == root.child('chats').child($chatId).child('meta').child('providerId').val())"
+          ".write": "auth != null && (auth.uid == root.child('chats').child($chatId).child('meta').child('customerId').val() || auth.uid == root.child('chats').child($chatId).child('meta').child('providerId').val())",
+
+          "$messageId": {
+            "senderId": {
+              ".validate": "newData.val() == auth.uid"
+            }
+          }
         }
       }
     }

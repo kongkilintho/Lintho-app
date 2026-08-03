@@ -132,11 +132,15 @@ class AppPricing {
   // ຄ່າ static ນີ້ອາດຖືກ override ໂດຍ loadLive() (spread ...addonItems[key]!)
   // ເຊິ່ງຍັງຄົງ 'name' key ເກົ່າໄວ້ — ບໍ່ກະທົບ. ໃຫ້ tr() ຢູ່ display site ເທົ່ານັ້ນ
   // (_AddonCheckRow) ເພື່ອບໍ່ໃຫ້ static field ຄ້າງພາສາເກົ່າ.
+  // 🔒 [AUDIT UI-1 / 2026-08-02 — Medium, fresh re-audit] 'emoji' → 'icon'
+  // (IconData) — ໜ້ານີ້ໄດ້ migrate _QuickBookCard/_BigCatCard/_BtuSelector
+  // ໄປໃຊ້ Icon() ແລ້ວ (ເບິ່ງ [FIX ME-7] comment) ແຕ່ addon/specialist rows
+  // ຂ້າງລຸ່ມນີ້ຍັງເຫຼືອ emoji ດິບ.
   static Map<String, Map<String, dynamic>> addonItems = {
-    'ironing': {'name': 'addon_ironing_name', 'emoji': '👔', 'price': 50000},
-    'fridge':  {'name': 'addon_fridge_name',  'emoji': '🧊', 'price': 40000},
-    'oven':    {'name': 'addon_oven_name',    'emoji': '🍞', 'price': 20000},
-    'window':  {'name': 'addon_window_name',  'emoji': '🪟', 'price': 30000},
+    'ironing': {'name': 'addon_ironing_name', 'icon': Icons.iron_outlined, 'price': 50000},
+    'fridge':  {'name': 'addon_fridge_name',  'icon': Icons.kitchen_outlined, 'price': 40000},
+    'oven':    {'name': 'addon_oven_name',    'icon': Icons.local_fire_department_outlined, 'price': 20000},
+    'window':  {'name': 'addon_window_name',  'icon': Icons.window_outlined, 'price': 30000},
   };
 
   static int deepResMin  = 15000;
@@ -151,14 +155,14 @@ class AppPricing {
   // ✅ [i18n] 'name'/'unit'/'sub' ໃນນີ້ຄື tr() KEY (ບໍ່ແມ່ນ display text) —
   // ເບິ່ງ comment ຢູ່ addonItems ຂ້າງເທິງ.
   static Map<String, Map<String, dynamic>> specialistItems = {
-    'sofa':     {'name': 'specialist_sofa_name',     'emoji': '🛋️', 'min': 300000, 'max': 500000, 'unit': 'specialist_sofa_unit'},
-    'mattress': {'name': 'specialist_mattress_name', 'emoji': '🛏️', 'min': 250000, 'max': 450000, 'unit': 'specialist_mattress_unit',
+    'sofa':     {'name': 'specialist_sofa_name',     'icon': Icons.weekend_outlined, 'min': 300000, 'max': 500000, 'unit': 'specialist_sofa_unit'},
+    'mattress': {'name': 'specialist_mattress_name', 'icon': Icons.bed_outlined, 'min': 250000, 'max': 450000, 'unit': 'specialist_mattress_unit',
                  'sub': 'specialist_mattress_sub'},
-    'vacuum':   {'name': 'specialist_vacuum_name',   'emoji': '🌀', 'min': 150000, 'max': 250000, 'unit': 'specialist_vacuum_unit',
+    'vacuum':   {'name': 'specialist_vacuum_name',   'icon': Icons.cyclone_outlined, 'min': 150000, 'max': 250000, 'unit': 'specialist_vacuum_unit',
                  'sub': 'specialist_vacuum_sub'},
-    'carpet':   {'name': 'specialist_carpet_name',   'emoji': '🪣', 'min': 25000,  'max': 40000,  'unit': 'specialist_carpet_unit'},
-    'facade':   {'name': 'specialist_facade_name',   'emoji': '🏢', 'min': 5000, 'max': 15000, 'unit': 'specialist_facade_unit'},
-    'pest':     {'name': 'specialist_pest_name',     'emoji': '🧴', 'min': 5000,   'max': 10000,  'unit': 'specialist_pest_unit'},
+    'carpet':   {'name': 'specialist_carpet_name',   'icon': Icons.texture_outlined, 'min': 25000,  'max': 40000,  'unit': 'specialist_carpet_unit'},
+    'facade':   {'name': 'specialist_facade_name',   'icon': Icons.apartment_outlined, 'min': 5000, 'max': 15000, 'unit': 'specialist_facade_unit'},
+    'pest':     {'name': 'specialist_pest_name',     'icon': Icons.pest_control_outlined, 'min': 5000,   'max': 10000,  'unit': 'specialist_pest_unit'},
   };
 
   static double travelFreeKm = 10.0;
@@ -2024,8 +2028,10 @@ class _SpecialistSummary extends StatelessWidget {
       final item  = AppPricing.specialistItems[e.key];
       if (item == null) return const _PriceLine('', ''); // ✅ [FIX-2] safe
       final price = (item['min'] as int) * e.value;
+      // 🔒 [AUDIT UI-1 / 2026-08-02] _PriceLine ເປັນ text-only row (ບໍ່ມີ icon
+      // slot) — ຕັດ emoji ອອກແທນທີ່ຈະໃສ່ IconData ໃນ text string.
       return _PriceLine(
-          '${item['emoji']} ${tr(item['name'] as String)} × ${e.value}',
+          '${tr(item['name'] as String)} × ${e.value}',
           '${AppPricing.fmt(price)} ${tr("kip_currency")}');
     }).toList();
     if (order.pestSqm > 0) {
@@ -2401,7 +2407,13 @@ class _JobPhotoPicker extends StatelessWidget {
       return ClipRRect(
         borderRadius: BorderRadius.circular(14),
         child: Stack(children: [
-          Image.network(photoUrl, height: 140, width: double.infinity, fit: BoxFit.cover),
+          // 🔒 [AUDIT PERF-5 / 2026-08-02 — Medium, fresh re-audit] cacheHeight
+          // ຈຳກັດ decode ຢູ່ຂະໜາດສະແດງຈິງ (job_workflow_Screen.dart ໃຊ້ pattern
+          // ດຽວກັນ) — ຮູບທີ່ upload ໄປແລ້ວຖືກຈຳກັດ 1600px (booking_form_screen.dart's
+          // picker), ແຕ່ສະແດງຢູ່ນີ້ພຽງແຕ່ 140dp ສູງ, ບໍ່ຈຳກັດ decode size ຈະໃຊ້
+          // memory ເກີນຄວາມຈຳເປັນ.
+          Image.network(photoUrl, height: 140, width: double.infinity,
+              fit: BoxFit.cover, cacheHeight: 280),
           Positioned(
             top: 6, right: 6,
             child: Material(
@@ -2558,6 +2570,7 @@ class _BcelQrBox extends ConsumerWidget {
                 ? Image.network(
                     cfg.qrImageUrl!,
                     width: 160, height: 160, fit: BoxFit.contain,
+                    cacheWidth: 320, cacheHeight: 320, // 🔒 [AUDIT PERF-5 / 2026-08-02]
                     errorBuilder: (_, __, ___) => QrImageView(
                       data:    order.bcelQrData,
                       version: QrVersions.auto,
@@ -3236,7 +3249,7 @@ class _AddonCheckRow extends StatelessWidget {
             color: checked ? C.primary : C.muted, size: 22,
           ),
           const SizedBox(width: 10),
-          Text(data['emoji'] as String, style: const TextStyle(fontSize: 18)),
+          Icon(data['icon'] as IconData, color: C.textPrimary, size: 18),
           const SizedBox(width: 10),
           Expanded(child: Text(tr(data['name'] as String), style: const TextStyle(
               fontSize: 13, fontWeight: FontWeight.w700, color: C.textPrimary))),
@@ -3272,7 +3285,7 @@ class _SpecialistRow extends StatelessWidget {
             color: checked ? C.primary : C.border, width: checked ? 2 : 1),
       ),
       child: Row(children: [
-        Text(data['emoji'] as String, style: const TextStyle(fontSize: 20)),
+        Icon(data['icon'] as IconData, color: C.textPrimary, size: 20),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(tr(data['name'] as String), style: const TextStyle(
