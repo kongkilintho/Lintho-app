@@ -53,8 +53,13 @@ class WelcomeScreen extends StatelessWidget {
                 children: [
                   Align(
                     alignment: Alignment.topRight,
+                    // ✅ [Customer UX pass 2026-08-03] ປ່ຽນຈາກ globe icon ທົ່ວໄປ
+                    // ເປັນທຸງຂອງພາສາທີ່ເລືອກຢູ່ປັດຈຸບັນ (AppLangLabel.flag ຈາກ
+                    // language_selector.dart) — ໜ້ານີ້ຢູ່ໃນ ListenableBuilder
+                    // ຢູ່ແລ້ວ ຈຶ່ງ rebuild ອັດຕະໂນມັດທັນທີທີ່ປ່ຽນພາສາ.
                     child: IconButton(
-                      icon: const Icon(Icons.language, color: C.text),
+                      icon: Text(AppLocale.instance.lang.flag,
+                          style: const TextStyle(fontSize: 22)),
                       tooltip: tr('change_language_semantic'), // ✅ [FIX ME-AUTH-5]
                       onPressed: () => LanguageSelector.show(context),
                     ),

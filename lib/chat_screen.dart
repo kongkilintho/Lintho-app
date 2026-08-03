@@ -61,14 +61,20 @@ class ChatMessage {
 // CHAT LIST SCREEN
 // ════════════════════════════════════════════════════════════
 
-class ChatListScreen extends StatefulWidget {
-  const ChatListScreen({super.key});
+// ── CHAT LIST BODY (reusable) ────────────────────────────────
+// ✅ [Notification feature 2026-08-03] ຍົກ body ອອກຈາກ ChatListScreen ເປັນ
+// widget ແຍກຕ່າງຫາກ — ໃຫ້ NotificationScreen's "Chat" tab embed ໄດ້ໂດຍກົງ
+// (ໃຊ້ chats collection ດຽວກັນ, query ດຽວກັນ, ບໍ່ສ້າງ data source ຊ້ຳ).
+// ChatListScreen ຂ້າງລຸ່ມຍັງເຮັດວຽກຄືເກົ່າ 100% (Scaffold+AppBar+FAB ຫຸ້ມ
+// widget ນີ້).
+class ChatListBody extends StatefulWidget {
+  const ChatListBody({super.key});
 
   @override
-  State<ChatListScreen> createState() => _ChatListScreenState();
+  State<ChatListBody> createState() => _ChatListBodyState();
 }
 
-class _ChatListScreenState extends State<ChatListScreen> {
+class _ChatListBodyState extends State<ChatListBody> {
   // 🔒 [AUDIT EDGE-4 / 2026-08-02 — Low, fresh re-audit] bumped by the retry
   // button below to force the StreamBuilder to resubscribe — this screen has
   // no Riverpod provider to invalidate() (raw Firestore stream), so a
@@ -79,6 +85,70 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
+    return StreamBuilder<QuerySnapshot>(
+      key: ValueKey(_retryTick),
+      // 🔒 [AUDIT PERF-2 / 2026-08-02 — Medium, fresh re-audit] ບໍ່ເຄີຍມີ
+      // .limit() ຢູ່ນີ້ — ຕ່າງຈາກ query ອື່ນທຸກອັນໃນແອັບທີ່ຈຳກັດຂອບເຂດໝົດ
+      // (booking_repository.dart ໃຊ້ .limit(30/50) ທົ່ວໄປ). ຜູ້ໃຊ້ທີ່ມີ
+      // ຫ້ອງແຊັດຫຼາຍຮ້ອຍຫ້ອງຈະດາວໂຫຼດ/ hold ໄວ້ໃນ memory ໝົດທຸກຄັ້ງທີ່ເປີດໜ້ານີ້.
+      stream: FirebaseFirestore.instance
+          .collection('chats')
+          .where('members', arrayContains: user?.uid)
+          .orderBy('lastMessageAt', descending: true)
+          .limit(50)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _SkeletonChatList();
+        }
+        // 🔒 [AUDIT EDGE-4 / 2026-08-02 — Low, fresh re-audit] previously
+        // an error fell into the same branch as "no chats yet" below —
+        // indistinguishable to the user, and no way to retry a real
+        // failure (offline, permission change) short of leaving the screen.
+        if (snapshot.hasError) {
+          return ErrorStateView(
+              onRetry: () => setState(() => _retryTick++));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const _EmptyChatList();
+        }
+        final chats = snapshot.data!.docs;
+        return ListView.builder(
+          padding:     const EdgeInsets.all(16),
+          itemCount:   chats.length,
+          itemBuilder: (_, i) {
+            final chat       = chats[i].data() as Map<String, dynamic>;
+            final chatId     = chats[i].id;
+            final isCustomer = user?.uid == chat['customerId'];
+            final otherName  = isCustomer
+                ? (chat['providerName']  as String? ?? 'ຊ່າງ')
+                : (chat['customerName'] as String? ?? 'ລູກຄ້າ');
+            final lastMsg    = chat['lastMessage']          as String? ?? '';
+
+            return _ChatListTile(
+              chatId:      chatId,
+              otherName:   otherName,
+              serviceName: chat['serviceName'] as String? ?? '',
+              lastMsg:     lastMsg,
+              myUid:       user?.uid,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class ChatListScreen extends StatefulWidget {
+  const ChatListScreen({super.key});
+
+  @override
+  State<ChatListScreen> createState() => _ChatListScreenState();
+}
+
+class _ChatListScreenState extends State<ChatListScreen> {
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: C.cream,
       appBar: AppBar(
@@ -88,57 +158,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
           color: C.primary, fontWeight: FontWeight.w800, fontSize: 18,
         )),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        key: ValueKey(_retryTick),
-        // 🔒 [AUDIT PERF-2 / 2026-08-02 — Medium, fresh re-audit] ບໍ່ເຄີຍມີ
-        // .limit() ຢູ່ນີ້ — ຕ່າງຈາກ query ອື່ນທຸກອັນໃນແອັບທີ່ຈຳກັດຂອບເຂດໝົດ
-        // (booking_repository.dart ໃຊ້ .limit(30/50) ທົ່ວໄປ). ຜູ້ໃຊ້ທີ່ມີ
-        // ຫ້ອງແຊັດຫຼາຍຮ້ອຍຫ້ອງຈະດາວໂຫຼດ/ hold ໄວ້ໃນ memory ໝົດທຸກຄັ້ງທີ່ເປີດໜ້ານີ້.
-        stream: FirebaseFirestore.instance
-            .collection('chats')
-            .where('members', arrayContains: user?.uid)
-            .orderBy('lastMessageAt', descending: true)
-            .limit(50)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const _SkeletonChatList();
-          }
-          // 🔒 [AUDIT EDGE-4 / 2026-08-02 — Low, fresh re-audit] previously
-          // an error fell into the same branch as "no chats yet" below —
-          // indistinguishable to the user, and no way to retry a real
-          // failure (offline, permission change) short of leaving the screen.
-          if (snapshot.hasError) {
-            return ErrorStateView(
-                onRetry: () => setState(() => _retryTick++));
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const _EmptyChatList();
-          }
-          final chats = snapshot.data!.docs;
-          return ListView.builder(
-            padding:     const EdgeInsets.all(16),
-            itemCount:   chats.length,
-            itemBuilder: (_, i) {
-              final chat       = chats[i].data() as Map<String, dynamic>;
-              final chatId     = chats[i].id;
-              final isCustomer = user?.uid == chat['customerId'];
-              final otherName  = isCustomer
-                  ? (chat['providerName']  as String? ?? 'ຊ່າງ')
-                  : (chat['customerName'] as String? ?? 'ລູກຄ້າ');
-              final lastMsg    = chat['lastMessage']          as String? ?? '';
-
-              return _ChatListTile(
-                chatId:      chatId,
-                otherName:   otherName,
-                serviceName: chat['serviceName'] as String? ?? '',
-                lastMsg:     lastMsg,
-                myUid:       user?.uid,
-              );
-            },
-          );
-        },
-      ),
+      body: const ChatListBody(),
       floatingActionButton: FloatingActionButton(
         backgroundColor: C.primary,
         onPressed:       () => _showNewChatHint(context),

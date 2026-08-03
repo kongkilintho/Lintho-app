@@ -15,20 +15,26 @@ class SavedAddress {
   // _useSavedAddress() ໃນ quick_booking_screen.dart ຕ້ອງໃຊ້ພິກັດຄົງທີ່
   // (ວຽງຈັນ) ແທນ ທຸກຄັ້ງ. ເພີ່ມເຂົ້າມາໃຫ້ໃຊ້ພິກັດແທ້ໄດ້.
   final GeoPoint? location;
+  // ✅ [Customer UX pass 2026-08-03] ໃໝ່ — ໃຫ້ລູກຄ້າຕັ້ງທີ່ຢູ່ໜຶ່ງອັນເປັນ
+  // ຄ່າເລີ່ມຕົ້ນ. Additive field, ບໍ່ກະທົບ document ເກົ່າທີ່ບໍ່ມີ field ນີ້
+  // (default false).
+  final bool isDefault;
 
   const SavedAddress({
     required this.id,
     required this.label,
     required this.address,
     this.location,
+    this.isDefault = false,
   });
 
   factory SavedAddress.fromMap(Map<String, dynamic> d, String id) =>
       SavedAddress(
-        id:       id,
-        label:    d['label']   as String? ?? '',
-        address:  d['address'] as String? ?? '',
-        location: d['location'] as GeoPoint?,
+        id:        id,
+        label:     d['label']   as String? ?? '',
+        address:   d['address'] as String? ?? '',
+        location:  d['location'] as GeoPoint?,
+        isDefault: d['isDefault'] as bool? ?? false,
       );
 }
 

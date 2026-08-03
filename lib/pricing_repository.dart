@@ -99,6 +99,29 @@ class ServicePricing {
   bool get isFixed => pricingType == 'FIXED';
   bool get isTiered => pricingType == 'TIERED';
 
+  /// ລາຄາຕ່ຳສຸດທີ່ເປັນໄປໄດ້ຈິງຂອງບໍລິການນີ້ — ໃຊ້ສະແດງ "ເລີ່ມຕົ້ນ ₭X" ຢູ່
+  /// ໜ້າ Home (card ໝວດ/ບໍລິການຍອດນິຍົມ) ໂດຍບໍ່ຕ້ອງຮູ້ໂຄງສ້າງ tier ສະເພາະ
+  /// ຂອງແຕ່ລະບໍລິການ — ສະແກນທຸກ priceMin/price ໃນທຸກ tierAttribute/option
+  /// (ບວກ basePrice ຖ້າ FIXED) ແລ້ວເອົາຄ່າຕ່ຳສຸດ. null ຖ້າບໍ່ມີຂໍ້ມູນລາຄາເລີຍ —
+  /// caller ຕ້ອງເຊື່ອງ field ແທນສະແດງ 0/fake.
+  num? get startingPrice {
+    num? min;
+    void consider(num? v) {
+      if (v == null) return;
+      if (min == null || v < min!) min = v;
+    }
+
+    consider(basePrice);
+    for (final attr in tierAttributes) {
+      consider(attr.unitPriceMin);
+      for (final opt in attr.options) {
+        consider(opt.price);
+        consider(opt.priceMin);
+      }
+    }
+    return min;
+  }
+
   factory ServicePricing.fromMap(String id, Map<String, dynamic> m) => ServicePricing(
         id: id,
         pricingType: m['pricingType'] as String? ?? 'FIXED',

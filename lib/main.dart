@@ -13,6 +13,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -42,6 +43,9 @@ import 'booking_provider.dart' show customerBookingCountProvider;
 import 'map_picker_screen.dart';
 import 'saved_address.dart';
 import 'booking_detail_screen.dart';
+import 'pricing_repository.dart';
+import 'payment_config_provider.dart';
+import 'notification_screen.dart';
 import 'fcm_service.dart';
 import 'cloudinary_service.dart';
 import 'quick_booking_screen.dart';
@@ -1037,24 +1041,30 @@ class _LocationSelectorState extends State<_LocationSelector> {
   @override
   Widget build(BuildContext context) {
     final city = _city ?? _cities.first;
+    // ✅ [Green gradient header] ໜ້ານີ້ຖືກໃຊ້ຢູ່ເທິງພື້ນຫຼັງ gradient ຂຽວ
+    // ຂອງ Home ເທົ່ານັ້ນ (ບໍ່ໄດ້ໃຊ້ຊ້ຳບ່ອນອື່ນ) — ຕອນນີ້ເປັນ pill ແກ້ວໃສ
+    // ສີຂາວໂປ່ງແສງ + ໂຕໜັງສື/ໄອຄອນຂາວ ແທນ bg/text ສີເຂັ້ມເກົ່າ ໃຫ້ contrast
+    // ພຽງພໍເທິງພື້ນຫຼັງຂຽວ.
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(20),
         onTap: _showPicker,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: C.bg,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: C.border),
+            color: Colors.white.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Text(city, style: const TextStyle(
-                color: C.text, fontSize: 18, fontWeight: FontWeight.w800)),
+            const Icon(Icons.location_on_rounded, color: Colors.white, size: 14),
             const SizedBox(width: 4),
-            const Icon(Icons.keyboard_arrow_down_rounded,
-                color: C.sky, size: 22),
+            Text(city, style: const TextStyle(
+                color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
+            const SizedBox(width: 2),
+            Icon(Icons.keyboard_arrow_down_rounded,
+                color: Colors.white.withValues(alpha: 0.85), size: 16),
           ]),
         ),
       ),
@@ -1121,7 +1131,10 @@ class _PromoCarouselState extends State<_PromoCarousel> {
   Widget build(BuildContext context) {
     return Column(children: [
       SizedBox(
-        height: 144,
+        // ✅ [FIX] 144 ບໍ່ພໍອີກຕໍ່ໄປ ຫຼັງຈາກເພີ່ມປຸ່ມ CTA ໃສ່ບັດທີ່ບໍ່ແມ່ນ referral —
+        // "bottom overflowed by 9.0 pixels" ໃນ debug ຢືນຢັນວ່າເນື້ອຫາ (title+
+        // subtitle+ປຸ່ມ) ສູງກວ່າພື້ນທີ່ card ທີ່ມີ (144 - padding 18*2 = 108px).
+        height: 172,
         child: PageView.builder(
           controller: _ctrl,
           itemCount: _promos.length,
@@ -1131,11 +1144,13 @@ class _PromoCarouselState extends State<_PromoCarousel> {
             final colors = p['colors'] as List<Color>;
             final isReferral = i == _referralIndex;
             final isMonthly = i == 1;
-            // ✅ [FIX H14] ບັດ referral ນີ້ (index 2) ບໍ່ເຄີຍມີ onTap ມາກ່ອນ —
-            // ReferralScreen ຖືກສ້າງແລ້ວ ແລະ ໃຊ້ໄດ້ຈິງ (referral_provider.dart
-            // ມີ logic ຄົບ) ແຕ່ບໍ່ເຄີຍຖືກ navigate ໄປຫາຈາກຈຸດໃດເລີຍ. ບັດອື່ນ
-            // (promo ທົ່ວໄປ/monthly) ຍັງເປັນ decorative ລ້ວນໆ, ບໍ່ມີໜ້າຈໍສະເພາະ
-            // ໃຫ້ໄປ, ຈຶ່ງບໍ່ໄດ້ເພີ່ມ onTap.
+            // ✅ [Customer UX pass 2026-08-03] ທຸກບັດຕ້ອງມີ CTA ຊັດເຈນ — referral
+            // (index 2) ທັງບັດເປັນ CTA ຢູ່ແລ້ວ (ໄປ ReferralScreen), ບັດອື່ນ (promo
+            // ທົ່ວໄປ/monthly) ດຽວນີ້ມີປຸ່ມ "ເບິ່ງບໍລິການ" → BookingFormScreen ແທນທີ່
+            // ຈະເປັນ decorative ລ້ວນໆຄືເກົ່າ.
+            void goToServices() => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const BookingFormScreen()));
+
             final card = Container(
               padding: const EdgeInsets.fromLTRB(20, 18, 16, 18),
               decoration: BoxDecoration(
@@ -1154,14 +1169,44 @@ class _PromoCarouselState extends State<_PromoCarousel> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(p['title'] as String, style: const TextStyle(
+                    Text(p['title'] as String,
+                        maxLines: 2, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 20,
+                        fontSize: 19,
+                        height: 1.15,
+                        letterSpacing: -0.2,
                         fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
-                    Text(p['sub'] as String, style: TextStyle(
+                    Text(p['sub'] as String,
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: isReferral ? 15 : 12)),
+                        fontSize: isReferral ? 15 : 12.5,
+                        height: 1.3)),
+                    if (!isReferral) ...[
+                      const SizedBox(height: 8),
+                      Material(
+                        color: Colors.white.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(8),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: goToServices,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              Text(tr('see_services'), style: const TextStyle(
+                                  color: Colors.white, fontSize: 11,
+                                  fontWeight: FontWeight.w800)),
+                              const SizedBox(width: 3),
+                              const Icon(Icons.arrow_forward_rounded,
+                                  color: Colors.white, size: 12),
+                            ]),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 )),
                 const SizedBox(width: 12),
@@ -1205,6 +1250,261 @@ class _PromoCarouselState extends State<_PromoCarousel> {
   }
 }
 
+// ── SEARCH BAR (Fastwork style) ──────────────────────────────
+// ▸ ບໍ່ພິມຢູ່ບ່ອນນີ້ອີກຕໍ່ໄປ — ກົດແລ້ວພາໄປ SearchScreen ເຕັມໜ້າຈໍທັນທີ
+// (ຄືກັບ Fastwork/Grab), ຄົ້ນຫາຈິງເກີດຢູ່ SearchScreen ບ່ອນດຽວ.
+class _HomeSearchBar extends StatelessWidget {
+  const _HomeSearchBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Expanded(
+        child: Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const SearchScreen())),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 10, offset: const Offset(0, 3),
+                )],
+              ),
+              child: Row(children: [
+                const Icon(Icons.search_rounded, color: C.muted, size: 20),
+                const SizedBox(width: 8),
+                Expanded(child: Text(tr('search_placeholder'),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: C.muted, fontSize: 13.5))),
+              ]),
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(width: 10),
+      Material(
+        // ✅ [Green gradient header] mint (ຂາວອ່ອນໆ) ເຄີຍໃຊ້ໄດ້ດີເທິງພື້ນຫຼັງ
+        // ຂາວ — ແຕ່ຈາງເກີນໄປເທິງພື້ນຫຼັງ gradient ຂຽວສົດ. ຕອນນີ້ໃຊ້ຂາວແທ້
+        // ຄືກັນກັບກ່ອງຄົ້ນຫາ ໃຫ້ pop ຊັດເຈນ.
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => _showFilterSheet(context),
+          child: Container(
+            width: 46, height: 46,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 10, offset: const Offset(0, 3),
+              )],
+            ),
+            child: const Icon(Icons.tune_rounded, color: C.primary, size: 20),
+          ),
+        ),
+      ),
+    ]);
+  }
+
+  // ▸ ຕອງຕາມປະເພດບໍລິການ — ພຽງ 2 ໝວດຈິງໃນແອັບ (HomeScreen._cats), ກົດແລ້ວ
+  // ພາໄປ BookingFormScreen ຂອງໝວດນັ້ນທັນທີ (pattern ດຽວກັນກັບບັດໝວດໃນ Home).
+  void _showFilterSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(tr('filter_by_service'), style: const TextStyle(
+              fontSize: 16, fontWeight: FontWeight.w800, color: C.text)),
+          const SizedBox(height: 8),
+          ...HomeScreen._cats.map((cat) => ListTile(
+            leading: Icon(cat['icon'] as IconData, color: cat['accent'] as Color),
+            title: Text(cat['label'] as String,
+                style: const TextStyle(fontWeight: FontWeight.w700, color: C.text)),
+            onTap: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => BookingFormScreen(
+                    initialOrder: BookingOrder(
+                        category: cat['category'] as ServiceCategory),
+                    initialStep: 1,
+                  )));
+            },
+          )),
+        ]),
+      )),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// SEARCH SCREEN — dedicated full-screen search (Fastwork style)
+// ════════════════════════════════════════════════════════════
+// ▸ ຄົ້ນຫາຢູ່ໃນ HomeScreen._popular (ຊື່ບໍລິການ) + HomeScreen._cats (ຊື່ໝວດ) —
+// ນີ້ຄື service data source ດຽວທີ່ HomeScreen ມີຢູ່ແລ້ວ, ບໍ່ສ້າງ list ໃໝ່ຊ້ຳ.
+// ▸ ຢູ່ໃນ main.dart ນຳ HomeScreen (ບໍ່ແຍກ file ຄືໜ້າຈໍອື່ນໆ) ເພາະໃຊ້
+// HomeScreen._cats/_popular ແລະ _PopularCard/_PriceLine ຮ່ວມກັນ — ທຸກອັນເປັນ
+// library-private (underscore), import ຂ້າມ file ບໍ່ໄດ້ໂດຍບໍ່ປ່ຽນເປັນ public.
+class SearchScreen extends StatefulWidget {
+  const SearchScreen({super.key});
+  @override
+  State<SearchScreen> createState() => _SearchScreenState();
+}
+
+class _SearchScreenState extends State<SearchScreen> {
+  final _ctrl = TextEditingController();
+  final _focus = FocusNode();
+  Timer? _debounce;
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focus.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _ctrl.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String v) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) setState(() => _query = v.trim());
+    });
+  }
+
+  // ▸ ບໍ່ມີ query → ສະແດງບໍລິການທັງໝົດ (ຂໍ້ມູນຈິງ, ບໍ່ແມ່ນ placeholder) —
+  // ຄືກັນກັບ Fastwork ທີ່ສະແດງ suggestion ກ່ອນຜູ້ໃຊ້ພິມຫຍັງ.
+  List<Map<String, Object>> get _results {
+    final all = HomeScreen._popular;
+    if (_query.isEmpty) return all;
+    final q = _query.toLowerCase();
+    return all.where((s) {
+      final name = (s['name'] as String).toLowerCase();
+      if (name.contains(q)) return true;
+      final cat = s['category'] as ServiceCategory;
+      return HomeScreen._cats.any((c) =>
+          c['category'] == cat && (c['label'] as String).toLowerCase().contains(q));
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final results = _results;
+    return Scaffold(
+      backgroundColor: C.background,
+      appBar: AppBar(
+        backgroundColor: C.background,
+        elevation: 0,
+        titleSpacing: 0,
+        title: Container(
+          height: 44,
+          margin: const EdgeInsets.only(right: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10, offset: const Offset(0, 3),
+            )],
+          ),
+          child: TextField(
+            controller: _ctrl,
+            focusNode: _focus,
+            onChanged: _onChanged,
+            style: const TextStyle(fontSize: 14, color: C.text),
+            decoration: InputDecoration(
+              hintText: tr('search_placeholder'),
+              hintStyle: const TextStyle(color: C.muted, fontSize: 13.5),
+              prefixIcon: const Icon(Icons.search_rounded, color: C.muted, size: 20),
+              suffixIcon: _ctrl.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.close_rounded, color: C.muted, size: 18),
+                      onPressed: () {
+                        _ctrl.clear();
+                        _debounce?.cancel();
+                        setState(() => _query = '');
+                      },
+                    )
+                  : null,
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+            ),
+          ),
+        ),
+      ),
+      body: results.isEmpty
+          ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.search_off_rounded, color: C.muted, size: 40),
+              const SizedBox(height: 10),
+              Text(tr('search_no_results'), style: const TextStyle(
+                  color: C.muted, fontSize: 14, fontWeight: FontWeight.w600)),
+            ]))
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: results.map((s) => _PopularCard(service: s)).toList(),
+            ),
+    );
+  }
+}
+
+// ── TRUST SECTION ───────────────────────────────────────────
+class _TrustSection extends StatelessWidget {
+  const _TrustSection();
+
+  static const _items = [
+    (Icons.verified_user_rounded, 'trust_verified_title'),
+    (Icons.star_rounded,          'trust_reviews_title'),
+    (Icons.build_rounded,         'trust_guarantee_title'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      decoration: BoxDecoration(
+        color: C.mint,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: C.primary.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        children: _items.map((item) {
+          final (icon, key) = item;
+          return Expanded(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(icon, color: C.primary, size: 22),
+              const SizedBox(height: 6),
+              Text(tr(key), textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w700, color: C.text)),
+            ]),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -1233,14 +1533,12 @@ class HomeScreen extends StatelessWidget {
   static List<Map<String, Object>> get _popular => [
     {
       'icon': Icons.ac_unit_rounded, 'name': tr('svc_ac_general_full'),
-      'price': '${tr('starting_from')} 300,000',
       'time': '45–60 ${tr('minutes_unit')}',
       'color': C.categoryAcBg, 'accent': C.categoryAcAccent,
       'category': ServiceCategory.acCleaning,
     },
     {
       'icon': Icons.cleaning_services_rounded, 'name': tr('svc_house_general_full'),
-      'price': '${tr('starting_from')} 180,000',
       'time': '1–3 ${tr('hours_unit')}',
       'color': C.categoryCleanBg, 'accent': C.categoryCleanAccent,
       'category': ServiceCategory.homeCleaning,
@@ -1262,61 +1560,124 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    return Scaffold(
+    // ✅ [Canva-style green gradient header] ຫົວ Home (greeting/location/
+    // ຄົ້ນຫາ) ດຽວນີ້ມີພື້ນຫຼັງ gradient ຂຽວແທນສີຂາວ — Container ນີ້ບໍ່ຢູ່ໃນ
+    // Padding ຂອບ 20px ອີກຕໍ່ໄປ (ໃຫ້ gradient ເຕັມຄວາມກວ້າງໜ້າຈໍແທ້ໆ), ແລະ
+    // padding ເທິງໃຊ້ MediaQuery.padding.top ແທນຄ່າ hardcode ເກົ່າ (48) ໃຫ້
+    // gradient ແຕ້ມຂຶ້ນໄປຫາ status bar ຢ່າງບໍ່ມີຮອຍຕໍ່. AnnotatedRegion ຂ້າງລຸ່ມ
+    // ປ່ຽນໄອຄອນ status bar ເປັນສີຂາວໃຫ້ເບິ່ງເຫັນເທິງພື້ນຫຼັງຂຽວສົດ.
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
       body: CustomScrollView(slivers: [
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 60, 20, 0),
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 🔒 [FOLLOWUP-J2] ໂຕລະຄັງແຈ້ງເຕືອນ (bell) ບໍ່ເຄີຍມີ onTap ເລີຍ —
-                  // ກົດແລ້ວບໍ່ເຮັດຫຍັງ, ແລະ ບໍ່ມີໜ້າຈໍ notification-center ໃນແອັບ
-                  // ໃຫ້ navigate ໄປຫາ (ການສ້າງໜ້າຈໍນັ້ນເປັນ feature ໃໝ່, ບໍ່ແມ່ນ
-                  // bug fix). ລຶບອອກແທນທີ່ຈະປະໄວ້ໃຫ້ຫຼອກລວງວ່າກົດໄດ້.
-                  Row(children: [
-                    const Icon(Icons.location_on_outlined, color: C.text, size: 18),
-                    const SizedBox(width: 6),
-                    Text(user?.displayName ?? tr('default_user_name'),
-                        style: const TextStyle(
-                            color: C.text, fontSize: 13, fontWeight: FontWeight.w600)),
-                  ]),
-                  const SizedBox(height: 6),
-                  const _LocationSelector(),
-                  const SizedBox(height: 20),
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () => Navigator.push(context, MaterialPageRoute(
-                          builder: (_) => const QuickBookingFlow())),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: C.navy,
-                          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.fromLTRB(
+                    20, MediaQuery.of(context).padding.top + 16, 20, 24),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [C.primary, Color(0xFF00C9A7)],
+                  ),
+                  borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(28),
+                      bottomRight: Radius.circular(28)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ✅ [Notification feature 2026-08-03] ໂຕກະດິ່ງເຄີຍຖືກລຶບອອກ
+                    // (FOLLOWUP-J2) ຍ້ອນບໍ່ມີໜ້າຈໍ notification-center ໃຫ້ໄປ —
+                    // ຕອນນີ້ NotificationScreen ສ້າງແລ້ວ (3 tabs: Chat/News/
+                    // Customer Service, ທຸກ tab ໃຊ້ຂໍ້ມູນຈິງ) ຈຶ່ງເພີ່ມກັບຄືນ.
+                    Row(children: [
+                      Expanded(child: Text(
+                          '${tr('greeting_hello')}, ${user?.displayName ?? tr('default_user_name')} 👋',
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800))),
+                      Material(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => const NotificationScreen())),
+                          child: const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Icon(Icons.notifications_rounded,
+                                color: Colors.white, size: 20),
+                          ),
                         ),
-                        child: Row(children: [
-                          const Text('🚀', style: TextStyle(fontSize: 22)),
-                          const SizedBox(width: 10),
-                          Expanded(child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(tr('quick_book_banner_title'), style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white, fontSize: 14)),
-                              Text(tr('quick_book_banner_sub'),
-                                  style: const TextStyle(fontSize: 11, color: Colors.white70)),
-                            ],
-                          )),
-                          const Icon(Icons.chevron_right, color: Colors.white),
-                        ]),
+                      ),
+                    ]),
+                    const SizedBox(height: 2),
+                    Text(tr('greeting_subtitle'), style: const TextStyle(
+                        color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 10),
+                    const _LocationSelector(),
+                    const SizedBox(height: 12),
+                    const _HomeSearchBar(),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => const QuickBookingFlow())),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: C.navy,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(children: [
+                            const Text('🚀', style: TextStyle(fontSize: 24)),
+                            const SizedBox(width: 10),
+                            Expanded(child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(tr('quick_book_banner_title'),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white, fontSize: 18,
+                                    height: 1.1, letterSpacing: -0.2)),
+                                const SizedBox(height: 3),
+                                Text(tr('quick_book_banner_sub'),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.white70)),
+                              ],
+                            )),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.chevron_right, color: Colors.white),
+                          ]),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 32),
-                  const _PromoCarousel(),
-                ]),
+                    const SizedBox(height: 32),
+                    const _PromoCarousel(),
+                    const SizedBox(height: 20),
+                    const _TrustSection(),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
         SliverToBoxAdapter(child: Padding(
@@ -1390,6 +1751,10 @@ class HomeScreen extends StatelessWidget {
                                   Text(cat['sub'] as String, textAlign: TextAlign.center,
                                       style: const TextStyle(
                                       fontSize: 11, color: C.muted)),
+                                  const SizedBox(height: 4),
+                                  _PriceLine(
+                                      category: cat['category'] as ServiceCategory,
+                                      compact: true),
                                 ],
                               ),
                             ),
@@ -1425,6 +1790,7 @@ class HomeScreen extends StatelessWidget {
               ]),
         )),
       ]),
+      ),
     );
   }
 }
@@ -1485,9 +1851,7 @@ class _PopularCard extends StatelessWidget {
                           fontWeight: FontWeight.w500, color: C.muted)),
                 ]),
                 const SizedBox(height: 6),
-                Text(s['price'] as String, style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w900,
-                    color: C.blue)),
+                _PriceLine(category: s['category'] as ServiceCategory),
               ],
             )),
             const SizedBox(width: 8),
@@ -1495,6 +1859,128 @@ class _PopularCard extends StatelessWidget {
           ]),
         ),
       ),
+    );
+  }
+}
+
+// ── ລາຄາເລີ່ມຕົ້ນ (real-time, ບໍ່ hardcode) ──────────────────
+// 🔒 [Customer UX pass 2026-08-03] ກ່ອນໜ້ານີ້ HomeScreen._popular ຂຽນລາຄາເປັນ
+// literal string ('${starting_from} 300,000') ບໍ່ກ່ຽວຂ້ອງກັບ Firestore ເລີຍ —
+// ອາດຄາດເຄື່ອນຈາກລາຄາຈິງທີ່ admin ຕັ້ງໄວ້. ຕອນນີ້ດຶງຈາກ PricingRepository ດຽວກັນ
+// ກັບ booking_form_screen.dart (ServicePricing.startingPrice — ຄ່າຕ່ຳສຸດຈິງ
+// ຈາກທຸກ tier), ບໍ່ສະແດງຫຍັງເລີຍຖ້າ fetch ບໍ່ໄດ້/ບໍ່ມີຂໍ້ມູນ.
+class _PriceLine extends StatelessWidget {
+  final ServiceCategory category;
+  final bool compact;
+  const _PriceLine({required this.category, this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<ServicePricing?>(
+      future: PricingRepository.instance.fetchPricing(category.key),
+      builder: (context, snap) {
+        final price = snap.data?.startingPrice;
+        if (price == null) return const SizedBox.shrink();
+        final text =
+            '${tr('starting_from')} ₭${NumberFormat('#,###').format(price)}';
+        return Text(text,
+            textAlign: compact ? TextAlign.center : TextAlign.start,
+            style: TextStyle(
+                fontSize: compact ? 11 : 14,
+                fontWeight: FontWeight.w900,
+                color: C.blue));
+      },
+    );
+  }
+}
+
+// ── ACTIVE BOOKING HIGHLIGHT ─────────────────────────────────
+// ▸ ສະແດງເໜືອ tabs ເມື່ອລູກຄ້າມີ booking ຢູ່ໃນສະຖານະ trackable (ຮັບແລ້ວ→
+// ກຳລັງເຮັດ) — ອ່ານ field ດຽວກັນກັບ booking_detail_screen.dart
+// (providerName/category/scheduledAt) ບໍ່ສ້າງ schema ໃໝ່. ການກະທຳ (ຍົກເລີກ/
+// ຕິດຕໍ່ຊ່າງ/ຕິດຕາມ) ຄົງຢູ່ໃນ BookingDetailScreen ບ່ອນທີ່ business rule ຖືກ
+// ບັງຄັບໃຊ້ຢູ່ແລ້ວ (bookingIsCancelable/bookingIsTrackable) — card ນີ້ພຽງແຕ່
+// ສະຫຼຸບ + ພາໄປ.
+class _ActiveBookingCard extends StatelessWidget {
+  final String bookingId;
+  final Map<String, dynamic> booking;
+  const _ActiveBookingCard({required this.bookingId, required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    final status = booking['status'] as String? ?? 'pending';
+    final style = bookingStatusStyle(status);
+    final providerName = booking['providerName'] as String?;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: style.fg.withValues(alpha: 0.3), width: 1.4),
+        boxShadow: [BoxShadow(
+          color: style.fg.withValues(alpha: 0.10),
+          blurRadius: 14, offset: const Offset(0, 6),
+        )],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(tr('active_booking_title'), style: const TextStyle(
+              fontSize: 12, fontWeight: FontWeight.w800, color: C.muted,
+              letterSpacing: 0.3)),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+                color: style.bg, borderRadius: BorderRadius.circular(20)),
+            child: Text(bookingStatusLabel(status), style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.bold, color: style.fg)),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        Row(children: [
+          Container(
+            width: 48, height: 48,
+            decoration: BoxDecoration(
+                color: C.bg, borderRadius: BorderRadius.circular(14)),
+            child: Center(child: Icon(
+                serviceIconForCategory(booking['category'] as String? ?? ''),
+                size: 22, color: C.navy)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(bookingServiceName(booking), style: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w900, color: C.text)),
+              const SizedBox(height: 3),
+              Text(bookingScheduleLabel(booking), style: const TextStyle(
+                  fontSize: 12, color: C.muted, fontWeight: FontWeight.w600)),
+              if (providerName != null && providerName.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Row(children: [
+                  const Icon(Icons.person_rounded, size: 12, color: C.muted),
+                  const SizedBox(width: 3),
+                  Text(providerName, style: const TextStyle(
+                      fontSize: 12, color: C.muted, fontWeight: FontWeight.w600)),
+                ]),
+              ],
+            ],
+          )),
+        ]),
+        const SizedBox(height: 12),
+        SizedBox(width: double.infinity, child: ElevatedButton(
+          onPressed: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => BookingDetailScreen(bookingId: bookingId))),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: C.primary,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: Text(tr('view_details_link'), style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+        )),
+      ]),
     );
   }
 }
@@ -1529,12 +2015,33 @@ class _BookingScreenState extends State<BookingScreen> {
             color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),
         centerTitle: true,
       ),
-      body: Column(children: [
-        _buildStatusTabs(),
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirestoreService.getMyBookings(),
-            builder: (context, snapshot) {
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirestoreService.getMyBookings(),
+        builder: (context, outerSnapshot) {
+          // ✅ [Customer UX pass 2026-08-03] Active-booking highlight card ດຶງ
+          // ຈາກ snapshot ດຽວກັນນີ້ (ບໍ່ເປີດ listener ໃໝ່) — ຫາ booking ທຳອິດ
+          // (createdAt ລ່າສຸດສຸດ, getMyBookings() ຈັດລຽງໄວ້ແລ້ວ) ທີ່ຢູ່ໃນ
+          // ສະຖານະ trackable (ຮັບແລ້ວ→ກຳລັງເຮັດ).
+          Map<String, dynamic>? activeBooking;
+          String? activeBookingId;
+          if (outerSnapshot.hasData) {
+            for (final doc in outerSnapshot.data!.docs) {
+              final b = doc.data() as Map<String, dynamic>;
+              final status = b['status'] as String? ?? 'pending';
+              if (bookingIsTrackable(status)) {
+                activeBooking = b;
+                activeBookingId = doc.id;
+                break;
+              }
+            }
+          }
+          return Column(children: [
+            if (activeBooking != null)
+              _ActiveBookingCard(bookingId: activeBookingId!, booking: activeBooking),
+            _buildStatusTabs(),
+            Expanded(
+              child: Builder(builder: (context) {
+              final snapshot = outerSnapshot;
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const _BookingListSkeleton();
               }
@@ -1586,6 +2093,22 @@ class _BookingScreenState extends State<BookingScreen> {
                         style: const TextStyle(
                             fontSize: 16, color: C.muted,
                             fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 20),
+                    Consumer(builder: (context, ref, _) => ElevatedButton(
+                      onPressed: () {
+                        ref.read(mainShellTabIndexProvider.notifier).state = 0;
+                        if (Navigator.canPop(context)) Navigator.pop(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: C.primary,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(tr('booking_empty_cta'), style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w700)),
+                    )),
                   ],
                 ));
               }
@@ -1707,6 +2230,21 @@ class _BookingScreenState extends State<BookingScreen> {
                           ),
                         ),
                       ],
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Divider(height: 1, color: C.border),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Text(tr('view_details_link'), style: const TextStyle(
+                              fontSize: 12.5, fontWeight: FontWeight.w700,
+                              color: C.sky)),
+                          const SizedBox(width: 3),
+                          const Icon(Icons.arrow_forward_rounded,
+                              size: 14, color: C.sky),
+                        ],
+                      ),
                     ]),
                   );
 
@@ -1725,10 +2263,10 @@ class _BookingScreenState extends State<BookingScreen> {
                   );
                 },
               );
-            },
-          ),
-        ),
-      ]),
+              })),
+          ]);
+        },
+      ),
     );
   }
 
@@ -1977,7 +2515,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 color: Color(0x14000000),
                 blurRadius: 16, offset: Offset(0, 6))],
           ),
-          padding: EdgeInsets.fromLTRB(20, topPad + 24, 20, 24),
+          padding: EdgeInsets.fromLTRB(20, topPad + 18, 20, 20),
           child: Column(children: [
             SizedBox(
               width: 88, height: 88,
@@ -2083,7 +2621,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -2121,6 +2659,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // the app). Removed rather than half-implemented; the screen
             // class stays in case the feature is built for real later.
             _group(tr('manage_account'), [
+              _tile(Icons.location_on_outlined,
+                  tr('my_addresses'), tr('my_addresses_sub'), iconColor: C.navy,
+                  onTap: () => _showAddr(context)),
+              _tile(Icons.payments_outlined,
+                  tr('payment_methods_title'), tr('payment_methods_sub'), iconColor: C.green,
+                  onTap: () => _showPaymentMethods(context)),
               _tile(Icons.receipt_long,
                   tr('payment_history'), tr('payment_history_sub'), iconColor: C.blue,
                   onTap: () => Navigator.push(context, MaterialPageRoute(
@@ -2139,6 +2683,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onTap: () => _showTermsPrivacy(context)),
               _tile(Icons.language, tr('language'), '',
                   iconColor: C.sky,
+                  trailing: '${AppLocale.instance.lang.flag} '
+                      '${AppLocale.instance.lang.displayName}',
                   onTap: () => LanguageSelector.show(context)),
               _tile(Icons.vpn_key_outlined, tr('security'),
                   tr('security_sub'), iconColor: C.green,
@@ -2914,6 +3460,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // read/create/delete ໃຫ້ເຈົ້າຂອງແລ້ວ, ເບິ່ງ firestore.rules:161). ເພີ່ມທີ່ຢູ່
   // ໃໝ່ໃຊ້ MapPickerScreen + reverse-geocode ດຽວກັນກັບ
   // quick_booking_screen.dart._pickOnMap().
+  // ✅ [Customer UX pass 2026-08-03] ໜ້ານີ້ບໍ່ໄດ້ຮ້ອງ `.update()` ຢູ່
+  // users/{uid}/addresses/{addrId} ເລີຍ — firestore.rules:433 ຕັ້ງ
+  // `allow update: if false;` ໂດຍເຈດຕະນາ (ບໍ່ໄດ້ຢູ່ໃນຂອບເຂດວຽກນີ້ໃຫ້ແກ້
+  // rules). ດັ່ງນັ້ນ "ແກ້ໄຂ"/"ຕັ້ງເປັນຄ່າເລີ່ມຕົ້ນ" ທັງສອງໃຊ້ delete+create
+  // (ທັງສອງອະນຸຍາດແລ້ວ) ພາຍໃນ WriteBatch ດຽວ ແທນ update ໂດຍກົງ — ຄົງຄ່າ
+  // createdAt ເດີມໄວ້ບໍ່ໃຫ້ລຳດັບໃນ list ປ່ຽນໂດຍບໍ່ຕັ້ງໃຈ.
+  Future<void> _rewriteAddress(String uid, String addrId,
+      Map<String, dynamic> fieldChanges) async {
+    final addressesRef = FirebaseFirestore.instance
+        .collection('users').doc(uid).collection('addresses');
+    final oldDoc = await addressesRef.doc(addrId).get();
+    final data = {...(oldDoc.data() ?? {}), ...fieldChanges};
+    final batch = FirebaseFirestore.instance.batch();
+    batch.delete(addressesRef.doc(addrId));
+    batch.set(addressesRef.doc(), data);
+    await batch.commit();
+  }
+
+  Future<void> _setDefaultAddress(
+      String uid, SavedAddress target, List<SavedAddress> all) async {
+    for (final a in all) {
+      if (a.id != target.id && a.isDefault) {
+        await _rewriteAddress(uid, a.id, {'isDefault': false});
+      }
+    }
+    await _rewriteAddress(uid, target.id, {'isDefault': true});
+  }
+
+  Future<String?> _pickAddressLabel(BuildContext context, {String? initial}) {
+    final options = [
+      tr('address_label_home'), tr('address_label_office'),
+      tr('address_label_condo'), tr('address_label_other'),
+    ];
+    String selected = options.contains(initial) ? initial! : options.first;
+    return showDialog<String>(
+      context: context,
+      builder: (dCtx) => StatefulBuilder(builder: (dCtx, setS) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(tr('address_edit_title'), style: const TextStyle(
+            fontWeight: FontWeight.w800, color: C.text)),
+        content: Wrap(spacing: 8, runSpacing: 8, children: options.map((o) =>
+            ChoiceChip(
+              label: Text(o),
+              selected: selected == o,
+              onSelected: (_) => setS(() => selected = o),
+              selectedColor: C.primary.withValues(alpha: 0.15),
+              labelStyle: TextStyle(
+                  color: selected == o ? C.primary : C.text,
+                  fontWeight: FontWeight.w700),
+            )).toList()),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dCtx),
+              child: Text(tr('no'), style: const TextStyle(color: C.muted))),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(dCtx, selected),
+              style: ElevatedButton.styleFrom(backgroundColor: C.primary),
+              child: Text(tr('confirm'),
+                  style: const TextStyle(color: Colors.white))),
+        ],
+      )),
+    );
+  }
+
   void _showAddr(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -2922,7 +3532,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => Padding(
         padding: const EdgeInsets.all(20),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('ທີ່ຢູ່ຂອງຂ້ອຍ', style: TextStyle(
+          Text(tr('my_addresses'), style: const TextStyle(
               fontSize: 18, fontWeight: FontWeight.w800, color: C.text)),
           const SizedBox(height: 16),
           Consumer(builder: (context, ref, _) {
@@ -2939,47 +3549,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // ມີ ໂດຍບໍ່ມີທາງ scroll ໄປເບິ່ງລາຍການ/ປຸ່ມທີ່ຢູ່ລຸ່ມ. ຈຳກັດຄວາມສູງ
             // ແລະ ຫຸ້ມ SingleChildScrollView, ພ້ອມຈຳກັດ subtitle ໃຫ້ 2 ແຖວ.
             return ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 280),
+              constraints: const BoxConstraints(maxHeight: 320),
               child: SingleChildScrollView(
                 child: Column(children: addresses.map((a) => ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.location_on_outlined, color: C.navy),
-                  title: Text(a.label.isEmpty ? 'ທີ່ຢູ່' : a.label,
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  leading: Icon(
+                      a.isDefault ? Icons.star_rounded : Icons.location_on_outlined,
+                      color: a.isDefault ? C.gold : C.navy),
+                  title: Row(children: [
+                    Flexible(child: Text(a.label.isEmpty ? 'ທີ່ຢູ່' : a.label,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700))),
+                    if (a.isDefault) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                            color: C.mint, borderRadius: BorderRadius.circular(6)),
+                        child: Text(tr('address_default_badge'), style: const TextStyle(
+                            fontSize: 10, color: C.primary, fontWeight: FontWeight.w700)),
+                      ),
+                    ],
+                  ]),
                   subtitle: Text(a.address,
                       maxLines: 2, overflow: TextOverflow.ellipsis),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, color: C.muted, size: 20),
-                    tooltip: 'ລຶບທີ່ຢູ່',
-                    // 🔒 [AUDIT M-13 / 2026-07-27] ກ່ອນໜ້ານີ້ລຶບທັນທີບໍ່ມີ
-                    // ການຢືນຢັນ — ນິ້ວມືພາດຕໍາເອົາໄອຄອນຖັງຂີ້ເຫຍື້ອດຽວ ລຶບທີ່ຢູ່
-                    // ຖາວອນທັນທີ ບໍ່ມີ undo. ຕອນນີ້ຖາມຢືນຢັນກ່ອນ (ຄືກັນກັບ
-                    // ການຍົກເລີກ booking ທີ່ໃຊ້ dialog ຢືນຢັນຢູ່ແລ້ວທົ່ວແອັບ).
-                    onPressed: () async {
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (dCtx) => AlertDialog(
-                          title: const Text('ລຶບທີ່ຢູ່ນີ້?'),
-                          content: Text(
-                              'ທ່ານແນ່ໃຈບໍວ່າຕ້ອງການລຶບ "${a.label.isEmpty ? a.address : a.label}"?'),
-                          actions: [
-                            TextButton(
-                                onPressed: () => Navigator.pop(dCtx, false),
-                                child: const Text('ຍົກເລີກ')),
-                            TextButton(
-                                onPressed: () => Navigator.pop(dCtx, true),
-                                child: const Text('ລຶບ',
-                                    style: TextStyle(color: C.red))),
-                          ],
-                        ),
-                      );
-                      if (confirmed != true) return;
+                  trailing: PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, color: C.muted, size: 20),
+                    onSelected: (action) async {
                       final uid = FirebaseAuth.instance.currentUser?.uid;
                       if (uid == null) return;
-                      await FirebaseFirestore.instance
-                          .collection('users').doc(uid)
-                          .collection('addresses').doc(a.id).delete();
+                      if (action == 'default') {
+                        await _setDefaultAddress(uid, a, addresses);
+                      } else if (action == 'edit') {
+                        final newLabel = await _pickAddressLabel(context, initial: a.label);
+                        if (newLabel == null) return;
+                        await _rewriteAddress(uid, a.id, {'label': newLabel});
+                      } else if (action == 'delete') {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (dCtx) => AlertDialog(
+                            title: const Text('ລຶບທີ່ຢູ່ນີ້?'),
+                            content: Text(
+                                'ທ່ານແນ່ໃຈບໍວ່າຕ້ອງການລຶບ "${a.label.isEmpty ? a.address : a.label}"?'),
+                            actions: [
+                              TextButton(
+                                  onPressed: () => Navigator.pop(dCtx, false),
+                                  child: const Text('ຍົກເລີກ')),
+                              TextButton(
+                                  onPressed: () => Navigator.pop(dCtx, true),
+                                  child: const Text('ລຶບ',
+                                      style: TextStyle(color: C.red))),
+                            ],
+                          ),
+                        );
+                        if (confirmed != true) return;
+                        await FirebaseFirestore.instance
+                            .collection('users').doc(uid)
+                            .collection('addresses').doc(a.id).delete();
+                      }
                     },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(value: 'edit', child: Text(tr('address_edit_title'))),
+                      if (!a.isDefault)
+                        PopupMenuItem(value: 'default', child: Text(tr('address_set_default'))),
+                      const PopupMenuItem(value: 'delete', child: Text('ລຶບ',
+                          style: TextStyle(color: C.red))),
+                    ],
                   ),
                 )).toList()),
               ),
@@ -3004,15 +3639,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   if (joined.isNotEmpty) addr = joined;
                 }
               } catch (_) {}
+              if (!ctx.mounted) return;
+              final label = await _pickAddressLabel(ctx) ?? tr('address_label_other');
               final uid = FirebaseAuth.instance.currentUser?.uid;
               if (uid == null) return;
               await FirebaseFirestore.instance
                   .collection('users').doc(uid)
                   .collection('addresses').add({
-                'label':     'ທີ່ຢູ່ໃໝ່',
+                'label':     label,
                 'address':   addr,
                 'location':  GeoPoint(picked.latitude, picked.longitude),
                 'createdAt': Timestamp.fromDate(DateTime.now()),
+                'isDefault': false,
               });
             },
             icon: const Icon(Icons.add_location_alt_outlined,
@@ -3026,6 +3664,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
           )),
+        ]),
+      ),
+    );
+  }
+
+  // ✅ [Customer UX pass 2026-08-03] read-only — ສະແດງແຕ່ວິທີຊຳລະທີ່ແອັບຮອງຮັບ
+  // ຈິງຢູ່ໜ້າຈອງ (booking_form_screen.dart: 'cash'/'bcel') ໂດຍໃຊ້ tr() key
+  // ດຽວກັນ + paymentConfigProvider ດຽວກັນກັບ earnings_tab.dart's top-up sheet —
+  // ບໍ່ມີ Firestore read ໃໝ່, ບໍ່ໃຫ້ເລືອກ (ການເລືອກວິທີຊຳລະຢູ່ໜ້າຈອງເທົ່ານັ້ນ).
+  void _showPaymentMethods(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(tr('payment_methods_title'), style: const TextStyle(
+              fontSize: 18, fontWeight: FontWeight.w800, color: C.text)),
+          const SizedBox(height: 16),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                  color: C.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.payments_outlined, color: C.green),
+            ),
+            title: Text(tr('payment_cash_title'),
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text(tr('payment_cash_sub')),
+          ),
+          const Divider(height: 1, color: C.border),
+          Consumer(builder: (context, ref, _) {
+            final config = ref.watch(paymentConfigProvider).valueOrNull
+                ?? PaymentConfig.fallback;
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                    color: C.sky.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.qr_code_scanner_rounded, color: C.sky),
+              ),
+              title: Text(tr('payment_bcel_title'),
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text('${tr('payment_bcel_sub')}\n'
+                  '${config.bankName} · ${config.accountNumber}'),
+              isThreeLine: true,
+            );
+          }),
         ]),
       ),
     );
@@ -3375,7 +4066,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   );
 
   Widget _tile(IconData icon, String title, String sub,
-      {VoidCallback? onTap, String? badge, Color? iconColor}) {
+      {VoidCallback? onTap, String? badge, Color? iconColor, String? trailing}) {
     final color = iconColor ?? C.navy;
     return Material(
       color: Colors.transparent,
@@ -3424,6 +4115,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       fontSize: 11, color: C.muted)),
               ],
             )),
+            if (trailing != null) ...[
+              const SizedBox(width: 8),
+              Text(trailing, style: const TextStyle(
+                  fontSize: 12.5, color: C.muted, fontWeight: FontWeight.w600)),
+            ],
             const SizedBox(width: 4),
             const Icon(Icons.chevron_right, color: C.muted, size: 18),
           ]),

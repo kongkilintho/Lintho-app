@@ -15,46 +15,59 @@ import 'widgets/empty_state_view.dart';
 import 'widgets/error_state_view.dart';
 import 'widgets/skeleton_box.dart';
 
-class CouponListScreen extends ConsumerWidget {
-  const CouponListScreen({super.key});
+// ✅ [Notification feature 2026-08-03] ຍົກ body ອອກຈາກ CouponListScreen ເປັນ
+// widget ແຍກຕ່າງຫາກ — ໃຫ້ NotificationScreen's "News" tab embed ໄດ້ໂດຍກົງ
+// ເປັນ promotions ຈິງຂອງລູກຄ້າຄົນນັ້ນ (ໃຊ້ myCouponsProvider ດຽວກັນ, ບໍ່ສ້າງ
+// data source ຊ້ຳ). CouponListScreen ຂ້າງລຸ່ມຍັງເຮັດວຽກຄືເກົ່າ 100%.
+class CouponListBody extends ConsumerWidget {
+  const CouponListBody({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final couponsAsync = ref.watch(myCouponsProvider);
 
+    return couponsAsync.when(
+      // ✅ [FIX — shared components] ເຄີຍ CircularProgressIndicator ດຽວ,
+      // ບໍ່ກົງກັບຮູບແບບ skeleton ທີ່ອື່ນໆໃນແອັບໃຊ້; error ເຄີຍເປັນຂໍ້ຄວາມ
+      // ດິບ ('ໂຫລດຄູປອງບໍ່ໄດ້: $e') ບໍ່ມີປຸ່ມລອງໃໝ່; empty ເຄີຍເປັນ
+      // ຂໍ້ຄວາມສີເທົາທຳມະດາ ອ່ອນກວ່າໜ້າອື່ນໆໃນແອັບຫຼາຍ.
+      loading: () => ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: 4,
+        itemBuilder: (_, __) => const SkeletonListTile(leadingSize: 40),
+      ),
+      error: (_, __) => ErrorStateView(
+          onRetry: () => ref.invalidate(myCouponsProvider)),
+      data: (coupons) {
+        if (coupons.isEmpty) {
+          return EmptyStateView(
+            icon: Icons.local_offer_outlined,
+            title: tr('no_coupons'),
+            accent: C.orange,
+          );
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: coupons.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          itemBuilder: (_, i) => _CouponCard(coupon: coupons[i]),
+        );
+      },
+    );
+  }
+}
+
+class CouponListScreen extends ConsumerWidget {
+  const CouponListScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: C.background,
       appBar: AppBar(
         title: Text(tr('coupons_title')),
       ),
-      body: couponsAsync.when(
-        // ✅ [FIX — shared components] ເຄີຍ CircularProgressIndicator ດຽວ,
-        // ບໍ່ກົງກັບຮູບແບບ skeleton ທີ່ອື່ນໆໃນແອັບໃຊ້; error ເຄີຍເປັນຂໍ້ຄວາມ
-        // ດິບ ('ໂຫລດຄູປອງບໍ່ໄດ້: $e') ບໍ່ມີປຸ່ມລອງໃໝ່; empty ເຄີຍເປັນ
-        // ຂໍ້ຄວາມສີເທົາທຳມະດາ ອ່ອນກວ່າໜ້າອື່ນໆໃນແອັບຫຼາຍ.
-        loading: () => ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: 4,
-          itemBuilder: (_, __) => const SkeletonListTile(leadingSize: 40),
-        ),
-        error: (_, __) => ErrorStateView(
-            onRetry: () => ref.invalidate(myCouponsProvider)),
-        data: (coupons) {
-          if (coupons.isEmpty) {
-            return EmptyStateView(
-              icon: Icons.local_offer_outlined,
-              title: tr('no_coupons'),
-              accent: C.orange,
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: coupons.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (_, i) => _CouponCard(coupon: coupons[i]),
-          );
-        },
-      ),
+      body: const CouponListBody(),
     );
   }
 }

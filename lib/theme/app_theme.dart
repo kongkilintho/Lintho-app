@@ -142,13 +142,20 @@ class AppStatus {
   static Color colorOf(JobStatus status) => switch (status) {
         JobStatus.pending    => AppColors.gold,
         JobStatus.accepted   => AppColors.sky,
-        JobStatus.onTheWay   => AppColors.teal,
-        JobStatus.arrived    => AppColors.teal,
-        JobStatus.inProgress => AppColors.teal,
+        // ✅ [Customer UX pass 2026-08-03] onTheWay/arrived ("technician on
+        // the way") ແຍກອອກຈາກ inProgress ດ້ວຍສີ purple/indigo ຕາມ spec — ໃຊ້
+        // categoryAddonBorder (#7C3AED) ທີ່ມີຢູ່ແລ້ວແທນສ້າງ token ໃໝ່
+        JobStatus.onTheWay   => AppColors.categoryAddonBorder,
+        JobStatus.arrived    => AppColors.categoryAddonBorder,
+        // ✅ inProgress = blue (ຄືກັນກັບ accepted/"confirmed"), ແຍກຈາກ teal ເກົ່າ
+        JobStatus.inProgress => AppColors.sky,
         // ✅ [Brand color audit 2026-07-27 v2] completed = Success (#22C55E),
         // ແຍກຈາກ Primary (#14B87A)
         JobStatus.completed  => AppColors.success,
-        JobStatus.cancelled  => AppColors.muted,
+        // ✅ [Customer UX pass 2026-08-03] cancelled ເຄີຍເປັນ muted (ເທົາ) —
+        // ຕອນນີ້ແດງຄືກັນກັບ rejected, ສອດຄ່ອງກັບ bookingTabOf() ທີ່ຈັດທັງສອງ
+        // ເຂົ້າ tab "ຍົກເລີກ" ດຽວກັນຢູ່ແລ້ວ
+        JobStatus.cancelled  => AppColors.red,
         JobStatus.rejected   => AppColors.red,
       };
 

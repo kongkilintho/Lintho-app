@@ -6,6 +6,24 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
 
+// ✅ [Customer UX pass 2026-08-03] ຍົກ flag/ຊື່ພາສາອອກເປັນ extension ກາງ —
+// ໃຫ້ບ່ອນອື່ນ (ເຊັ່ນ Profile menu trailing text) ໃຊ້ label ດຽວກັນນີ້ໄດ້ ໂດຍບໍ່
+// ຕ້ອງ hardcode ຊ້ຳ. _LangTile ຍັງໃຊ້ literal ຂອງຕົນເອງຄືເກົ່າ (ບໍ່ແຕະ, ເຮັດວຽກຢູ່ແລ້ວ).
+extension AppLangLabel on AppLang {
+  String get flag => switch (this) {
+        AppLang.lo => '🇱🇦',
+        AppLang.en => '🇬🇧',
+        AppLang.th => '🇹🇭',
+        AppLang.zh => '🇨🇳',
+      };
+  String get displayName => switch (this) {
+        AppLang.lo => 'ພາສາລາວ',
+        AppLang.en => 'English',
+        AppLang.th => 'ภาษาไทย',
+        AppLang.zh => '中文',
+      };
+}
+
 class LanguageSelector extends StatelessWidget {
   const LanguageSelector({super.key});
 
