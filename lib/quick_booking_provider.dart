@@ -93,6 +93,11 @@ class QuickBookingDraft {
   final String?   error;
   final String?   couponCode;
   final num?      couponDiscount;
+  // 🔒 [AUDIT CUST-1b / 2026-08-06] packagePrice ຢູ່ຕອນທີ່ coupon ຖືກ apply —
+  // couponDiscount ເປັນຈຳນວນ Kip ຄົງທີ່ຄິດໄລ່ຈາກຄ່ານີ້ຄັ້ງດຽວ. ຖ້າຜູ້ໃຊ້ຍ້ອນກັບໄປ
+  // ເລືອກແພັກເກັດອື່ນ (selectService() ຖືກເອີ້ນຊ້ຳ) ຫຼັງຈາກ apply coupon ແລ້ວ,
+  // packagePrice ໃໝ່ຈະບໍ່ກົງກັບຄ່ານີ້ອີກຕໍ່ໄປ — ໃຊ້ກວດໃນ isCouponStale ຂ້າງລຸ່ມ.
+  final num?      couponBaseTotal;
   final bool      checkingCoupon;
   final String?   couponError;
   final String?   clientRequestId;
@@ -112,6 +117,7 @@ class QuickBookingDraft {
     this.error,
     this.couponCode,
     this.couponDiscount,
+    this.couponBaseTotal,
     this.checkingCoupon = false,
     this.couponError,
     this.clientRequestId,
@@ -121,9 +127,21 @@ class QuickBookingDraft {
   bool get canGoToCheckout =>
       canGoToSchedule && scheduledAt != null && location != null && address != null;
 
+  // 🔒 [AUDIT CUST-1b / 2026-08-06] true ຖ້າ packagePrice ປ່ຽນໄປຫຼັງຈາກ coupon
+  // ຖືກ apply — couponDiscount ເກົ່າບໍ່ຄືນເປັນຄ່າທີ່ຖືກຕ້ອງອີກຕໍ່ໄປ (ເບິ່ງ
+  // couponBaseTotal ຂ້າງເທິງ).
+  bool get isCouponStale =>
+      couponCode != null &&
+      couponBaseTotal != null &&
+      packagePrice != couponBaseTotal;
+
   /// ລາຄາສຸດທິຫຼັງຫັກສ່ວນຫຼຸດ coupon (ຖ້າມີ) — ໃຊ້ສະແດງ ແລະ ສົ່ງເຂົ້າ booking.
-  double get finalPrice =>
-      ((packagePrice ?? 0) - (couponDiscount ?? 0)).clamp(0, double.infinity);
+  // 🔒 [AUDIT CUST-1b / 2026-08-06] ຖ້າ coupon ໝົດຄວາມສົດ (isCouponStale)
+  // ບໍ່ຫັກສ່ວນຫຼຸດອອກ — ບໍ່ດັ່ງນັ້ນຜູ້ໃຊ້ສາມາດ apply coupon ໃສ່ແພັກເກັດລາຄາແພງ
+  // ແລ້ວຍ້ອນກັບໄປເລືອກແພັກເກັດຖືກກວ່າ, price ຈະຖືກ clamp ເປັນ 0 ໄດ້.
+  double get finalPrice => isCouponStale
+      ? (packagePrice ?? 0)
+      : ((packagePrice ?? 0) - (couponDiscount ?? 0)).clamp(0, double.infinity);
 
   QuickBookingDraft copyWith({
     String? serviceType,
@@ -140,6 +158,7 @@ class QuickBookingDraft {
     String? error,
     String? couponCode,
     num? couponDiscount,
+    num? couponBaseTotal,
     bool? checkingCoupon,
     String? couponError,
     bool clearCoupon = false,
@@ -159,6 +178,7 @@ class QuickBookingDraft {
     error: error,
     couponCode: clearCoupon ? null : (couponCode ?? this.couponCode),
     couponDiscount: clearCoupon ? null : (couponDiscount ?? this.couponDiscount),
+    couponBaseTotal: clearCoupon ? null : (couponBaseTotal ?? this.couponBaseTotal),
     checkingCoupon: checkingCoupon ?? this.checkingCoupon,
     couponError: clearCoupon ? null : couponError,
     clientRequestId: clientRequestId ?? this.clientRequestId,
@@ -181,6 +201,11 @@ class QuickBookingNotifier extends Notifier<QuickBookingDraft> {
       // ✅ [FIX HI-6] generate ຄັ້ງດຽວຕໍ່ draft session — ຄົງຄ່າເກົ່າໄວ້ ຖ້າ
       // selectService() ຖືກເອີ້ນຊ້ຳ (ຜູ້ໃຊ້ຍ້ອນກັບໄປປ່ຽນບໍລິການ) ໃນ session ດຽວກັນ
       clientRequestId: state.clientRequestId ?? _generateQuickClientRequestId(),
+      // 🔒 [AUDIT CUST-1b / 2026-08-06] (ຄວາມສະຫນັບສະໜູນ isCouponStale ຂ້າງເທິງ
+      // ຢູ່ແລ້ວກໍປ້ອງກັນລາຄາຜິດໄດ້) — ລ້າງ coupon ໂດຍກົງນຳ ເພື່ອບໍ່ໃຫ້ badge
+      // "coupon applied" ຄ້າງສະແດງຢູ່ໜ້າ checkout ທັງໆທີ່ບໍ່ໄດ້ຫັກສ່ວນຫຼຸດອີກ
+      // ຕໍ່ໄປ — ການເລືອກແພັກເກັດໃໝ່ຖືເປັນ order ໃໝ່, ຕ້ອງໃສ່ລະຫັດຄືນຖ້າຕ້ອງການ.
+      clearCoupon: true,
     );
   }
 
@@ -215,6 +240,9 @@ class QuickBookingNotifier extends Notifier<QuickBookingDraft> {
       checkingCoupon: false,
       couponCode: result.code,
       couponDiscount: result.discountAmount,
+      // 🔒 [AUDIT CUST-1b / 2026-08-06] ບັນທຶກ packagePrice ຕອນນີ້ໄວ້ — ໃຊ້ກວດ
+      // ຄວາມສົດຂອງສ່ວນຫຼຸດນີ້ພາຍຫຼັງ (isCouponStale, finalPrice ຂ້າງເທິງ).
+      couponBaseTotal: state.packagePrice,
     );
   }
 
@@ -237,6 +265,15 @@ class QuickBookingNotifier extends Notifier<QuickBookingDraft> {
 
       final db = FirebaseFirestore.instance;
 
+      // 🔒 [AUDIT CUST-1b / 2026-08-06] finalPrice ຂ້າງລຸ່ມ (state.finalPrice)
+      // ບໍ່ຫັກ couponDiscount ອອກອີກຕໍ່ໄປຖ້າ isCouponStale — ຕ້ອງບໍ່ຂຽນ
+      // couponCode/discountAmount ນຳ booking ນຳໃນກໍລະນີນັ້ນ ບໍ່ດັ່ງນັ້ນ
+      // createBooking() (booking_repository.dart) ຈະ re-validate coupon ຜ່ານ
+      // ແລະ ນັບວ່າຖືກໃຊ້ (usedCount+1) ທັງໆທີ່ບໍ່ໄດ້ຫັກສ່ວນຫຼຸດແທ້ — ລູກຄ້າຈະເສຍ
+      // ການໃຊ້ coupon ໄປລ້າໆໂດຍບໍ່ໄດ້ຫຍັງເລີຍ.
+      final effectiveCouponCode = state.isCouponStale ? null : state.couponCode;
+      final effectiveCouponDiscount = state.isCouponStale ? null : state.couponDiscount;
+
       // ✅ [AUDIT C5] referral lookup ຖືກຍ້າຍໄປລວມສູນຢູ່
       // CustomerBookingRepository.createBooking() ແລ້ວ (booking_repository.dart)
       // ບໍ່ຕ້ອງ query users/{customerId} ຊ້ຳຢູ່ນີ້ອີກ — createBooking() ຈະໃສ່
@@ -256,8 +293,8 @@ class QuickBookingNotifier extends Notifier<QuickBookingDraft> {
         'scheduledAt': Timestamp.fromDate(state.scheduledAt!),
         'status': JobStatus.pending.name,
         'price': state.finalPrice,
-        if (state.couponCode != null) 'couponCode': state.couponCode,
-        if (state.couponDiscount != null) 'discountAmount': state.couponDiscount,
+        if (effectiveCouponCode != null) 'couponCode': effectiveCouponCode,
+        if (effectiveCouponDiscount != null) 'discountAmount': effectiveCouponDiscount,
         // ✅ [FIX LO-4] ໃຊ້ serverTimestamp() ຄືກັນກັບໜ້າຈອງຫຼັກ — client time
         // ອາດຄາດເຄື່ອນຖ້າໂມງເຄື່ອງບໍ່ກົງ, ເຮັດໃຫ້ລຳດັບ createdAt ຜິດເມື່ອ sort
         // ຮ່ວມກັບ booking ຈາກທັງສອງ flow
@@ -266,7 +303,7 @@ class QuickBookingNotifier extends Notifier<QuickBookingDraft> {
         'paymentMethod': 'cash',
         'paymentStatus': 'pending',
         'clientRequestId': clientRequestId,
-      }, couponCode: state.couponCode);
+      }, couponCode: effectiveCouponCode);
 
       // 🔒 [FOLLOWUP-F] ກ່ອນໜ້ານີ້ການບັນທຶກທີ່ຢູ່ (saveAsDefaultAddress, ບໍ່
       // ກ່ຽວຂ້ອງກັບ booking ໂດຍກົງ) ຢູ່ໃນ try/catch ດຽວກັນກັບ createBooking() —

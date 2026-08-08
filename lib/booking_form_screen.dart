@@ -151,6 +151,11 @@ class AppPricing {
   static int deepPostMin = 20000;
   static int deepPostMax = 35000;
   static double deepSqmMin = 50; // ✅ ຂັ້ນຕ່ຳ 50 ຕາແມັດ
+  // 🔒 [AUDIT EDGE-4 / 2026-08-06] ບໍ່ເຄີຍມີຂອບເຂດເທິງ — ຕົວເລກຜິດພາດ (ພິມເລກ
+  // 0 ເກີນ, ເຊັ່ນ 5000 ແທນ 500) ຈະຜ່ານທຸກຂັ້ນຕອນຈົນຮອດ submit ແລ້ວຖືກ
+  // firestore.rules' price<=50000000 ປະຕິເສດແບບ raw exception ທີ່ອ່ານບໍ່ຮູ້ເລື່ອງ.
+  // ຂອບເຂດນີ້ (2000 ຕາແມັດ ≈ ບ້ານໃຫຍ່ທີ່ສຸດທີ່ເປັນໄປໄດ້ຈິງ) ໃຫ້ warn ຝັ່ງ UI ກ່ອນ.
+  static double deepSqmMax = 2000;
 
   static int pestSqmMin = 5000;
   static int pestSqmMax = 10000;
@@ -431,15 +436,42 @@ class BookingOrder {
   final String      clientRequestId = _generateClientRequestId();
   String?           couponCode;
   num?              couponDiscount;
+  // 🔒 [AUDIT CUST-1 / 2026-08-06] grandTotal ຢູ່ຕອນທີ່ coupon ຖືກກວດ/apply —
+  // couponDiscount ຖືກເກັບເປັນຈຳນວນ Kip ຄົງທີ່ (ບໍ່ແມ່ນ % ສົດ), ຄິດໄລ່ຈາກ
+  // grandTotal ຕອນນັ້ນຄັ້ງດຽວ. ຖ້າຜູ້ໃຊ້ກັບໄປແກ້ໄຂລາຍການ (ກົດ "ແກ້ໄຂ" ຈາກໜ້າ
+  // ທົບທວນ ຫຼືປ່ຽນຈຳນວນ/ແພັກເກັດ) ຫຼັງຈາກ apply coupon ແລ້ວ, grandTotal ໃໝ່ຈະ
+  // ບໍ່ກົງກັບຄ່ານີ້ອີກຕໍ່ໄປ — ໃຊ້ປຽບທຽບໃນ _invalidateStaleCoupon() ຂ້າງລຸ່ມ.
+  num?              _couponBaseTotal;
 
   BookingOrder({required this.category});
 
   bool get hasTravelFee => distanceKm > AppPricing.travelFreeKm;
 
+  // 🔒 [AUDIT CUST-1 / 2026-08-06] ຖ້າ grandTotal ປ່ຽນໄປຫຼັງຈາກ coupon ຖືກ
+  // apply (ເບິ່ງ _couponBaseTotal ຂ້າງເທິງ), couponDiscount ເກົ່າບໍ່ຄືນເປັນ
+  // ຄ່າທີ່ຖືກຕ້ອງອີກຕໍ່ໄປ — ຖ້າປ່ອຍໃຫ້ discountedTotal ຫັກມັນອອກຈາກ grandTotal
+  // ໃໝ່ໂດຍກົງ, ຜູ້ໃຊ້ສາມາດຫຼຸດລາຍການຈົນລາຄາຕ່ຳກວ່າສ່ວນຫຼຸດ ແລ້ວ price ຈະຖືກ
+  // clamp ເປັນ 0 ໄດ້ທັງໆທີ່ຍັງໄດ້ຮັບບໍລິການເຕັມມູນຄ່າ. ຕອນນີ້ຖືວ່າ coupon ໝົດ
+  // ອາຍຸ/ບໍ່ກົງກັນອີກຕໍ່ໄປທັນທີ grandTotal ປ່ຽນ — ລ້າງຄ່າຖິ້ມ (ບໍ່ຫັກສ່ວນຫຼຸດ,
+  // ບໍ່ຂຽນ couponCode ໄປນຳ booking — ບໍ່ດັ່ງນັ້ນ createBooking()
+  // (booking_repository.dart) ຈະນັບວ່າ coupon ຖືກໃຊ້ (usedCount+1) ທັງໆທີ່ບໍ່ໄດ້
+  // ຫັກສ່ວນຫຼຸດແທ້) — ຜູ້ໃຊ້ຕ້ອງໃສ່ລະຫັດຄືນໃໝ່ຖ້າຍັງຕ້ອງການໃຊ້.
+  void _invalidateStaleCoupon() {
+    if (couponCode != null &&
+        _couponBaseTotal != null &&
+        grandTotal != _couponBaseTotal) {
+      couponCode = null;
+      couponDiscount = null;
+      _couponBaseTotal = null;
+    }
+  }
+
   // ✅ ລາຄາສຸດທິຫຼັງຫັກສ່ວນຫຼຸດ coupon (ຖ້າມີ) — ນີ້ຄືຄ່າທີ່ລູກຄ້າຈ່າຍຈິງ
   // ແລະ ຄ່າທີ່ຂຽນເຂົ້າ field 'price' (admin dashboard revenue ອ່ານ field ນີ້)
-  num get discountedTotal =>
-      (grandTotal - (couponDiscount ?? 0)).clamp(0, double.infinity);
+  num get discountedTotal {
+    _invalidateStaleCoupon();
+    return (grandTotal - (couponDiscount ?? 0)).clamp(0, double.infinity);
+  }
 
   // ✅ ລາຍການ "ລ້າງ" (ທົ່ວໄປ/ໃຫຍ່) ນັບລວມເພື່ອຄິດສ່ວນຫຼຸດປະລິມານ — ບໍ່ນັບ Add-on
   bool _isWashItem(AcCartItem i) =>
@@ -533,6 +565,11 @@ class BookingOrder {
   Map<String, dynamic> toFirestore(
       String userId, String userName, String phone) {
     final now = DateTime.now();
+    // 🔒 [AUDIT CUST-1 / 2026-08-06] ເອີ້ນຢ່າງຈະແຈ້ງກ່ອນອ່ານ couponCode/
+    // couponDiscount ຂ້າງລຸ່ມ — ບໍ່ອີງໃສ່ລຳດັບການປະເມີນ map literal
+    // (discountedTotal ຖືກເອີ້ນຢູ່ໃນ map ນຳ, ແຕ່ການເອີ້ນຊ້ຳຢູ່ນີ້ຮັບປະກັນຄວາມ
+    // ຖືກຕ້ອງເຖິງແມ່ນຈະມີໃຜປ່ຽນລຳດັບ field ໃນ map ໃນອະນາຄົດ).
+    _invalidateStaleCoupon();
     return {
       'customerId':    userId,
       'customerName':  userName,
@@ -721,7 +758,8 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             packageSelected = false;
           }
         } else if (o.cleanType == HomeCleaningType.deep) {
-          packageSelected = o.sqm >= AppPricing.deepSqmMin;
+          packageSelected = o.sqm >= AppPricing.deepSqmMin &&
+              o.sqm <= AppPricing.deepSqmMax;
         } else if (o.cleanType == HomeCleaningType.specialist) {
           packageSelected = o.specialistQty.values.any((v) => v > 0) || o.pestSqm > 0;
         } else {
@@ -1613,13 +1651,6 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   Widget _buildStep3() {
     final o = _order!;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _Label(tr('label_contact_phone')),
-      const SizedBox(height: 10),
-      VerifiedPhoneDisplay(
-        phone: _verifiedPhone,
-        onEditTap: () => goToProfileTab(context, ref),
-      ),
-      const SizedBox(height: 20),
       _Label(tr('label_service_address')),
       const SizedBox(height: 16),
       if (o.isGpsAddress)
@@ -2059,6 +2090,10 @@ class _BillCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 🔒 [AUDIT CUST-1 / 2026-08-06] ກວດ/ລ້າງ coupon ທີ່ໝົດຄວາມສົດກ່ອນ ເພື່ອບໍ່ໃຫ້
+    // ແຖວ "ສ່ວນຫຼຸດ" ຂ້າງລຸ່ມສະແດງຄ້າງ ໃນຂະນະທີ່ຍອດລວມ (discountedTotal, ຊຶ່ງ
+    // self-heal ຢູ່ແລ້ວ) ບໍ່ໄດ້ຫັກສ່ວນຫຼຸດນັ້ນອອກອີກຕໍ່ໄປ.
+    order._invalidateStaleCoupon();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2190,6 +2225,9 @@ class _CouponBoxState extends State<_CouponBox> {
       } else {
         widget.order.couponCode = result.code;
         widget.order.couponDiscount = result.discountAmount;
+        // 🔒 [AUDIT CUST-1 / 2026-08-06] ບັນທຶກ grandTotal ຕອນນີ້ໄວ້ — ໃຊ້
+        // ກວດຄວາມສົດຂອງສ່ວນຫຼຸດນີ້ພາຍຫຼັງ (_invalidateStaleCoupon()).
+        widget.order._couponBaseTotal = widget.order.grandTotal;
       }
     });
     widget.onChanged();
@@ -2199,6 +2237,7 @@ class _CouponBoxState extends State<_CouponBox> {
     setState(() {
       widget.order.couponCode = null;
       widget.order.couponDiscount = null;
+      widget.order._couponBaseTotal = null;
       _ctrl.clear();
       _error = null;
     });
@@ -2208,6 +2247,10 @@ class _CouponBoxState extends State<_CouponBox> {
   @override
   Widget build(BuildContext context) {
     final order = widget.order;
+    // 🔒 [AUDIT CUST-1 / 2026-08-06] ຖ້າຜູ້ໃຊ້ແກ້ໄຂລາຍການ (ປ່ຽນຈຳນວນ/
+    // ແພັກເກັດ) ຫຼັງຈາກ apply coupon ແລ້ວກັບມາໜ້ານີ້, badge "coupon applied"
+    // ຕ້ອງບໍ່ຄ້າງສະແດງສ່ວນຫຼຸດທີ່ບໍ່ໄດ້ຫັກອີກຕໍ່ໄປ — ກວດ/ລ້າງກ່ອນ build ທຸກຄັ້ງ.
+    order._invalidateStaleCoupon();
     if (order.couponCode != null) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -3158,8 +3201,12 @@ class _SqmInput extends StatelessWidget {
   });
 
   static const _presets = [50.0, 100.0, 150.0];
+  // 🔒 [AUDIT EDGE-4 / 2026-08-06] see AppPricing.deepSqmMax
+  static const _maxSqm = 2000.0;
 
-  bool get _hasError => value > 0 && value < minSqm;
+  bool get _hasMinError => value > 0 && value < minSqm;
+  bool get _hasMaxError => value > _maxSqm;
+  bool get _hasError => _hasMinError || _hasMaxError;
 
   @override
   Widget build(BuildContext context) {
@@ -3183,9 +3230,13 @@ class _SqmInput extends StatelessWidget {
               borderSide: BorderSide(color: _hasError ? errColor : C.primary, width: 1.5)),
         ),
       ),
-      if (_hasError) ...[
+      if (_hasMinError) ...[
         const SizedBox(height: 6),
         Text('${tr("sqm_input_error_prefix")} ${minSqm.toStringAsFixed(0)} ${tr("sqm_input_error_suffix")}',
+            style: TextStyle(fontSize: 12, color: C.red.withValues(alpha: 0.85), fontWeight: FontWeight.w600)),
+      ] else if (_hasMaxError) ...[
+        const SizedBox(height: 6),
+        Text('${tr("sqm_input_max_error_prefix")} ${_maxSqm.toStringAsFixed(0)} ${tr("sqm_input_max_error_suffix")}',
             style: TextStyle(fontSize: 12, color: C.red.withValues(alpha: 0.85), fontWeight: FontWeight.w600)),
       ],
       const SizedBox(height: 10),

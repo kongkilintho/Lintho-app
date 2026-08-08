@@ -20,6 +20,17 @@ import 'widgets/app_icon_button.dart';
 import 'widgets/status_stepper.dart' as shared;
 import 'widgets/pulsing_fade.dart';
 
+// 🔒 [AUDIT PROV-NEW-4 / 2026-08-06] launchUrl('tel:...') ບໍ່ເຄີຍກວດ
+// canLaunchUrl() ກ່ອນຢູ່ 2 ບ່ອນໃນໄຟລ໌ນີ້ (AppBar + _CustomerCard) — ຕ່າງຈາກ
+// match_screen.dart's ຝັ່ງລູກຄ້າທີ່ກວດຢູ່ແລ້ວ. ຄວາມສ່ຽງຕ່ຳ (AndroidManifest.xml
+// ມີ DIAL intent query ຢູ່ແລ້ວ) ແຕ່ຄວນສອດຄ່ອງກັນ.
+Future<void> _callTel(String phone) async {
+  final uri = Uri.parse('tel:$phone');
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri);
+  }
+}
+
 // ── SINGLE BOOKING STREAM ────────────────────────────────────
 
 final singleBookingProvider =
@@ -86,8 +97,16 @@ class JobWorkflowScreen extends ConsumerWidget {
               b.status != JobStatus.cancelled &&
               b.status != JobStatus.rejected) ...[
             _ActionButton(booking: b),
-            const SizedBox(height: 10),
-            _CancelJobButton(booking: b),
+            // 🔒 [AUDIT PROV-NEW-5 / 2026-08-06] ສຳລັບວຽກທີ່ຍັງ 'pending'
+            // (ຈອງໂດຍກົງໃສ່ຊ່າງຄົນນີ້, ຍັງບໍ່ທັນຮັບ) home_tab.dart's
+            // _PendingActions (Reject/Accept) ຄືທາງເລືອກທີ່ຖືກຕ້ອງແລ້ວຢູ່ Home
+            // tab — ປຸ່ມ "ຍົກເລີກ" ນີ້ຄືກັນຢູ່ໜ້ານີ້ຊ້ຳກັນ ບັນທຶກເປັນ terminal
+            // state ຄົນລະຄ່າ (cancelled ບໍ່ແມ່ນ rejected) ສຳລັບການກະທຳດຽວກັນ.
+            // ຄ່ອນຢູ່ໜ້ານີ້ສະເພາະຫຼັງຮັບງານແລ້ວ (accepted ຂຶ້ນໄປ).
+            if (b.status != JobStatus.pending) ...[
+              const SizedBox(height: 10),
+              _CancelJobButton(booking: b),
+            ],
           ],
           const SizedBox(height: 30),
         ]),
@@ -127,8 +146,7 @@ class JobWorkflowScreen extends ConsumerWidget {
           icon: const Icon(Icons.phone_outlined,
               color: Colors.white, size: 22),
           tooltip: tr('call_semantic'),
-          onPressed: () =>
-              launchUrl(Uri.parse('tel:${b.contactPhone}')),
+          onPressed: () => _callTel(b.contactPhone),
         ),
         IconButton(
           icon: const Icon(Icons.navigation_outlined,
@@ -447,8 +465,7 @@ class _CustomerCard extends ConsumerWidget {
           Column(children: [
             AppIconButton(icon: Icons.phone, color: C.green,
                 label: tr('call_semantic'),
-                onTap: () => launchUrl(
-                    Uri.parse('tel:${b.contactPhone}'))),
+                onTap: () => _callTel(b.contactPhone)),
             const SizedBox(height: 8),
             AppIconButton(icon: Icons.navigation_rounded, color: C.blue,
                 label: tr('navigate_semantic'),
@@ -648,8 +665,14 @@ class _PhotoSectionState extends ConsumerState<_PhotoSection> {
                 label: tr('photo_after'), icon: Icons.auto_awesome_outlined,
                 imageUrl: b.afterPhotoUrl,
                 uploading: _uploadingAfter,
-                onTap: (b.status == JobStatus.inProgress ||
-                    b.status == JobStatus.completed)
+                // 🔒 [AUDIT PROV-NEW-2 / 2026-08-06] ກ່ອນໜ້ານີ້ຍັງ tap ໄດ້
+                // ຫຼັງ completed — Cloudinary upload ຈະສຳເລັດ (ເສຍຄ່າ storage,
+                // ຮູບບໍ່ຖືກເຊື່ອມກັບ booking) ແຕ່ Firestore write ຈະຖືກ
+                // firestore.rules' isValidProviderChargesRequest() reject ຢ່າງ
+                // ບໍ່ມີເງື່ອນໄຂເມື່ອ status=='completed' (permission-denied ທັນທີ,
+                // ບໍ່ວ່າ field ໃດຖືກແກ້). ຕອນນີ້ລ໋ອກໄວ້ຄືກັນກັບ before-photo
+                // (ອະນຸຍາດສະເພາະ inProgress).
+                onTap: b.status == JobStatus.inProgress
                     ? () => _pickPhoto(isBefore: false) : null,
               )),
             ]),
@@ -867,6 +890,15 @@ class _AdditionalChargesSection extends ConsumerWidget {
     // ✅ RULE: dispose() — ຈັດການໃນ closure ກ່ອນ pop
     final amountCtrl = TextEditingController();
     final noteCtrl   = TextEditingController();
+    // 🔒 [AUDIT EDGE-2 / 2026-08-06] ປຸ່ມນີ້ບໍ່ເຄີຍຖືກປິດ/disable ໃນຂະນະທີ່
+    // await requestAdditionalCharges() ຍັງບໍ່ resolve — sheet ຖືກ pop ຫຼັງ await
+    // ເທົ່ານັ້ນ, ຕ່າງຈາກ pattern ທີ່ປອດໄພກວ່າໃນ home_tab.dart's reject sheet
+    // (pop ກ່ອນ await). ຖ້າກົດຊ້ຳໄວໆ (ອິນເຕີເນັດຊ້າ) requestAdditionalCharges()
+    // ຈະຖືກເອີ້ນ 2 ຄັ້ງ — additionalChargesRound ຖືກ increment ຊ້ຳ ແລະ
+    // ລູກຄ້າໄດ້ຮັບ push notification ຊ້ຳກັນ 2 ຄັ້ງຕໍ່ 1 ຄຳຮ້ອງຂໍ. ຕອນນີ້ໃຊ້
+    // StatefulBuilder ເພື່ອ track ສະຖານະ sending ໃນ local, ປິດປຸ່ມໄວ້ໃນຂະນະ
+    // ກຳລັງສົ່ງ.
+    bool sending = false;
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
@@ -874,7 +906,8 @@ class _AdditionalChargesSection extends ConsumerWidget {
           borderRadius:
           BorderRadius.vertical(top: Radius.circular(24))),
       // ✅ fix: dispose() ສະເໝີຫຼັງ sheet ປິດ (ບໍ່ວ່າ submit ຫຼື swipe ປິດ)
-      builder: (_) => Padding(
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
         padding: EdgeInsets.only(
             left: 20, right: 20, top: 20,
             bottom: MediaQuery.of(context).viewInsets.bottom + 24),
@@ -941,10 +974,11 @@ class _AdditionalChargesSection extends ConsumerWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () async {
+              onPressed: sending ? null : () async {
                 final amt = double.tryParse(
                     amountCtrl.text.replaceAll(',', ''));
                 if (amt == null || amt <= 0) return;
+                setSheetState(() => sending = true);
                 // 🔒 [AUDIT M-1 / 2026-07-27] ລຶບການເອີ້ນສົ່ງ additional-charges
                 // notification ອອກຈາກໜ້ານີ້ — BookingRepository.requestAdditionalCharges()
                 // (booking_repository.dart) ສົ່ງ notification ນີ້ຢູ່ແລ້ວພາຍໃນຕົວ
@@ -970,12 +1004,17 @@ class _AdditionalChargesSection extends ConsumerWidget {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
                   padding: const EdgeInsets.symmetric(vertical: 16)),
-              child: Text(tr('send_request'), style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w800,
-                  fontSize: 16)),
+              child: sending
+                  ? const SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : Text(tr('send_request'), style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w800,
+                      fontSize: 16)),
             ),
           ),
         ]),
+        ),
       ),
       // ✅ fix: dispose() ສະເໝີຫຼັງ sheet ປິດ (submit, swipe, ຫຼື back ກໍ່ໄດ້)
     ).whenComplete(() {
@@ -1202,9 +1241,14 @@ class _ActionButton extends ConsumerWidget {
     // ✅ RULE: mounted check ຫຼັງ async
     if (!context.mounted) return;
 
+    // 🔒 [AUDIT PROV-NEW-3 / 2026-08-06] BookingNotifier ຈັບ error message
+    // ສະເພາະເຈາະຈົງໄວ້ຢູ່ແລ້ວ (ຕົວຢ່າງ: "ກະລຸນາຢືນຢັນການຮັບເງິນກ່ອນປິດງານ") ແຕ່
+    // ບໍ່ເຄີຍຖືກອ່ານມາສະແດງ — ຜູ້ໃຊ້ເຫັນແຕ່ "ເກີດຂໍ້ຜິດພາດ, ລອງໃໝ່" ທົ່ວໄປ ໂດຍບໍ່ຮູ້
+    // ສາເຫດແທ້.
+    final errMsg = ok ? null : ref.read(bookingNotifierProvider).error;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(ok ? tr('payment_confirmed_snackbar')
-                          : tr('error_try_again')),
+                          : (errMsg ?? tr('error_try_again'))),
         backgroundColor: ok ? C.teal : C.red));
   }
 
@@ -1254,8 +1298,11 @@ class _ActionButton extends ConsumerWidget {
 
     // ✅ RULE: mounted check ຫຼັງ async
     if (!ok && context.mounted) {
+      // 🔒 [AUDIT PROV-NEW-3 / 2026-08-06] ເບິ່ງຄໍາເຫັນຢູ່ _onConfirmPayment
+      // ຂ້າງເທິງ — ອ່ານເຫດຜົນສະເພາະເຈາະຈົງຈາກ state.error ແທນຂໍ້ຄວາມທົ່ວໄປ.
+      final errMsg = ref.read(bookingNotifierProvider).error;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(tr('error_try_again')),
+          content: Text(errMsg ?? tr('error_try_again')),
           backgroundColor: C.red));
       return;
     }

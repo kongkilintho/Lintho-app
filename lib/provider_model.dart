@@ -37,6 +37,16 @@ class ProviderModel {
   final double?      lng;
   final String?      geohash;       // ສຳລັບ bounding-box query (ກ່ອນ limit)
   final DateTime?    lastSeen;
+  // 🔒 [AUDIT EDGE-3 / 2026-08-06] providers/{uid}.isOnline (Firestore) ແລະ
+  // RTDB presence/{uid} ເປັນ 2 signal ແຍກກັນ — RTDB's onDisconnect() ແກ້ໄຂ
+  // ສະເພາະ RTDB ເອງ, ບໍ່ໄດ້ propagate ກັບຄືນມາອັບເດດ Firestore isOnline ຖ້າ
+  // provider ຖືກ force-kill/ຂາດເນັດຖາວອນກ່ອນ dispose() ໄດ້ຮັນ — isOnline:true
+  // ຄ້າງຢູ່ Firestore ໂດຍບໍ່ມີ Cloud Function ຄືນຄ່າ (ບໍ່ສາມາດ deploy Cloud
+  // Function ໄດ້ຕອນນີ້, ໂຄງການຍັງຢູ່ Spark plan). locationUpdatedAt ຖືກຂຽນ
+  // ຊ້ຳໆທຸກ 5 ວິນາທີໂດຍ LocationService.writeLocation() ໃນຂະນະທີ່ provider
+  // online ແທ້ (GPS stream ຍັງເຮັດວຽກຢູ່) — ໃຊ້ເປັນສັນຍານ freshness ແທນ
+  // isOnline ຢ່າງດຽວ ໃນ match_screen.dart.
+  final DateTime?    locationUpdatedAt;
   final DateTime?    createdAt;
   final DateTime?    updatedAt;
 
@@ -60,6 +70,7 @@ class ProviderModel {
     this.lng,
     this.geohash,
     this.lastSeen,
+    this.locationUpdatedAt,
     this.createdAt,
     this.updatedAt,
   });
@@ -96,6 +107,7 @@ class ProviderModel {
 
       // ✅ Timestamps
       lastSeen:  _toDateTime(d['lastSeen']),
+      locationUpdatedAt: _toDateTime(d['locationUpdatedAt']),
       createdAt: _toDateTime(d['createdAt']),
       updatedAt: _toDateTime(d['updatedAt']),
     );

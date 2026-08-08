@@ -14,7 +14,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'booking_provider.dart' show currentUidProvider;
@@ -31,8 +30,7 @@ enum OnlineToggleResult {
 }
 
 class LocationService {
-  final _db   = FirebaseFirestore.instance;
-  final _rtdb = FirebaseDatabase.instance;
+  final _db = FirebaseFirestore.instance;
 
   // ✅ fix: ?.uid ?? '' — ບໍ່ ! crash ຖ້າ user logout ກ່ອນ dispose
   String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -95,38 +93,31 @@ class LocationService {
     } catch (_) {}
   }
 
-  // ✅ fix: return ຄວາມສຳເລັດ ແທນ swallow silent — ໃຫ້ caller ຮູ້ ແລະ rollback state ໄດ້
+  // 🔒 [AUDIT SEC-4 / 2026-08-06 — ພົບລະຫວ່າງແກ້ໄຂ, ຮ້າຍແຮງກວ່າທີ່ audit ເດີມ
+  // ບອກໄວ້] database.rules.json ບໍ່ມີ rule ອະນຸຍາດໃຫ້ຂຽນ presence/{uid} ເລີຍ
+  // (root ເປັນ .write:false, ບໍ່ມີ child ຍົກເວັ້ນ) — RTDB block ຂ້າງລຸ່ມນີ້
+  // (ຖືກລຶບອອກແລ້ວ) ຖືກ permission-denied ທຸກຄັ້ງ, ຕັ້ງ ok=false ໂດຍບໍ່ຂຶ້ນກັບ
+  // ວ່າ Firestore write ຂ້າງເທິງສຳເລັດຫຼືບໍ່ — ໝາຍຄວາມວ່າ setOnlineStatus()
+  // ຄືນ false ຢູ່ຕະຫຼອດທຸກຄັ້ງທີ່ຖືກເອີ້ນ, ເຮັດໃຫ້ OnlineStatusNotifier.setOnline()
+  // (ຂ້າງລຸ່ມ) return OnlineToggleResult.writeFailed ຢູ່ຕະຫຼອດ — state ທ້ອງຖິ່ນ
+  // ບໍ່ເຄີຍຖືກຕັ້ງເປັນ online, GPS stream ບໍ່ເຄີຍເລີ່ມ, ຜູ້ໃຊ້ເຫັນ error ຢູ່ຕະຫຼອດ
+  // — ທັງໆທີ່ Firestore isOnline:true ຂຽນສຳເລັດແທ້ (ບໍ່ຖືກ rollback, ເປັນ write
+  // ແຍກຕ່າງຫາກ) — ຊ່າງຖືກນັບວ່າ online ໃນ backend ໂດຍທີ່ແອັບເອງຄິດວ່າ toggle
+  // ລົ້ມເຫລວ ແລະ ບໍ່ສົ່ງ GPS location ອັບເດດເລີຍ. ນີ້ຄືບັນຫາທີ່ EDGE-3 ພະຍາຍາມ
+  // ຫຼຸດຜ່ອນຜົນກະທົບ (freshness filter ໃນ match_screen.dart) ແຕ່ນີ້ຄືສາເຫດຮາກ —
+  // ລຶບ RTDB presence write ອອກທັງໝົດ (Firestore isOnline + locationUpdatedAt
+  // ເປັນ source of truth ດຽວແລ້ວ, ບໍ່ຕ້ອງການ RTDB presence ອີກເລີຍ).
   Future<bool> setOnlineStatus(bool isOnline) async {
     if (_uid.isEmpty) return false;
-    bool ok = true;
-
-    // Firestore
     try {
       await _db.collection('providers').doc(_uid).update({
         'isOnline': isOnline,
         'lastSeen': FieldValue.serverTimestamp(),
       });
+      return true;
     } catch (_) {
-      ok = false;
+      return false;
     }
-
-    // RTDB presence
-    try {
-      final ref = _rtdb.ref('presence/$_uid');
-      if (isOnline) {
-        await ref.set({'online': true, 'lastSeen': ServerValue.timestamp});
-        // ✅ onDisconnect: update ທັງ RTDB presence ແລະ Firestore
-        await ref.onDisconnect()
-            .update({'online': false, 'lastSeen': ServerValue.timestamp});
-      } else {
-        await ref.update({'online': false, 'lastSeen': ServerValue.timestamp});
-        await ref.onDisconnect().cancel();
-      }
-    } catch (_) {
-      ok = false;
-    }
-
-    return ok;
   }
 }
 
@@ -135,8 +126,31 @@ class LocationService {
 class OnlineStatusNotifier extends StateNotifier<bool> {
   final LocationService _svc;
   StreamSubscription<Position>? _gpsSub;
+  bool _synced = false;
 
   OnlineStatusNotifier(this._svc) : super(false);
+
+  // 🔒 [Availability persistence fix] state ເລີ່ມຕົ້ນ super(false) ສະເໝີ —
+  // ບໍ່ເຄີຍອ່ານຄ່າ isOnline ທີ່ບັນທຶກໄວ້ໃນ Firestore ຕອນເປີດແອັບ/login ໃໝ່,
+  // ເຮັດໃຫ້ UI ສະແດງ "Offline" ຢູ່ສະເໝີຈົນກວ່າຜູ້ໃຊ້ຈະກົດ toggle ເອງ — ແລະຖ້າ
+  // ຜູ້ໃຊ້ກົດປິດຕອນນັ້ນ (state ທ້ອງຖິ່ນ false ຢູ່ແລ້ວ) guard `state == online`
+  // ຈະ no-op ໂດຍບໍ່ຂຽນ Firestore ເລີຍ — ຄ້າງ isOnline:true ຢູ່ backend ໂດຍບໍ່ມີ
+  // GPS stream ແລ່ນຄຽງຄູ່. ເອີ້ນຄັ້ງດຽວຫຼັງ profile stream ໂຫລດຄັ້ງທຳອິດ ເພື່ອ
+  // seed state ໃຫ້ກົງກັບຄ່າຈິງ (ProviderDashboard ເອີ້ນຜ່ານ ref.listen).
+  void syncFromRemote(bool remoteIsOnline) {
+    if (_synced) return;
+    _synced = true;
+    if (remoteIsOnline == state) return;
+    state = remoteIsOnline;
+    if (remoteIsOnline) {
+      _gpsSub?.cancel();
+      _gpsSub = _svc.positionStream.listen(
+            (pos) => _svc.writeLocation(pos),
+        onError: (_) {},
+        cancelOnError: false,
+      );
+    }
+  }
 
   Future<OnlineToggleResult> toggle() => setOnline(!state);
 

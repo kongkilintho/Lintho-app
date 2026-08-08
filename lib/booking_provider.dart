@@ -151,6 +151,12 @@ final transactionsProvider = StreamProvider<List<ProviderTransaction>>((ref) {
   return ref.watch(earningsRepoProvider).watchTransactions();
 });
 
+// 🔒 [AUDIT PERF-5 / 2026-08-06] see EarningsRepository.watchMonthlyEarnings()
+final monthlyEarningsProvider = StreamProvider<List<ProviderTransaction>>((ref) {
+  ref.watch(currentUidProvider);
+  return ref.watch(earningsRepoProvider).watchMonthlyEarnings();
+});
+
 // ── PROFILE ──────────────────────────────────────────────────
 
 final profileStreamProvider = StreamProvider<ProviderProfile>((ref) {

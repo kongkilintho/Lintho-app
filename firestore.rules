@@ -161,6 +161,21 @@ service cloud.firestore {
         );
     }
 
+    // 🔒 [AUDIT EDGE-1 / 2026-08-06] scheduledAt ບໍ່ເຄີຍຖືກກວດຢູ່ rule ນີ້ເລີຍ —
+    // booking_form_screen.dart/quick_booking_screen.dart ກວດແຕ່ຝັ່ງ client
+    // (picked.isBefore(DateTime.now())) ເທົ່ານັ້ນ, modified client ສາມາດຂຽນ
+    // scheduledAt ໃນອະດີດໄດ້ໂດຍກົງ. ຍົກເວັ້ນເວລາ isNow==true (ຂຽນຄ່າຜ່ານ
+    // FieldValue.serverTimestamp(), ອາດ resolve ໄວກວ່າ request.time ໜ້ອຍໜຶ່ງ
+    // ຕາມລຳດັບການປະເມີນ) — ກວດສະເພາະກໍລະນີຈອງລ່ວງໜ້າ (isNow==false), ອະນຸຍາດ
+    // grace period 5 ນາທີເພື່ອບໍ່ໃຫ້ block ການຈອງ "ອີກໜ້ອຍນາທີ" ທີ່ຜູ້ໃຊ້ໃຊ້ເວລາ
+    // ຕື່ມແບບຟອມຫຼາຍກວ່ານັ້ນໜ້ອຍໜຶ່ງ.
+    function isValidScheduledAt() {
+      return !('scheduledAt' in request.resource.data) ||
+        request.resource.data.isNow == true ||
+        (request.resource.data.scheduledAt is timestamp &&
+         request.resource.data.scheduledAt >= request.time - duration.value(5, 'm'));
+    }
+
     function isValidNewBookingShape() {
       return request.resource.data.status == 'pending' &&
         request.resource.data.paymentStatus == 'pending' &&
@@ -169,7 +184,8 @@ service cloud.firestore {
         (!('grandTotal' in request.resource.data) ||
           (request.resource.data.grandTotal is number &&
            request.resource.data.grandTotal >= 0 && request.resource.data.grandTotal <= 50000000)) &&
-        isValidBookingTextFields() && isValidContactPhone() && isValidOpenToAllFlag();
+        isValidBookingTextFields() && isValidContactPhone() && isValidOpenToAllFlag() &&
+        isValidScheduledAt();
     }
 
     // 🔒 [AUDIT QA-1 / HI-2] ກ່ອນໜ້ານີ້ update ບໍ່ໄດ້ກວດຄ່າ/transition ຂອງ
@@ -375,11 +391,24 @@ service cloud.firestore {
     // serviceAreas ຍັງບໍ່ຖືກຍົກເວັ້ນ (ບໍ່ມີ dedicated permission ໃນ
     // ROLE_PERMISSIONS ໃຫ້ອ້າງອີງ — admin ໃດກໍໄດ້ຂຽນໄດ້ຄືເກົ່າ, ບໍ່ແມ່ນຈຸດອ່ອນ
     // Critical ທີ່ກວດພົບຮອບນີ້).
+    // 🔒 [AUDIT SEC-1 / 2026-08-06] ລາຍການຍົກເວັ້ນຂ້າງເທິງເຄີຍຖືກຂະຫຍາຍມາແລ້ວ
+    // 2 ຄັ້ງ (ADM-5, ແລ້ວ SEC-1/SEC-2 ຮອບກ່ອນ) ແຕ່ຍັງບໍ່ຄົບ — 6 collection ນີ້ມີ
+    // dedicated rule ຂອງຕົນເອງທີ່ຕັ້ງໃຈບັງຄັບ Cloud-Function-only ຫຼື field-level
+    // restriction (rewardTransactions/rewardRedemptions/fcm_queue: `if false`
+    // ສະເພາະບາງ operation, kyc/chats: field ຫຼື membership ຄວນຄົງທີ່,
+    // referralCodes: update/delete `if false`) ແຕ່ຍັງບໍ່ໄດ້ຢູ່ໃນ exclusion
+    // array — ໝາຍຄວາມວ່າ admin tier ໃດກໍໄດ້ (ລວມ marketing_admin/
+    // support_admin ທີ່ບໍ່ຄວນແຕະ) ຍັງສາມາດຂຽນ/ລຶບກົງໄດ້ຜ່ານ blanket bypass ນີ້
+    // ໂດຍກົງ, ຂ້າມ dedicated rule ຂອງແຕ່ລະ collection ໄປທັງໝົດ. ຕອນນີ້ເພີ່ມທັງ
+    // 6 collection ນີ້ເຂົ້າ exclusion array — ບໍ່ມີ legitimate admin-write
+    // use case ໃດອີງໃສ່ blanket rule ນີ້ຢູ່ແລ້ວສຳລັບ 6 ອັນນີ້.
     match /{document=**} {
       allow read: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
         && !(request.path[3] in ['bookings', 'users', 'wallets', 'withdrawalRequests',
-          'topupRequests', 'providers', 'settings', 'coupons', 'transactions']);
+          'topupRequests', 'providers', 'settings', 'coupons', 'transactions',
+          'rewardTransactions', 'rewardRedemptions', 'kyc', 'chats', 'fcm_queue',
+          'referralCodes']);
     }
 
     match /users/{uid} {

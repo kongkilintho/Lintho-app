@@ -16,6 +16,7 @@ import 'booking_provider.dart';
 import 'home_tab.dart';
 import 'jobs_tab.dart';
 import 'earnings_tab.dart';
+import 'online_provider.dart';
 import 'profile_tab.dart';
 
 // ── NAV INDEX ────────────────────────────────────────────────
@@ -43,6 +44,21 @@ class ProviderDashboard extends ConsumerWidget {
     // ລໍຖ້າຢູ່ໜ້າ home tab. ນັບລວມທັງສອງ.
     final pendingCount = ref.watch(pendingJobsProvider).length +
         ref.watch(unassignedOpenJobsProvider).length;
+
+    // 🔒 [Availability persistence fix] seed the local online/offline toggle
+    // from the persisted providers/{uid}.isOnline value once profile data
+    // loads — otherwise both Home tab's and Profile's availability switches
+    // always show "offline" after app restart/login regardless of the real
+    // Firestore state (see online_provider.dart's syncFromRemote).
+    ref.listen(profileStreamProvider, (prev, next) {
+      next.whenData((p) =>
+          ref.read(onlineStatusProvider.notifier).syncFromRemote(p.isOnline));
+    });
+    // listen() only fires on *future* changes — if the stream already had
+    // data cached before this widget attached the listener, catch up here
+    // too (syncFromRemote is idempotent/one-shot, safe to call every build).
+    ref.read(profileStreamProvider).whenData(
+        (p) => ref.read(onlineStatusProvider.notifier).syncFromRemote(p.isOnline));
 
     return Scaffold(
       body: IndexedStack(index: idx, children: _tabs),

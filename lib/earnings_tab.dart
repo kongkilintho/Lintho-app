@@ -404,10 +404,10 @@ class ProviderEarningsTab extends ConsumerWidget {
                   }
                   setS(() => submitting = true);
                   try {
-                    final slipUrl = await ref.read(earningsRepoProvider)
+                    final slip = await ref.read(earningsRepoProvider)
                         .uploadTopupSlip(slipFile!);
                     await ref.read(earningsRepoProvider)
-                        .requestTopup(amt, slipUrl: slipUrl);
+                        .requestTopup(amt, slipUrl: slip.url, slipPath: slip.path);
                     if (ctx.mounted) {
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

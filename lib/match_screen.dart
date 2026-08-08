@@ -330,9 +330,25 @@ class _MatchScreenState extends State<MatchScreen>
       }
 
       // 3. Map → ProviderModel
-      final providers = snap.docs
+      var providers = snap.docs
           .map((d) => ProviderModel.fromDoc(d))
           .toList();
+
+      // 🔒 [AUDIT EDGE-3 / 2026-08-06] isOnline:true ອາດຄ້າງຢູ່ Firestore
+      // ໂດຍ provider ບໍ່ໄດ້ອອນລາຍແທ້ (ແອັບຖືກ force-kill/ຂາດເນັດຖາວອນກ່ອນ
+      // dispose() ໄດ້ຮັນ, ເບິ່ງຄໍາເຫັນຢູ່ ProviderModel.locationUpdatedAt) —
+      // ກັ່ນຕອງອອກ provider ທີ່ isOnline:true ແຕ່ບໍ່ມີການອັບເດດ location ໃນ
+      // ໄລຍະໃກ້ໆນີ້ (LocationService ຂຽນທຸກ 5 ວິນາທີໃນຂະນະ online ແທ້). ໃຫ້
+      // provider ທີ່ບໍ່ເຄີຍມີ locationUpdatedAt ເລີຍ (ຍັງບໍ່ທັນ migrate/GPS
+      // ປິດ) ຜ່ານໄດ້ຄືເກົ່າ — ບໍ່ດັ່ງນັ້ນຈະຕັດ provider ຖືກຕ້ອງອອກໂດຍບໍ່ຕັ້ງໃຈ.
+      final freshnessCutoff = DateTime.now().subtract(const Duration(minutes: 10));
+      providers = providers.where((p) =>
+          p.locationUpdatedAt == null ||
+          p.locationUpdatedAt!.isAfter(freshnessCutoff)).toList();
+      if (providers.isEmpty) {
+        _scheduleRetry();
+        return;
+      }
 
       // 4. Sort: distance ກ່ອນ (ຖ້າມີ lat/lng), ຈາກນັ້ນ rating
       providers.sort((a, b) {
@@ -416,14 +432,29 @@ class _MatchScreenState extends State<MatchScreen>
         // write ດຽວກັນ (atomic) — ນີ້ຄືສິ່ງທີ່ບອກ firestore.rules'
         // isOpenOrTargeted() ວ່າ booking ນີ້ບໍ່ແມ່ນ "ເປີດໃຫ້ທຸກຄົນ" ອີກຕໍ່ໄປ, ຈຳກັດ
         // ໃຫ້ເຫັນສະເພາະ 3 ຄົນທີ່ຖືກເລືອກ (sentTo) ເທົ່ານັ້ນ.
-        await _db
-            .collection('bookings')
-            .doc(widget.bookingId)
-            .update({
-          'sentTo':     ids,
-          'openToAll':  false,
-          'status':     'pending',
-          'updatedAt':  FieldValue.serverTimestamp(),
+        // 🔒 [AUDIT BE-2 / 2026-08-06] ກ່ອນໜ້ານີ້ເປັນ .update() ທຳມະດາ (ບໍ່ແມ່ນ
+        // transaction) ທີ່ບັງຄັບຂຽນ status:'pending' ໂດຍບໍ່ກວດຄ່າປັດຈຸບັນກ່ອນ —
+        // ຕ່າງຈາກທຸກ write ອື່ນທີ່ປ່ຽນ status ໃນແອັບ (acceptBooking,
+        // rejectBooking, ...) ທີ່ລ້ວນແຕ່ອ່ານຄືນພາຍໃນ transaction ກ່ອນຂຽນ. ຖ້າ
+        // write ນີ້ commit ຝັ່ງ server ແຕ່ client timeout ໃນເຄືອຂ່າຍຊ້າ,
+        // scheduler ຈະ retry ຄັ້ງນີ້ອີກ — ຖ້າໃນລະຫວ່າງນັ້ນຊ່າງໄດ້ຮັບງານໄປແລ້ວ
+        // (status:'accepted'), retry ນີ້ຈະຂຽນທັບ status ກັບໄປເປັນ 'pending'
+        // ໄດ້ໂດຍບໍ່ຮູ້ຕົວ — undo ການຮັບງານຂອງຊ່າງ ແລະ ອາດເປີດຊ່ອງໃຫ້ຄົນທີ 2 ຮັບ
+        // ງານດຽວກັນຊ້ຳ. ຕອນນີ້ອ່ານ status ປັດຈຸບັນພາຍໃນ transaction ດຽວກັນກ່ອນ —
+        // ຂຽນສະເພາະຖ້າຍັງເປັນ 'pending' ຢູ່, ບໍ່ດັ່ງນັ້ນຖືວ່າ booking ໄດ້ຖືກແກ້
+        // ໄຂແລ້ວ (ຮັບ/ຍົກເລີກ) ໂດຍທາງອື່ນ, ບໍ່ຕ້ອງຂຽນທັບ.
+        final ref = _db.collection('bookings').doc(widget.bookingId);
+        await _db.runTransaction((tx) async {
+          final snap = await tx.get(ref);
+          if (!snap.exists) return;
+          final currentStatus = snap.data()?['status'] as String?;
+          if (currentStatus != 'pending') return;
+          tx.update(ref, {
+            'sentTo':     ids,
+            'openToAll':  false,
+            'status':     'pending',
+            'updatedAt':  FieldValue.serverTimestamp(),
+          });
         }).timeout(const Duration(seconds: 15));
         // TODO: ສົ່ງ FCM push ຜ່ານ Cloud Function
         // ຕອນນີ້ provider app ຈະ stream bookings

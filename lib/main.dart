@@ -9,7 +9,9 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -923,44 +925,104 @@ class _MainShellState extends ConsumerState<MainShell> {
       ProfileScreen(),
     ];
     return Scaffold(
+      // ✅ extendBody: true — ໃຫ້ body ແຜ່ລົງໄປເຕັມຈໍ (ຢູ່ດ້ານໃຕ້ floating nav
+      // bar), ບໍ່ດັ່ງນັ້ນ Scaffold ຈະຫຍໍ້ body ໄວ້ເທິງ bottomNavigationBar
+      // ແລະ BackdropFilter blur ຈະບໍ່ມີ content ໃຫ້ blur ຜ່ານ
+      extendBody: true,
       body: IndexedStack(index: idx, children: pages),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20, offset: const Offset(0, -4),
-          )],
+      bottomNavigationBar: SafeArea(
+        top: false,
+        minimum: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 16, right: 16, bottom: 20),
+          child: _FloatingNavBar(
+            index: idx,
+            onTap: (i) => ref.read(mainShellTabIndexProvider.notifier).state = i,
+          ),
         ),
-        child: SafeArea(child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          child: Row(children: [
-            _nav(idx, 0, Icons.home_rounded,           tr('home')),
-            _nav(idx, 1, Icons.receipt_long_outlined,  tr('booking')),
-            _nav(idx, 2, Icons.person_outline_rounded, tr('profile')),
-          ]),
-        )),
+      ),
+    );
+  }
+}
+
+// ── FLOATING GLASSMORPHISM BOTTOM NAV (Fastwork-style) ─────────
+class _FloatingNavBar extends StatelessWidget {
+  const _FloatingNavBar({required this.index, required this.onTap});
+  final int index;
+  final ValueChanged<int> onTap;
+
+  static const _items = [
+    (Icons.home_rounded, 'home'),
+    (Icons.receipt_long_outlined, 'booking'),
+    (Icons.person_outline_rounded, 'profile'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 64,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [BoxShadow(
+          color: Colors.black.withValues(alpha: 0.10),
+          blurRadius: 24, offset: const Offset(0, 6),
+        )],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        // ✅ [Glassmorphism pass] sigma 10→12 + background ໂປ່ງແສງຫຼາຍຂຶ້ນ
+        // (0.85→0.55 mint-tinted white) ໃຫ້ content ດ້ານຫຼັງເບິ່ງເຫັນມົວແທ້ໆຜ່ານ
+        // BackdropFilter, ບໍ່ແມ່ນແຕ່ສີພື້ນທຶບໆຄືເກົ່າ
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0),
+          child: Container(
+            decoration: BoxDecoration(
+              // ✅ ຍັງຄົງໂຕນສີ mint ຂອງແບຣນ LinTho ໄວ້ ແຕ່ໂປ່ງແສງຂຶ້ນຫຼາຍ
+              // (alpha 0.55) ໃຫ້ blur ດ້ານຫຼັງເຫັນຜ່ານໄດ້ຈິງ
+              color: Color.lerp(Colors.white, C.mint, 0.3)!
+                  .withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.4), width: 1.5),
+            ),
+            child: Row(children: List.generate(_items.length, (i) {
+              final (icon, key) = _items[i];
+              return Expanded(
+                child: _navItem(
+                  sel: index == i,
+                  icon: icon,
+                  label: tr(key),
+                  onTap: () => onTap(i),
+                ),
+              );
+            })),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _nav(int idx, int i, IconData icon, String label) {
-    final sel = idx == i;
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => ref.read(mainShellTabIndexProvider.notifier).state = i,
-          borderRadius: BorderRadius.circular(14),
+  Widget _navItem({
+    required bool sel,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Center(
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              // ✅ [Brand color audit 2026-07-27] ແທັບທີ່ເລືອກໃຊ້ສີຂຽວແບຣນ
-              // (ແທນ C.navy) — ໃຫ້ສອດຄ່ອງກັບ Grab/Foodpanda/Airbnb ທີ່ໃຊ້ສີ
-              // ແບຣນຫຼັກເປັນຕົວບົ່ງບອກແທັບທີ່ເລືອກຢູ່
-              color: sel ? C.primary.withValues(alpha: 0.10) : Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
+              // ✅ ແທັບທີ່ເລືອກໃຊ້ soft pill ສີຂຽວແບຣນ ໃຫ້ສອດຄ່ອງກັບ Grab/
+              // Foodpanda/Airbnb ທີ່ໃຊ້ສີແບຣນຫຼັກເປັນຕົວບົ່ງບອກແທັບທີ່ເລືອກຢູ່
+              color: sel ? C.primary.withValues(alpha: 0.14) : Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(icon, color: sel ? C.primary : C.muted, size: 24),
@@ -1072,7 +1134,35 @@ class _LocationSelectorState extends State<_LocationSelector> {
   }
 }
 
-// ── PROMO BANNER CAROUSEL ────────────────────────────────────
+// ── PROMO BANNER CAROUSEL (real-photo banners) ───────────────
+// ✅ [Home banner photo redesign] ປ່ຽນຈາກ solid-gradient+emoji card ເປັນ
+// ຮູບພາບຈິງ (Cloudinary/CDN, ຜ່ານ CachedNetworkImage) + gradient overlay
+// ຊ້າຍ (Emerald/Navy) → ຂວາ (ຮູບຈິງຊັດ), ຂໍ້ຄວາມ+CTA ຢູ່ຊ້າຍ. ໂຄງສ້າງ
+// carousel/auto-play/indicator/tap-navigation ເກົ່າຍັງຄົງໄວ້ຄືເດີມ.
+
+class _PromoBannerData {
+  final String title;
+  final String subtitle;
+  final String ctaLabel;
+  final String imageUrl;
+  final Color  overlayColor;
+  final void Function(BuildContext) onTap;
+  const _PromoBannerData({
+    required this.title,
+    required this.subtitle,
+    required this.ctaLabel,
+    required this.imageUrl,
+    required this.overlayColor,
+    required this.onTap,
+  });
+}
+
+// ✅ ຂະໜາດຮູບຄົງທີ່ (w=1200) — ພໍດີກັບຄວາມກວ້າງ banner ໃນທຸກຂະໜາດຈໍ ໂດຍບໍ່
+// ຕ້ອງ decode ຮູບເຕັມຄວາມລະອຽດຈາກແຫຼ່ງຕົ້ນທາງ.
+const _acCleaningBannerImg = 'https://images.unsplash.com/photo-1737012197886-7d5a52ded45b?auto=format&fit=crop&w=1200&q=75';
+const _homeCleaningBannerImg = 'https://images.unsplash.com/photo-1758273705627-937374bfa978?auto=format&fit=crop&w=1200&q=75';
+const _promotionBannerImg = 'https://images.unsplash.com/photo-1669387448840-610c588f003d?auto=format&fit=crop&w=1200&q=75';
+const _membershipBannerImg = 'https://images.unsplash.com/photo-1758687126877-b37052a20a4d?auto=format&fit=crop&w=1200&q=75';
 
 class _PromoCarousel extends StatefulWidget {
   const _PromoCarousel();
@@ -1084,38 +1174,74 @@ class _PromoCarouselState extends State<_PromoCarousel> {
   final _ctrl = PageController();
   Timer? _timer;
   int _page = 0;
+  bool _userInteracting = false;
 
-  List<Map<String, Object>> get _promos => [
-    {
-      'title': tr('promo1_title'),
-      'sub': tr('promo1_sub'),
-      'emoji': '🎉',
-      'colors': [C.primary, C.teal],
-    },
-    {
-      'title': tr('promo2_title'),
-      'sub': tr('promo2_sub'),
-      'emoji': '❄️',
-      'colors': [C.promoBannerBlue, C.promoBannerGreen],
-    },
-    {
-      'title': tr('promo3_title'),
-      'sub': tr('promo3_sub'),
-      'emoji': '🎁',
-      'colors': [C.promoBannerOrange, C.gold],
-    },
+  List<_PromoBannerData> get _banners => [
+    _PromoBannerData(
+      title:    tr('promo_ac_title'),
+      subtitle: tr('promo_ac_sub'),
+      ctaLabel: tr('cta_book_now'),
+      imageUrl: _acCleaningBannerImg,
+      overlayColor: C.primary,
+      onTap: (context) => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => BookingFormScreen(
+              initialOrder: BookingOrder(category: ServiceCategory.acCleaning),
+              initialStep: 1))),
+    ),
+    _PromoBannerData(
+      title:    tr('promo_clean_title'),
+      subtitle: tr('promo_clean_sub'),
+      ctaLabel: tr('cta_choose_service'),
+      imageUrl: _homeCleaningBannerImg,
+      overlayColor: C.navy,
+      onTap: (context) => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => BookingFormScreen(
+              initialOrder: BookingOrder(category: ServiceCategory.homeCleaning),
+              initialStep: 1))),
+    ),
+    _PromoBannerData(
+      title:    tr('promo_promotion_title'),
+      subtitle: tr('promo_promotion_sub'),
+      ctaLabel: tr('cta_view_promotion'),
+      imageUrl: _promotionBannerImg,
+      overlayColor: C.primary,
+      onTap: (context) => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => const CouponListScreen())),
+    ),
+    _PromoBannerData(
+      title:    tr('promo_membership_title'),
+      subtitle: tr('promo_membership_sub'),
+      ctaLabel: tr('cta_view_rewards'),
+      imageUrl: _membershipBannerImg,
+      overlayColor: C.navy,
+      onTap: (context) => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => const ReferralScreen())),
+    ),
   ];
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (!mounted) return;
-      final next = (_page + 1) % _promos.length;
+    _startAutoplay();
+    // ✅ preload ຮູບ banner ຖັດໄປ (index 1) ລ່ວງໜ້າ — ບໍ່ໃຫ້ກະພິບຕອນ
+    // auto-play ຂ້າມໄປໜ້າ 2 ຄັ້ງທຳອິດ
+    WidgetsBinding.instance.addPostFrameCallback((_) => _preloadImage(1));
+  }
+
+  void _startAutoplay() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!mounted || _userInteracting) return;
+      final next = (_page + 1) % _banners.length;
       _ctrl.animateToPage(next,
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeInOut);
     });
+  }
+
+  void _preloadImage(int index) {
+    if (!mounted || index >= _banners.length) return;
+    precacheImage(CachedNetworkImageProvider(_banners[index].imageUrl), context);
   }
 
   @override
@@ -1125,128 +1251,154 @@ class _PromoCarouselState extends State<_PromoCarousel> {
     super.dispose();
   }
 
-  static const _referralIndex = 2;
-
   @override
   Widget build(BuildContext context) {
+    final banners = _banners;
     return Column(children: [
       SizedBox(
-        // ✅ [FIX] 144 ບໍ່ພໍອີກຕໍ່ໄປ ຫຼັງຈາກເພີ່ມປຸ່ມ CTA ໃສ່ບັດທີ່ບໍ່ແມ່ນ referral —
-        // "bottom overflowed by 9.0 pixels" ໃນ debug ຢືນຢັນວ່າເນື້ອຫາ (title+
-        // subtitle+ປຸ່ມ) ສູງກວ່າພື້ນທີ່ card ທີ່ມີ (144 - padding 18*2 = 108px).
         height: 172,
-        child: PageView.builder(
-          controller: _ctrl,
-          itemCount: _promos.length,
-          onPageChanged: (i) => setState(() => _page = i),
-          itemBuilder: (_, i) {
-            final p = _promos[i];
-            final colors = p['colors'] as List<Color>;
-            final isReferral = i == _referralIndex;
-            final isMonthly = i == 1;
-            // ✅ [Customer UX pass 2026-08-03] ທຸກບັດຕ້ອງມີ CTA ຊັດເຈນ — referral
-            // (index 2) ທັງບັດເປັນ CTA ຢູ່ແລ້ວ (ໄປ ReferralScreen), ບັດອື່ນ (promo
-            // ທົ່ວໄປ/monthly) ດຽວນີ້ມີປຸ່ມ "ເບິ່ງບໍລິການ" → BookingFormScreen ແທນທີ່
-            // ຈະເປັນ decorative ລ້ວນໆຄືເກົ່າ.
-            void goToServices() => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const BookingFormScreen()));
-
-            final card = Container(
-              padding: const EdgeInsets.fromLTRB(20, 18, 16, 18),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: colors,
-                  begin: Alignment.topLeft, end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [BoxShadow(
-                  color: colors.first.withValues(alpha: 0.25),
-                  blurRadius: 16, offset: const Offset(0, 8),
-                )],
-              ),
-              child: Row(children: [
-                Expanded(child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(p['title'] as String,
-                        maxLines: 2, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 19,
-                        height: 1.15,
-                        letterSpacing: -0.2,
-                        fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(p['sub'] as String,
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: isReferral ? 15 : 12.5,
-                        height: 1.3)),
-                    if (!isReferral) ...[
-                      const SizedBox(height: 8),
-                      Material(
-                        color: Colors.white.withValues(alpha: 0.22),
-                        borderRadius: BorderRadius.circular(8),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(8),
-                          onTap: goToServices,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              Text(tr('see_services'), style: const TextStyle(
-                                  color: Colors.white, fontSize: 11,
-                                  fontWeight: FontWeight.w800)),
-                              const SizedBox(width: 3),
-                              const Icon(Icons.arrow_forward_rounded,
-                                  color: Colors.white, size: 12),
-                            ]),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                )),
-                const SizedBox(width: 12),
-                Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: Text(p['emoji'] as String,
-                      style: TextStyle(
-                          fontSize: isReferral ? 44 : (isMonthly ? 48.6 : 36))),
-                ),
-              ]),
-            );
-
-            if (!isReferral) return card;
-            return Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(18),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const ReferralScreen())),
-                child: card,
-              ),
-            );
+        child: NotificationListener<ScrollNotification>(
+          // ✅ ຢຸດ auto-play ເມື່ອຜູ້ໃຊ້ກຳລັງ swipe ດ້ວຍນິ້ວມືເອງ (dragDetails
+          // ບໍ່ວ່າງ = user-initiated), ແລ້ວກັບຄືນເມື່ອປ່ອຍນິ້ວ
+          onNotification: (n) {
+            if (n is ScrollStartNotification && n.dragDetails != null) {
+              _userInteracting = true;
+            } else if (n is ScrollEndNotification) {
+              _userInteracting = false;
+            }
+            return false;
           },
+          child: PageView.builder(
+            controller: _ctrl,
+            itemCount: banners.length,
+            onPageChanged: (i) {
+              setState(() => _page = i);
+              _preloadImage((i + 1) % banners.length);
+            },
+            itemBuilder: (_, i) => _PromoBannerCard(banner: banners[i]),
+          ),
         ),
       ),
       const SizedBox(height: 10),
       Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: List.generate(_promos.length, (i) => AnimatedContainer(
+        children: List.generate(banners.length, (i) => AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.symmetric(horizontal: 3),
           width: _page == i ? 18 : 6, height: 6,
           decoration: BoxDecoration(
-            color: _page == i ? C.sky : C.border,
+            color: _page == i ? C.primary : C.border,
             borderRadius: BorderRadius.circular(3),
           ),
         )),
       ),
     ]);
+  }
+}
+
+class _PromoBannerCard extends StatelessWidget {
+  final _PromoBannerData banner;
+  const _PromoBannerCard({required this.banner});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: () => banner.onTap(context),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Stack(fit: StackFit.expand, children: [
+            CachedNetworkImage(
+              imageUrl: banner.imageUrl,
+              fit: BoxFit.cover,
+              // ✅ ຈຸດສຳຄັນຂອງຮູບ (ຄົນ/subject) ຢູ່ດ້ານຂວາ — ຂໍ້ຄວາມຢູ່ຊ້າຍ
+              alignment: Alignment.centerRight,
+              fadeInDuration: const Duration(milliseconds: 200),
+              placeholder: (_, __) => Container(color: banner.overlayColor.withValues(alpha: 0.12)),
+              errorWidget: (_, __, ___) => Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [banner.overlayColor, banner.overlayColor.withValues(alpha: 0.7)],
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  ),
+                ),
+                child: const Center(child: Icon(Icons.image_not_supported_outlined,
+                    color: Colors.white54, size: 32)),
+              ),
+            ),
+            // ✅ Gradient overlay: ຊ້າຍ (ສີແບຣນ ~80% opacity) → ຂວາ (ໂປ່ງໃສ, ຮູບຈິງຊັດ)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    banner.overlayColor.withValues(alpha: 0.85),
+                    banner.overlayColor.withValues(alpha: 0.55),
+                    banner.overlayColor.withValues(alpha: 0.0),
+                  ],
+                  stops: const [0.0, 0.45, 1.0],
+                  begin: Alignment.centerLeft, end: Alignment.centerRight,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 16, 18),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: 0.62,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(banner.title,
+                          maxLines: 2, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          height: 1.15,
+                          letterSpacing: -0.2,
+                          fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      Text(banner.subtitle,
+                          maxLines: 2, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          fontSize: 12,
+                          height: 1.3)),
+                      const SizedBox(height: 10),
+                      Material(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => banner.onTap(context),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 7),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              Text(banner.ctaLabel, style: TextStyle(
+                                  color: banner.overlayColor, fontSize: 11.5,
+                                  fontWeight: FontWeight.w800)),
+                              const SizedBox(width: 3),
+                              Icon(Icons.arrow_forward_rounded,
+                                  color: banner.overlayColor, size: 12),
+                            ]),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 }
 
@@ -1258,96 +1410,36 @@ class _HomeSearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Expanded(
-        child: Material(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const SearchScreen())),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 10, offset: const Offset(0, 3),
-                )],
-              ),
-              child: Row(children: [
-                const Icon(Icons.search_rounded, color: C.muted, size: 20),
-                const SizedBox(width: 8),
-                Expanded(child: _RotatingSearchHint(hints: [
-                  tr('search_hint_1'),
-                  tr('search_hint_2'),
-                  tr('search_hint_3'),
-                  tr('search_hint_4'),
-                ])),
-              ]),
-            ),
-          ),
-        ),
-      ),
-      const SizedBox(width: 10),
-      Material(
-        // ✅ [Green gradient header] mint (ຂາວອ່ອນໆ) ເຄີຍໃຊ້ໄດ້ດີເທິງພື້ນຫຼັງ
-        // ຂາວ — ແຕ່ຈາງເກີນໄປເທິງພື້ນຫຼັງ gradient ຂຽວສົດ. ຕອນນີ້ໃຊ້ຂາວແທ້
-        // ຄືກັນກັບກ່ອງຄົ້ນຫາ ໃຫ້ pop ຊັດເຈນ.
-        color: Colors.white,
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => _showFilterSheet(context),
-          child: Container(
-            width: 46, height: 46,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 10, offset: const Offset(0, 3),
-              )],
-            ),
-            child: const Icon(Icons.tune_rounded, color: C.primary, size: 20),
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const SearchScreen())),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10, offset: const Offset(0, 3),
+            )],
           ),
+          child: Row(children: [
+            const Icon(Icons.search_rounded, color: C.muted, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: _RotatingSearchHint(hints: [
+              tr('search_hint_1'),
+              tr('search_hint_2'),
+              tr('search_hint_3'),
+              tr('search_hint_4'),
+            ])),
+          ]),
         ),
       ),
-    ]);
-  }
-
-  // ▸ ຕອງຕາມປະເພດບໍລິການ — ພຽງ 2 ໝວດຈິງໃນແອັບ (HomeScreen._cats), ກົດແລ້ວ
-  // ພາໄປ BookingFormScreen ຂອງໝວດນັ້ນທັນທີ (pattern ດຽວກັນກັບບັດໝວດໃນ Home).
-  void _showFilterSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => SafeArea(child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(tr('filter_by_service'), style: const TextStyle(
-              fontSize: 16, fontWeight: FontWeight.w800, color: C.text)),
-          const SizedBox(height: 8),
-          ...HomeScreen._cats.map((cat) => ListTile(
-            leading: Icon(cat['icon'] as IconData, color: cat['accent'] as Color),
-            title: Text(cat['label'] as String,
-                style: const TextStyle(fontWeight: FontWeight.w700, color: C.text)),
-            onTap: () {
-              Navigator.pop(ctx);
-              Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => BookingFormScreen(
-                    initialOrder: BookingOrder(
-                        category: cat['category'] as ServiceCategory),
-                    initialStep: 1,
-                  )));
-            },
-          )),
-        ]),
-      )),
     );
   }
 }
@@ -1682,22 +1774,35 @@ class HomeScreen extends StatelessWidget {
                     // Customer Service, ທຸກ tab ໃຊ້ຂໍ້ມູນຈິງ) ຈຶ່ງເພີ່ມກັບຄືນ.
                     Row(children: [
                       Expanded(child: Text(
-                          '${tr('greeting_hello')}, ${user?.displayName ?? tr('default_user_name')} 👋',
+                          '${tr('greeting_hello')}, ${user?.displayName ?? tr('default_user_name')}',
                           maxLines: 1, overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800))),
-                      Material(
-                        color: Colors.white.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(12),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () => Navigator.push(context, MaterialPageRoute(
-                              builder: (_) => const NotificationScreen())),
-                          child: const Padding(
-                            padding: EdgeInsets.all(8),
-                            child: Icon(Icons.notifications_rounded,
-                                color: Colors.white, size: 20),
-                          ),
+                      // 🔒 [AUDIT UI-2 / 2026-08-06] Padding.all(8) ອ້ອມ icon
+                      // 20dp ໃຫ້ພື້ນທີ່ກົດພຽງ 36×36dp, ຕ່ຳກວ່າມາດຕະຖານ 44dp
+                      // ຂອງແອັບເອງ (ບັງຄັບຢູ່ແລ້ວຢູ່ home_tab.dart's
+                      // _OnlineToggle — AUDIT UI-13). ຕອນນີ້ໃຊ້ pattern ດຽວກັນ:
+                      // SizedBox+Center ຂະຫຍາຍພື້ນທີ່ກົດເປັນ 44dp ໂດຍບໍ່ປ່ຽນ
+                      // ຂະໜາດພາບ, ພ້ອມ Semantics label ໃຫ້ screen reader.
+                      Semantics(
+                        label: tr('notifications'),
+                        button: true,
+                        child: SizedBox(
+                          width: 44, height: 44,
+                          child: Center(child: Material(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => Navigator.push(context, MaterialPageRoute(
+                                  builder: (_) => const NotificationScreen())),
+                              child: const Padding(
+                                padding: EdgeInsets.all(8),
+                                child: Icon(Icons.notifications_rounded,
+                                    color: Colors.white, size: 20),
+                              ),
+                            ),
+                          )),
                         ),
                       ),
                     ]),
@@ -1725,11 +1830,19 @@ class HomeScreen extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                           decoration: BoxDecoration(
-                            color: C.navy,
+                            gradient: const LinearGradient(
+                              colors: [C.quickBookGradientStart, C.quickBookGradientEnd],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
                             borderRadius: BorderRadius.circular(16),
+                            boxShadow: [BoxShadow(
+                              color: C.quickBookGradientStart.withValues(alpha: 0.35),
+                              blurRadius: 16, offset: const Offset(0, 6),
+                            )],
                           ),
                           child: Row(children: [
-                            const Text('🚀', style: TextStyle(fontSize: 24)),
+                            const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 24),
                             const SizedBox(width: 10),
                             Expanded(child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1742,11 +1855,15 @@ class HomeScreen extends StatelessWidget {
                                     color: Colors.white, fontSize: 18,
                                     height: 1.1, letterSpacing: -0.2)),
                                 const SizedBox(height: 3),
+                                // 🔒 [AUDIT UI-3 / 2026-08-06] white70 (70%
+                                // alpha) ພຽງພໍເທິງພື້ນ navy ເກົ່າ ແຕ່ບໍ່ພຽງພໍ
+                                // ເທິງ gradient ສີສົ້ມທີ່ສະຫວ່າງກວ່າ — ຍົກ
+                                // opacity ຂຶ້ນເພື່ອຮັກສາ contrast.
                                 Text(tr('quick_book_banner_sub'),
                                     maxLines: 1, overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 12,
+                                    style: TextStyle(fontSize: 12,
                                         fontWeight: FontWeight.w500,
-                                        color: Colors.white70)),
+                                        color: Colors.white.withValues(alpha: 0.92))),
                               ],
                             )),
                             const SizedBox(width: 4),
@@ -1766,7 +1883,10 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
         SliverToBoxAdapter(child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 32, 20, 20),
+          // ✅ bottom: 120 — extendBody:true (MainShell) ດຽວນີ້ໃຫ້ body ແຜ່ລົງ
+          // ໃຕ້ floating glass nav bar, ຕ້ອງເພີ່ມ padding ລຸ່ມໃຫ້ພຽງພໍ ບໍ່ດັ່ງນັ້ນ
+          // ບັດ Popular ອັນສຸດທ້າຍຈະຖືກເບິ່ງບັງ
+          padding: const EdgeInsets.fromLTRB(20, 32, 20, 120),
           child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2170,7 +2290,7 @@ class _BookingScreenState extends State<BookingScreen> {
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: const Center(
-                        child: Text('📋', style: TextStyle(fontSize: 36)),
+                        child: Icon(Icons.assignment_outlined, color: C.sky, size: 36),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -2199,7 +2319,9 @@ class _BookingScreenState extends State<BookingScreen> {
               }
 
               return ListView.builder(
-                padding: const EdgeInsets.all(16),
+                // ✅ bottom: 116 — ໃຫ້ພຽງພໍບໍ່ໃຫ້ບັດສຸດທ້າຍຖືກເບິ່ງບັງໂດຍ
+                // floating glass nav bar (extendBody:true ຢູ່ MainShell)
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 116),
                 itemCount: docs.length,
                 itemBuilder: (_, i) {
                   final doc    = docs[i];
@@ -2621,13 +2743,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   child: user?.photoURL != null
                       ? null
-                      : Center(child: Text(
-                          user?.displayName?.isNotEmpty == true
-                              ? user!.displayName![0].toUpperCase()
-                              : '👤',
-                          style: const TextStyle(
-                              fontSize: 36, color: C.navy,
-                              fontWeight: FontWeight.w800))),
+                      : Center(
+                          child: user?.displayName?.isNotEmpty == true
+                              ? Text(user!.displayName![0].toUpperCase(),
+                                  style: const TextStyle(
+                                      fontSize: 36, color: C.navy,
+                                      fontWeight: FontWeight.w800))
+                              : const Icon(Icons.person_outline,
+                                  size: 36, color: C.navy)),
                 ),
                 if (_uploadingPhoto)
                   Container(
@@ -2832,8 +2955,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
+              // 🔒 [AUDIT CUST-2 / 2026-08-06] ຄືກັນກັບ "Provider logout
+              // stuck-in-app fix" ຢູ່ profile_tab.dart — signOut() ຄົນດຽວ
+              // ແກ້ບໍ່ໄດ້ຖ້າມີ route ອື່ນຄ້າງຢູ່ເທິງ stack (ຕົວຢ່າງ: ເປີດຈາກ
+              // notification ຜ່ານ FCMService.navigatorKey ໃນຈັງຫວະດຽວກັນ) —
+              // popUntil ລ້າງ route ຄ້າງ (ລວມທັງ dialog ນີ້ນຳ) ແລ້ວ
+              // pushAndRemoveUntil ໄປ WelcomeScreen ໂດຍກົງ ເປັນການຮັບປະກັນຊ້ຳ
+              // ບໍ່ອີງໃສ່ຈັງຫວະ auth-state stream ຢ່າງດຽວ.
+              Navigator.of(context, rootNavigator: true)
+                  .popUntil((route) => route.isFirst);
               await FirebaseAuth.instance.signOut();
+              if (!context.mounted) return;
+              Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+                (route) => false,
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: C.red, elevation: 0,
@@ -2923,6 +3059,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final newCtrl     = TextEditingController();
     final confirmCtrl = TextEditingController();
 
+    // 🔒 [AUDIT PERF-6 / 2026-08-06] ບໍ່ເຄີຍ dispose() controllers ເຫຼົ່ານີ້
+    // ມາກ່ອນ — ຕ່າງຈາກ pattern ດຽວກັນນີ້ຢູ່ _forgotPassword() ຂ້າງລຸ່ມ ແລະ
+    // job_workflow_Screen.dart's _showChargesSheet() ທີ່ dispose ຢູ່ແລ້ວ.
     showModalBottomSheet(
       context: context, isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -3081,7 +3220,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ]),
       ),
-    );
+    ).whenComplete(() {
+      currentCtrl.dispose();
+      newCtrl.dispose();
+      confirmCtrl.dispose();
+    });
   }
 
   // ✅ ລືມລະຫັດຜ່ານ — ສົ່ງ OTP ໄປເບີໂທຂອງບັນຊີປັດຈຸບັນ ໂດຍບໍ່ຕ້ອງກອກລະຫັດເກົ່າ
@@ -3208,7 +3351,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ]),
         ),
       ),
-    );
+      // 🔒 [AUDIT PERF-6 / 2026-08-06]
+    ).whenComplete(() => otpCtrl.dispose());
   }
 
   // ✅ Bottom Sheet ຕັ້ງລະຫັດຜ່ານໃໝ່ ຫຼັງຈາກຢືນຢັນຕົວຕົນຜ່ານ OTP ສຳເລັດແລ້ວ
@@ -3303,7 +3447,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           )),
         ]),
       ),
-    );
+      // 🔒 [AUDIT PERF-6 / 2026-08-06]
+    ).whenComplete(() {
+      newCtrl.dispose();
+      confirmCtrl.dispose();
+    });
   }
 
   Future<void> _editProfile(BuildContext context, User? user) async {
@@ -3467,7 +3615,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text('✅ ບັນທຶກແລ້ວ!'),
+                              content: Row(children: [
+                                Icon(Icons.check_circle, color: Colors.white, size: 18),
+                                SizedBox(width: 8),
+                                Text('ບັນທຶກແລ້ວ!'),
+                              ]),
                               backgroundColor: C.success));
                       setState(() {});
                     } catch (e) {
@@ -3490,9 +3642,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           width: 22, height: 22,
                           child: CircularProgressIndicator(
                               strokeWidth: 2.4, color: Colors.white))
-                      : const Text('💾 ບັນທຶກ', style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w800,
-                          fontSize: 16)),
+                      : const Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.save_outlined, color: Colors.white, size: 18),
+                          SizedBox(width: 8),
+                          Text('ບັນທຶກ', style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.w800,
+                              fontSize: 16)),
+                        ]),
                 ),
               ),
               const SizedBox(height: 8),
@@ -4308,7 +4464,7 @@ class PaymentHistoryScreen extends StatelessWidget {
             return Center(child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('🧾', style: TextStyle(fontSize: 48)),
+                const Icon(Icons.receipt_long_outlined, size: 48, color: C.muted),
                 const SizedBox(height: 12),
                 Text(tr('no_payment_history'), style: const TextStyle(
                     color: C.muted, fontSize: 15,
@@ -4401,7 +4557,7 @@ class _AdminRedirectScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(28),
               ),
               child: const Center(
-                child: Text('🛡️', style: TextStyle(fontSize: 44)),
+                child: Icon(Icons.shield_outlined, size: 44, color: C.vipGold),
               ),
             ),
             const SizedBox(height: 20),

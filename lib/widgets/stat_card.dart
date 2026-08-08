@@ -97,13 +97,25 @@ class StatCard extends StatelessWidget {
               Icon(icon, color: iconColor ?? fg.withValues(alpha: solid ? 0.85 : 1),
                   size: iconSize ?? 20),
               SizedBox(height: iconSpacing ?? AppSpacing.sm),
-              Text(value, style: TextStyle(
-                  color: valueColor ?? fg, fontSize: valueFontSize ?? 22,
-                  fontWeight: valueFontWeight ?? FontWeight.w900)),
+              // 🔒 [AUDIT UI-1 / 2026-08-06] value/label ບໍ່ເຄີຍມີ maxLines/overflow
+              // ມາກ່ອນ — ຖືກອອກແບບໄວ້ສະເພາະຄ່າສັ້ນ/ຂອບເຂດຄົງທີ່ (rating "4.5",
+              // ເປີເຊັນ "85%") ແຕ່ຕອນນີ້ໃຊ້ຮ່ວມກັບຄ່າເງິນທີ່ບໍ່ມີຂອບເຂດເຊັ່ນ
+              // "₭12,345,000" (profile_tab.dart's ລາຍໄດ້ເດືອນນີ້) — ຕົວເລກຍາວ
+              // ບໍ່ມີບ່ອນຫວ່າງໃຫ້ wrap ໄດ້, ຈຶ່ງລົ້ນອອກນອກກ່ອງ. ຕອນນີ້ຫຍໍ້ດ້ວຍ
+              // ellipsis ແທນທີ່ຈະລົ້ນ.
+              Text(value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: valueColor ?? fg, fontSize: valueFontSize ?? 22,
+                      fontWeight: valueFontWeight ?? FontWeight.w900)),
               SizedBox(height: valueLabelSpacing ?? 2),
-              Text(label, style: TextStyle(
-                  color: labelColor ?? (solid ? fg.withValues(alpha: 0.75) : AppColors.muted),
-                  fontSize: labelFontSize ?? 11)),
+              Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: labelColor ?? (solid ? fg.withValues(alpha: 0.75) : AppColors.muted),
+                      fontSize: labelFontSize ?? 11)),
               if (actionLabel != null) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Container(

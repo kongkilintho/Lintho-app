@@ -102,6 +102,13 @@ class AppColors {
   static const promoBannerGreen  = Color(0xFF22C55E); // ✅ ຄ່າກົງກັບ `success` ໂດຍບັງເອີນ — ຄົງແຍກ token ເພື່ອບໍ່ໃຫ້ banner ຜູກກັບຄວາມໝາຍ "ສຳເລັດ"
   static const promoBannerOrange = Color(0xFFF97316);
 
+  // ── Home "Quick Book" banner gradient ─────────────────────────
+  // 🔒 [AUDIT UI-4 / 2026-08-06] ຍົກອອກຈາກ main.dart's raw Color(0xFF...)
+  // literal ມາເປັນ token ນີ້ — ຄ່າ hex ຄົງເກົ່າ (ບໍ່ປ່ຽນພາບ), ພຽງແຕ່ໃຫ້ມີບ່ອນ
+  // ອ້າງອີງດຽວ ບໍ່ແມ່ນ orange ໂຕທີ 3 ທີ່ບໍ່ມີໃຜຮູ້ຈັກຢູ່ນອກ AppColors.
+  static const quickBookGradientStart = Color(0xFFFF8C00);
+  static const quickBookGradientEnd   = Color(0xFFFFA500);
+
   // ── Home quick-action card tint (AC vs ອື່ນໆ) ─────────────────
   static const homeCardAcTint    = Color(0xFFE3F2FD);
   static const homeCardOtherTint = Color(0xFFFFF3E0);

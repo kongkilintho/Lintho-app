@@ -628,7 +628,14 @@ class CustomerBookingRepository {
   // CustomerBookingRepository ທີ່ບໍ່ມີ .timeout() (cancelBooking()/
   // confirmPaymentSent() ຂ້າງລຸ່ມມີໝົດ) — ຖ້າອອບໄລນ໌ຕອນລູກຄ້າອະນຸມັດ/ປະຕິເສດ
   // ຄ່າໃຊ້ຈ່າຍເພີ່ມ, ຄ້າງໄດ້ບໍ່ຈຳກັດເວລາ.
+  // 🔒 [AUDIT EDGE-5 / 2026-08-06] ວິທີດຽວໃນ CustomerBookingRepository ທີ່ບໍ່
+  // ມີ session-expiry guard (ຕ່າງຈາກ cancelBooking/confirmPaymentSent/
+  // createBooking ຢູ່ໃນ class ດຽວກັນ) — ຖ້າ session ໝົດອາຍຸກາງທາງ, ຜູ້ໃຊ້ຈະເຫັນ
+  // raw Firestore permission-denied exception ແທນຂໍ້ຄວາມທີ່ອ່ານເຂົ້າໃຈງ່າຍ.
   Future<void> respondToAdditionalCharges(String bookingId, bool approve) async {
+    if (FirebaseAuth.instance.currentUser == null) {
+      throw Exception('ເຊດຊັນໝົດອາຍຸ, ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່ (session expired, please log in again)');
+    }
     final ref = _db.collection('bookings').doc(bookingId);
     if (approve) {
       await ref.update({'additionalChargesApproved': true})
@@ -683,6 +690,29 @@ class EarningsRepository {
         .toList());
   }
 
+  // 🔒 [AUDIT PERF-5 / 2026-08-06] "ລາຍໄດ້ເດືອນນີ້" (profile_tab.dart) ເຄີຍ
+  // ຄິດໄລ່ຈາກ watchTransactions() ຂ້າງເທິງ ເຊິ່ງ limit(30) ຖືກອອກແບບໄວ້ສຳລັບ
+  // ລາຍການປະຫວັດການເຮັດທຸລະກຳ (bounded list), ບໍ່ແມ່ນສຳລັບການລວມຍອດ — ຊ່າງທີ່ມີ
+  // ຫຼາຍກວ່າ 30 ທຸລະກຳໃນເດືອນດຽວ (ຫຼືມີ 30 ທຸລະກຳຈາກເດືອນກ່ອນໆຄ້າງຢູ່ໃນ 30
+  // ລາຍການລ່າສຸດ) ຈະຖືກຕັດອອກ ຍອດລວມຈຶ່ງນ້ອຍກວ່າຄວາມເປັນຈິງ. ຕອນນີ້ query
+  // ແຍກຕ່າງຫາກ filter ຢູ່ server ດ້ວຍ createdAt >= ຕົ້ນເດືອນ ໂດຍກົງ — ນຳໃຊ້
+  // composite index (providerId ASC, createdAt DESC) ດຽວກັນກັບ
+  // watchTransactions() ຢູ່ແລ້ວ (firestore.indexes.json), ບໍ່ຕ້ອງການ index ໃໝ່.
+  Stream<List<ProviderTransaction>> watchMonthlyEarnings() {
+    final now = DateTime.now();
+    final startOfMonth = DateTime(now.year, now.month, 1);
+    return _db
+        .collection('transactions')
+        .where('providerId', isEqualTo: _uid)
+        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth))
+        .orderBy('createdAt', descending: true)
+        .limit(500)
+        .snapshots()
+        .map((s) => s.docs
+        .map(ProviderTransaction.fromFirestore)
+        .toList());
+  }
+
   Future<void> requestWithdrawal(double amount) async {
     // 🔒 [AUDIT EDGE-1 / 2026-08-02 — High, fresh re-audit] ກ່ອນໜ້ານີ້ `return;`
     // ງຽບໆ (guard ນີ້ຖືກເພີ່ມມາເພື່ອກັນ crash ຈາກ _uid ວ່າງ, ບໍ່ແມ່ນເພື່ອລາຍງານຜົນ)
@@ -722,16 +752,21 @@ class EarningsRepository {
   // (timestamp) ບໍ່ໃຫ້ຄຳຂໍໃໝ່ຂຽນທັບຮູບຂອງຄຳຂໍເກົ່າ. ເບິ່ງ storage.rules —
   // topupRequests/{uid}/** ຂຽນ/ອ່ານໄດ້ສະເພາະເຈົ້າຂອງ (admin ອ່ານຜ່ານ token
   // ໃນ download URL ທີ່ເກັບໄວ້ໃນ Firestore ໂດຍກົງ, ຄືກັນກັບ KYC).
-  Future<String> uploadTopupSlip(File slip) async {
+  // 🔒 [AUDIT SEC-2 / 2026-08-06] ຄືນທັງ URL (backward-compat, ຄໍາຮ້ອງເກົ່າ
+  // ຍັງອ່ານໄດ້) ແລະ storage path ດິບ (ໃຫ້ lintho-admin ຂໍ signed URL ອາຍຸສັ້ນ
+  // ຜ່ານ getSignedMediaUrl Cloud Function ແທນທີ່ຈະໄວ້ໃຈ token ຖາວອນໃນ URL)
+  Future<({String url, String path})> uploadTopupSlip(File slip) async {
     final fileName = 'slip_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final path = 'topupRequests/$_uid/$fileName';
     final task = await _storage
-        .ref('topupRequests/$_uid/$fileName')
+        .ref(path)
         .putFile(slip, SettableMetadata(contentType: 'image/jpeg'))
         .timeout(_kUploadTimeout, onTimeout: () => throw Exception(
             'ອັບໂຫລດຮູບໝົດເວລາ, ກະລຸນາລອງໃໝ່ (upload timed out)'));
-    return task.ref.getDownloadURL().timeout(kNetworkOpTimeout,
+    final url = await task.ref.getDownloadURL().timeout(kNetworkOpTimeout,
         onTimeout: () => throw Exception(
             'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));
+    return (url: url, path: path);
   }
 
   // 🔒 [Top-up] ຄືກັນກັບ requestWithdrawal() — client ບໍ່ສາມາດຂຽນ
@@ -742,7 +777,8 @@ class EarningsRepository {
   // — ບໍ່ດັ່ງນັ້ນ provider ຄົນໃດກໍໄດ້ຈະສາມາດຕື່ມເງິນປອມເຂົ້າ wallet ຕົນເອງໄດ້
   // ໂດຍບໍ່ຕ້ອງໂອນເງິນຈິງເລີຍ. slipUrl ບັງຄັບ (upload ກ່ອນຢູ່ UI, ເບິ່ງ
   // earnings_tab.dart) — ບໍ່ມີຮູບ = admin ບໍ່ມີທາງກວດການໂອນໄດ້ເລີຍ.
-  Future<void> requestTopup(double amount, {required String slipUrl}) async {
+  Future<void> requestTopup(double amount,
+      {required String slipUrl, String? slipPath}) async {
     // 🔒 [AUDIT EDGE-1 / 2026-08-02 — High, fresh re-audit] ກ່ອນໜ້ານີ້ `return;`
     // ງຽບໆ (guard ນີ້ຖືກເພີ່ມມາເພື່ອກັນ crash ຈາກ _uid ວ່າງ, ບໍ່ແມ່ນເພື່ອລາຍງານຜົນ)
     // — ຖ້າ session ໝົດອາຍຸກາງທາງ (Firebase Auth token invalidate ໃນຂະນະທີ່
@@ -760,6 +796,7 @@ class EarningsRepository {
       'providerId': _uid,
       'amount':     amount,
       'slipUrl':    slipUrl,
+      if (slipPath != null) 'slipPath': slipPath,
       'status':     'pending',
       'createdAt':  FieldValue.serverTimestamp(),
     }).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
@@ -923,9 +960,16 @@ class ProfileRepository {
     // ອ່ານໄດ້ໂດຍ user login ໃດກໍໄດ້ (firestore.rules). ເກັບໄວ້ໃນ kyc/{uid} ແທນ
     // (ອ່ານໄດ້ສະເພາະເຈົ້າຂອງ/admin), ແລະ kycStatus ຢູ່ໃນ providers/{uid} ຄືເກົ່າ
     // ເພາະຍັງຕ້ອງໃຊ້ໂດຍ isVerifiedProvider() (firestore.rules).
+    // 🔒 [AUDIT SEC-2 / 2026-08-06] idDocPath/selfiePath (raw storage path,
+    // ຄູ່ກັບ idDocUrl/selfieUrl ຖາວອນ) ໃຫ້ lintho-admin ຂໍ signed URL ອາຍຸສັ້ນ
+    // ຜ່ານ getSignedMediaUrl Cloud Function ແທນທີ່ຈະໄວ້ໃຈ token ຖາວອນໃນ URL —
+    // URL field ຄົງໄວ້ບໍ່ລຶບ (backward-compat ກັບ record ເກົ່າ/admin UI ທີ່ຍັງ
+    // ບໍ່ທັນອັບເດດໃຫ້ໃຊ້ path ນີ້).
     await _db.collection('kyc').doc(_uid).set({
       'idDocUrl':  idUrl,
       'selfieUrl': selfieUrl,
+      'idDocPath':  'kyc/$_uid/id.jpg',
+      'selfiePath': 'kyc/$_uid/selfie.jpg',
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true)).timeout(kNetworkOpTimeout, onTimeout: () => throw Exception(
         'ໝົດເວລາການເຊື່ອມຕໍ່, ກະລຸນາລອງໃໝ່ (connection timed out)'));

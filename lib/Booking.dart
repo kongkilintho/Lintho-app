@@ -472,6 +472,11 @@ class ProviderProfile {
   final List<String> serviceTypes;
   final bool         isOnline;
   final double       rating;
+  // 🔒 [Profile redesign] reviewCount ຖືກ Cloud Function (onReviewCreated,
+  // functions/index.js) ຂຽນໄວ້ຢູ່ແລ້ວເປັນ aggregation state ພາຍໃນ — ບໍ່ເຄີຍຖືກ
+  // ອ່ານກັບຄືນຝັ່ງ client ມາກ່ອນ. ເພີ່ມເຂົ້ານີ້ໃຫ້ UI ແຍກ "ຍັງບໍ່ມີລີວິວ" (0 ຄະແນນ
+  // ຈິງໆ) ອອກຈາກ "rating ຄ່າເລີ່ມຕົ້ນ 0.0" ໄດ້.
+  final int          reviewCount;
   final int          totalJobs;
   final double       completionRate;
   final KycStatus    kycStatus;
@@ -486,6 +491,7 @@ class ProviderProfile {
     this.serviceTypes   = const [],
     this.isOnline       = false,
     this.rating         = 0,
+    this.reviewCount    = 0,
     this.totalJobs      = 0,
     this.completionRate = 0,
     this.kycStatus      = KycStatus.none,
@@ -508,6 +514,7 @@ class ProviderProfile {
       serviceTypes:   List<String>.from(d['serviceTypes'] ?? []),
       isOnline:       d['isOnline']       as bool?   ?? false,
       rating:        (d['rating']         as num?)?.toDouble() ?? 0,
+      reviewCount:    d['reviewCount']    as int?    ?? 0,
       totalJobs:      d['totalJobs']      as int?    ?? 0,
       completionRate:(d['completionRate'] as num?)?.toDouble() ?? 0,
       kycStatus: KycStatus.values.byName(d['kycStatus'] as String? ?? 'none'),
@@ -539,7 +546,8 @@ class ProviderProfile {
     photoUrl:     photoUrl     ?? this.photoUrl,
     serviceTypes: serviceTypes ?? this.serviceTypes,
     isOnline:     isOnline     ?? this.isOnline,
-    rating: rating, totalJobs: totalJobs, completionRate: completionRate,
+    rating: rating, reviewCount: reviewCount,
+    totalJobs: totalJobs, completionRate: completionRate,
     kycStatus:    kycStatus    ?? this.kycStatus,
     fcmTokens: fcmTokens, createdAt: createdAt,
   );
@@ -548,6 +556,7 @@ class ProviderProfile {
   // replaced with '?' — matches the same avatar-initial fallback pattern
   // already used in chat_screen.dart's ChatListTile.
   String get avatarLetter        => displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+  bool   get hasRating           => reviewCount > 0;
   String get ratingLabel         => rating.toStringAsFixed(1);
   String get completionRateLabel => '${completionRate.toStringAsFixed(0)}%';
 }

@@ -105,62 +105,6 @@ class PhoneRequiredGate extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════
-// READ-ONLY PHONE DISPLAY — ໃຊ້ຢູ່ Booking Form / Quick Booking Step ຕິດຕໍ່
-// ════════════════════════════════════════════════════════════
-
-class VerifiedPhoneDisplay extends StatelessWidget {
-  final String phone;
-  final VoidCallback onEditTap;
-  const VerifiedPhoneDisplay({
-    super.key, required this.phone, required this.onEditTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: C.border),
-      ),
-      child: Row(children: [
-        Container(
-          width: 40, height: 40,
-          decoration: BoxDecoration(
-            color: C.primary.withValues(alpha: 0.08),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.phone_iphone_rounded,
-              color: C.primary, size: 20),
-        ),
-        const SizedBox(width: 12),
-        Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Text(phone, style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w800, color: C.text)),
-              const SizedBox(width: 6),
-              const Icon(Icons.verified, size: 14, color: C.green),
-            ]),
-            const SizedBox(height: 2),
-            Text(tr('phone_from_account_note'),
-                style: const TextStyle(fontSize: 11.5, color: C.muted)),
-          ],
-        )),
-        TextButton(
-          onPressed: onEditTap,
-          style: TextButton.styleFrom(foregroundColor: C.primary),
-          child: Text(tr('edit'),
-              style: const TextStyle(fontWeight: FontWeight.w700)),
-        ),
-      ]),
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════
 // PHONE VERIFICATION SCREEN — Phone → OTP → link/update ໃສ່ບັນຊີປັດຈຸບັນ
 // ════════════════════════════════════════════════════════════
 

@@ -49,6 +49,8 @@ class C {
   static const promoBannerBlue        = AppColors.promoBannerBlue;
   static const promoBannerGreen       = AppColors.promoBannerGreen;
   static const promoBannerOrange      = AppColors.promoBannerOrange;
+  static const quickBookGradientStart = AppColors.quickBookGradientStart;
+  static const quickBookGradientEnd   = AppColors.quickBookGradientEnd;
   static const homeCardAcTint         = AppColors.homeCardAcTint;
   static const homeCardOtherTint      = AppColors.homeCardOtherTint;
   static const splashGradientStart    = AppColors.splashGradientStart;

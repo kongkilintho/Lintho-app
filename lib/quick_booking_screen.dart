@@ -547,11 +547,6 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
                     OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
-            const SizedBox(height: 10),
-            VerifiedPhoneDisplay(
-              phone: verifiedPhoneNumber() ?? '',
-              onEditTap: () => goToProfileTab(context, ref),
-            ),
             const SizedBox(height: 16),
             _SectionLabel(tr('discount_code_label')),
             const SizedBox(height: 8),

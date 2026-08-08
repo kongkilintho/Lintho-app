@@ -1100,3 +1100,44 @@ exports.getCloudinarySignature = functions
       folder,
     };
   });
+
+// ════════════════════════════════════════════════════════════
+// SIGNED MEDIA URL — short-lived read access to sensitive Storage files
+// ════════════════════════════════════════════════════════════
+// 🔒 [AUDIT SEC-2 / 2026-08-06] uploadKyc()/uploadTopupSlip()
+// (lib/booking_repository.dart) persist a Firebase Storage getDownloadURL()
+// into Firestore (kyc/{uid}.idDocUrl/selfieUrl, topupRequests/{id}.slipUrl)
+// — that URL embeds a permanent bearer token that grants read access to
+// anyone who ever obtains it (browser history, logs, a shared screenshot),
+// independent of storage.rules and independent of the requester's auth
+// state, for as long as the file exists. This function lets the admin panel
+// fetch a short-lived (5 min) signed URL on demand instead — the caller
+// must be a signed-in admin, and the path must be scoped to kyc/ or
+// topupRequests/ (no arbitrary Storage path can be read through this).
+// Requires the corresponding Firestore doc to also carry a *storage path*
+// field (idDocPath/selfiePath/slipPath, added alongside the existing URL
+// fields in lib/booking_repository.dart) — records uploaded before this
+// fix has no path field and the admin panel falls back to the old URL for
+// those, so this is additive/backward-compatible, not a breaking migration.
+const _SIGNED_MEDIA_PATH_RE = /^(kyc|topupRequests)\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_.-]{1,128}$/;
+
+exports.getSignedMediaUrl = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'ຕ້ອງເຂົ້າສູ່ລະບົບກ່ອນ.');
+  }
+  const callerSnap = await db.collection('users').doc(context.auth.uid).get();
+  if ((callerSnap.data() || {}).role !== 'admin') {
+    throw new functions.https.HttpsError('permission-denied', 'ສະເພາະ admin ເທົ່ານັ້ນ.');
+  }
+
+  const path = (data && data.path) || '';
+  if (typeof path !== 'string' || !_SIGNED_MEDIA_PATH_RE.test(path)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Path ບໍ່ຖືກຕ້ອງ.');
+  }
+
+  const [url] = await admin.storage().bucket().file(path).getSignedUrl({
+    action: 'read',
+    expires: Date.now() + 5 * 60 * 1000,
+  });
+  return { url };
+});

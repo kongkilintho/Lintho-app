@@ -22,13 +22,50 @@ import 'app_locale.dart';
 import 'Booking.dart';
 import 'booking_provider.dart';
 import 'cloudinary_service.dart';
+import 'earnings_tab.dart';
 import 'language_selector.dart';
+import 'online_provider.dart';
 import 'support_help.dart';
 import 'support_provider.dart';
+import 'welcome_screen.dart';
 import 'widgets/stat_card.dart';
 import 'widgets/empty_state_view.dart';
 import 'widgets/error_state_view.dart';
 import 'widgets/skeleton_box.dart';
+
+// ════════════════════════════════════════════════════════════
+// KYC DISPLAY HELPERS — shared by the header badge and the menu subtitle
+// ════════════════════════════════════════════════════════════
+
+String _kycStatusLabel(KycStatus? s) => switch (s) {
+  KycStatus.none     => tr('kyc_none'),
+  KycStatus.pending  => tr('kyc_pending'),
+  KycStatus.verified => tr('kyc_verified'),
+  KycStatus.rejected => tr('kyc_rejected'),
+  null               => tr('kyc_none'),
+};
+
+Color _kycStatusColor(KycStatus? s) => switch (s) {
+  KycStatus.verified => C.green,
+  KycStatus.pending  => C.gold,
+  KycStatus.rejected => C.red,
+  KycStatus.none     => C.gold,
+  null               => C.gold,
+};
+
+// 🔒 [AUDIT UI-7 / 2026-08-06] kyc_pending/verified/rejected tr() strings
+// ເຄີຍມີ emoji (⏳/✅/❌) ຝັງໄວ້ໃນ string ເອງ ແທນ Material icon — ນັກແປພາສາ
+// ໃນອະນາຄົດອາດແກ້/ລືມ glyph ນັ້ນໂດຍບໍ່ຮູ້ຕົວ, ແລະ screen reader ຈະອ່ານຊື່
+// Unicode ຂອງ emoji ອອກສຽງ (ຍາວ/ບໍ່ຊັດເຈນ) ແທນ Semantics ທີ່ຕັ້ງໃຈ. ຕອນນີ້
+// emoji ຖືກຕັດອອກຈາກ 4 ພາສາແລ້ວ — ໃຊ້ Icon ນີ້ແທນ, ອີງຕາມ switch ດຽວກັນກັບ
+// _kycStatusColor().
+IconData _kycStatusIcon(KycStatus? s) => switch (s) {
+  KycStatus.verified => Icons.verified_rounded,
+  KycStatus.pending  => Icons.hourglass_top_rounded,
+  KycStatus.rejected => Icons.cancel_rounded,
+  KycStatus.none     => Icons.hourglass_top_rounded,
+  null               => Icons.hourglass_top_rounded,
+};
 
 // ════════════════════════════════════════════════════════════
 // PROFILE TAB
@@ -80,25 +117,44 @@ class _ProfileBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = profile;
+    // 🔒 [AUDIT PERF-5 / 2026-08-06] monthlyEarningsProvider queries
+    // createdAt >= start-of-month server-side, not derived from the capped
+    // 30-item transactionsProvider (which undercounts once a provider
+    // passes 30 transactions in a month) — see watchMonthlyEarnings().
+    final monthlyTxAsync = ref.watch(monthlyEarningsProvider);
+    final monthlyEarnings = monthlyTxAsync.whenOrNull(data: (txs) {
+      return txs
+          .where((t) => t.type == TxType.earning)
+          .fold(0.0, (sum, t) => sum + t.amount);
+    });
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(children: [
         _ProfileCard(profile: p, user: user),
         const SizedBox(height: 14),
-        Row(children: [
-          _profileStat('${p?.totalJobs ?? 0}',         tr('total_jobs'),  Icons.work_outline,        C.navy),
-          _profileStat(p?.ratingLabel         ?? '0.0', tr('reviews'),     Icons.star_rounded,        C.yellow),
-          _profileStat(p?.completionRateLabel ?? '0%',  tr('completed'),   Icons.check_circle_outline, C.green),
-        ]),
+        const _AvailabilitySection(),
         const SizedBox(height: 14),
-        _MenuItem(
-          icon:     Icons.edit_outlined,
-          label:    tr('edit_profile'),
-          subtitle: tr('edit_profile_sub'),
-          onTap:    () => Navigator.push(context, MaterialPageRoute(
-            builder: (_) => EditProfileScreen(profile: p, user: user),
-          )),
+        // 🔒 [AUDIT UI-1 / 2026-08-06] IntrinsicHeight + CrossAxisAlignment.stretch
+        // ຮັບປະກັນວ່າ 3 ກ່ອງນີ້ສູງເທົ່າກັນສະເໝີ ເຖິງແມ່ນ label ຈະ wrap 2 ແຖວ
+        // ໃນບາງພາສາ (ເຊັ່ນ English "This Month's Earnings" ຍາວກວ່າພາສາອື່ນ) —
+        // ບໍ່ດັ່ງນັ້ນກ່ອງທີ່ label ຍາວກວ່າຈະສູງກວ່າໝູ່, ລົ້ນແຖວບໍ່ຈັດຮຽງກັນ.
+        IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            _profileStat('${p?.totalJobs ?? 0}', tr('completed_jobs_label'),
+                Icons.work_outline, C.navy),
+            _profileStat(
+                monthlyEarnings == null ? '₭0' : _formatKip(monthlyEarnings),
+                tr('monthly_earnings'), Icons.account_balance_wallet_outlined, C.green),
+            _profileStat(
+                (p != null && p.hasRating) ? p.ratingLabel : '—',
+                (p != null && p.hasRating) ? tr('rating_label') : tr('no_rating_yet'),
+                Icons.star_rounded, C.yellow),
+          ]),
         ),
+        const SizedBox(height: 20),
+
+        _SectionLabel(tr('section_manage_work')),
         _MenuItem(
           icon:     Icons.build_outlined,
           label:    tr('my_services'),
@@ -118,19 +174,44 @@ class _ProfileBody extends ConsumerWidget {
         _MenuItem(
           icon:     Icons.reviews_outlined,
           label:    tr('reviews_comments'),
-          subtitle: '${p?.totalJobs ?? 0} ${tr("reviews")} · ${p?.ratingLabel ?? '0.0'}★',
+          subtitle: '${p?.totalJobs ?? 0} ${tr("reviews")} · ${(p != null && p.hasRating) ? p.ratingLabel : tr("no_rating_yet")}',
           onTap:    () => Navigator.push(context, MaterialPageRoute(
             builder: (_) => const ReviewsScreen(),
+          )),
+        ),
+
+        const SizedBox(height: 8),
+        _SectionLabel(tr('section_account')),
+        _MenuItem(
+          icon:     Icons.edit_outlined,
+          label:    tr('edit_profile'),
+          subtitle: tr('edit_profile_sub'),
+          onTap:    () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => EditProfileScreen(profile: p, user: user),
           )),
         ),
         _MenuItem(
           icon:     Icons.verified_user_outlined,
           label:    tr('kyc'),
-          subtitle: _kycLabel(p?.kycStatus),
+          subtitle: _kycStatusLabel(p?.kycStatus),
           onTap:    () => Navigator.push(context, MaterialPageRoute(
             builder: (_) => KycScreen(profile: p),
           )),
         ),
+        // ✅ [Phase 6] wallet/earnings ເປັນລະບົບເຮັດວຽກຄົບແລ້ວ (walletProvider/
+        // transactionsProvider, ProviderEarningsTab tab ຢູ່ bottom nav) — ເພີ່ມ
+        // ທາງລັດເຂົ້າໜ້ານັ້ນຈາກ Profile ນຳ, reuse ໜ້າຈໍດຽວກັນ ບໍ່ສ້າງໃໝ່.
+        _MenuItem(
+          icon:     Icons.account_balance_wallet_outlined,
+          label:    tr('finance_wallet'),
+          subtitle: tr('finance_wallet_sub'),
+          onTap:    () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => const ProviderEarningsTab(),
+          )),
+        ),
+
+        const SizedBox(height: 8),
+        _SectionLabel(tr('settings')),
         _MenuItem(
           icon:     Icons.language_outlined,
           label:    tr('language'),
@@ -145,6 +226,8 @@ class _ProfileBody extends ConsumerWidget {
             builder: (_) => const HelpScreen(),
           )),
         ),
+
+        const SizedBox(height: 8),
         _MenuItem(
           icon:   Icons.logout,
           label:  tr('logout'),
@@ -154,6 +237,16 @@ class _ProfileBody extends ConsumerWidget {
         const SizedBox(height: 20),
       ]),
     );
+  }
+
+  static String _formatKip(double amount) {
+    final s = amount.round().toString();
+    final buf = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write(',');
+      buf.write(s[i]);
+    }
+    return '₭$buf';
   }
 
   void _confirmLogout(BuildContext context) {
@@ -175,8 +268,23 @@ class _ProfileBody extends ConsumerWidget {
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
+              // 🔒 [Provider logout stuck-in-app fix] signOut() ຄົນດຽວແກ້ບໍ່ໄດ້
+              // ຖ້າມີ route ອື່ນຄ້າງຢູ່ເທິງ stack (ຕົວຢ່າງ: ເປີດຈາກ notification
+              // ຜ່ານ FCMService.navigatorKey) — home: StreamBuilder<User?> ໃນ
+              // main.dart ຈະສະຫຼັບໄປ WelcomeScreen ຢູ່ດ້ານລຸ່ມ ແຕ່ຖືກ route ທີ່
+              // push ໄວ້ບັງຢູ່, ຜູ້ໃຊ້ຈະຮູ້ສຶກຄືກັບ "ຢືນຢັນ logout ແລ້ວແຕ່ຍັງຢູ່
+              // ໃນແອັບ". popUntil ລ້າງ route ຄ້າງ (ລວມທັງ dialog ນີ້ນຳ), ແລ້ວ
+              // pushAndRemoveUntil ໄປ WelcomeScreen ໂດຍກົງ (pattern ດຽວກັນກັບ
+              // delete-account flow ໃນ main.dart) ເປັນການຮັບປະກັນຊ້ຳ ບໍ່ອີງໃສ່
+              // ຈັງຫວະ auth-state stream ຢ່າງດຽວ.
+              Navigator.of(context, rootNavigator: true)
+                  .popUntil((route) => route.isFirst);
               await FirebaseAuth.instance.signOut();
+              if (!context.mounted) return;
+              Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+                (route) => false,
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: C.red, elevation: 0,
@@ -199,13 +307,6 @@ class _ProfileBody extends ConsumerWidget {
     AppLang.zh => '中文',
   };
 
-  String _kycLabel(KycStatus? s) => switch (s) {
-    KycStatus.none     => tr('kyc_none'),
-    KycStatus.pending  => tr('kyc_pending'),
-    KycStatus.verified => tr('kyc_verified'),
-    KycStatus.rejected => tr('kyc_rejected'),
-    null               => tr('kyc_none'),
-  };
 }
 
 // ════════════════════════════════════════════════════════════
@@ -236,58 +337,100 @@ class _ProfileCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(children: [
-        Stack(alignment: Alignment.bottomRight, children: [
-          Container(
-            width: 90, height: 90,
-            decoration: BoxDecoration(
-              color:        Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.5), width: 2,
-              ),
-            ),
-            child: p?.photoUrl != null
-                ? ClipRRect(
-              borderRadius: BorderRadius.circular(26),
-              // 🔒 [AUDIT H-5 / 2026-07-27] cacheWidth/Height — ນີ້ແມ່ນ avatar
-              // 90x90, ບໍ່ຈຳເປັນຕ້ອງ decode ຮູບເຕັມຄວາມລະອຽດເຂົ້າ memory
-              child: Image.network(
-                p!.photoUrl!,
-                fit: BoxFit.cover,
-                cacheWidth: 180, cacheHeight: 180,
-                errorBuilder: (_, __, ___) => Center(
-                  child: Text(p.avatarLetter, style: const TextStyle(
-                    fontSize: 36, color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  )),
+        // ✅ [Phase 2] camera badge ກ່ອນໜ້ານີ້ເປັນ decoration ລ້ວນໆ — ບໍ່ມີ
+        // InkWell/onTap ຫຍັງເລີຍ (ກົດແລ້ວບໍ່ມີຫຍັງເກີດຂຶ້ນ). ຕອນນີ້ແຕະໄດ້, ພາໄປ
+        // ໜ້າ EditProfileScreen ບ່ອນທີ່ photo picker ເຮັດວຽກແທ້ (reuse, ບໍ່
+        // ຊ້ຳ upload logic).
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(28),
+            onTap: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => EditProfileScreen(profile: p, user: user),
+            )),
+            child: Stack(alignment: Alignment.bottomRight, children: [
+              Container(
+                width: 90, height: 90,
+                decoration: BoxDecoration(
+                  color:        Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.5), width: 2,
+                  ),
                 ),
+                child: p?.photoUrl != null
+                    ? ClipRRect(
+                  borderRadius: BorderRadius.circular(26),
+                  // 🔒 [AUDIT H-5 / 2026-07-27] cacheWidth/Height — ນີ້ແມ່ນ avatar
+                  // 90x90, ບໍ່ຈຳເປັນຕ້ອງ decode ຮູບເຕັມຄວາມລະອຽດເຂົ້າ memory
+                  child: Image.network(
+                    p!.photoUrl!,
+                    fit: BoxFit.cover,
+                    cacheWidth: 180, cacheHeight: 180,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Text(p.avatarLetter, style: const TextStyle(
+                        fontSize: 36, color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      )),
+                    ),
+                  ),
+                )
+                    : Center(child: Text(
+                    p?.avatarLetter ?? '?',
+                    style: const TextStyle(
+                      fontSize: 36, color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ))),
               ),
-            )
-                : Center(child: Text(
-                p?.avatarLetter ?? '?',
-                style: const TextStyle(
-                  fontSize: 36, color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ))),
+              Container(
+                width: 28, height: 28,
+                decoration: BoxDecoration(
+                  color:        C.blue,
+                  shape:        BoxShape.circle,
+                  border:       Border.all(color: Colors.white, width: 2),
+                ),
+                child: const Icon(Icons.camera_alt,
+                    color: Colors.white, size: 14),
+              ),
+            ]),
           ),
-          Container(
-            width: 28, height: 28,
-            decoration: BoxDecoration(
-              color:        C.blue,
-              shape:        BoxShape.circle,
-              border:       Border.all(color: Colors.white, width: 2),
-            ),
-            child: const Icon(Icons.camera_alt,
-                color: Colors.white, size: 14),
-          ),
-        ]),
+        ),
         const SizedBox(height: 12),
-        Text(name, style: const TextStyle(
+        // 🔒 [Phase 8 — long names/overflow] name/email ບໍ່ມີ maxLines/overflow
+        // ມາກ່ອນ — ຊື່ ຫຼື email ຍາວອາດຖືກຕັດອອກຈາກ card ໂດຍບໍ່ມີ ellipsis
+        Text(name,
+            maxLines: 1, overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
           color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800,
         )),
-        Text(user?.email ?? '', style: TextStyle(
+        Text(user?.email ?? '',
+            maxLines: 1, overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
           color: Colors.white.withValues(alpha: 0.7), fontSize: 12,
         )),
+        const SizedBox(height: 10),
+        // ✅ [Phase 2] KYC badge — ສະແດງສະຖານະຢືນຢັນຕົວຕົນຈິງ (kycStatus),
+        // ບໍ່ hardcode "Verified" ຢູ່ header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+                color: _kycStatusColor(p?.kycStatus).withValues(alpha: 0.6)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(_kycStatusIcon(p?.kycStatus),
+                size: 12, color: _kycStatusColor(p?.kycStatus)),
+            const SizedBox(width: 4),
+            Text(_kycStatusLabel(p?.kycStatus), style: TextStyle(
+              color: _kycStatusColor(p?.kycStatus), fontSize: 11,
+              fontWeight: FontWeight.w700,
+            )),
+          ]),
+        ),
         if (p != null && p.serviceTypes.isNotEmpty) ...[
           const SizedBox(height: 12),
           Wrap(
@@ -306,6 +449,135 @@ class _ProfileCard extends StatelessWidget {
           ),
         ],
       ]),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// AVAILABILITY SECTION
+// ✅ [Phase 3] reuses the same providers/{uid}.isOnline field + toggle
+// service already used by home_tab.dart's _OnlineToggle (GPS permission
+// check, RTDB presence, error handling) — no new Firestore field, no
+// separate/duplicate matching logic. Booking assignment (match_screen.dart)
+// already gates on this exact field.
+// ════════════════════════════════════════════════════════════
+
+class _AvailabilitySection extends ConsumerStatefulWidget {
+  const _AvailabilitySection();
+
+  @override
+  ConsumerState<_AvailabilitySection> createState() => _AvailabilitySectionState();
+}
+
+class _AvailabilitySectionState extends ConsumerState<_AvailabilitySection> {
+  bool _busy = false;
+
+  Future<void> _handleToggle(bool value) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final result = await ref.read(onlineStatusProvider.notifier).setOnline(value);
+    if (!mounted) return;
+    setState(() => _busy = false);
+
+    final message = switch (result) {
+      OnlineToggleResult.success => null,
+      OnlineToggleResult.locationServiceDisabled => tr('enable_gps_for_jobs'),
+      OnlineToggleResult.permissionDenied        => tr('allow_location_for_jobs'),
+      OnlineToggleResult.writeFailed             => tr('status_change_failed'),
+    };
+    if (message != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: C.red),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isOnline = ref.watch(onlineStatusProvider);
+    final accent = isOnline ? C.green : C.muted;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color:        Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(
+          color:      Colors.black.withValues(alpha: 0.04),
+          blurRadius: 6, offset: const Offset(0, 2),
+        )],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 12, bottom: 2),
+          child: Text(tr('availability_title'), style: const TextStyle(
+            fontSize: 12, fontWeight: FontWeight.w700, color: C.muted,
+          )),
+        ),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            // ✅ [Phase 3] whole row tappable, minimum ~48dp height
+            borderRadius: BorderRadius.circular(10),
+            onTap: _busy ? null : () => _handleToggle(!isOnline),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Row(children: [
+                Icon(Icons.circle, size: 10, color: accent),
+                const SizedBox(width: 10),
+                Expanded(child: Text(
+                  isOnline ? tr('available_for_jobs') : tr('unavailable_for_jobs'),
+                  style: TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w700,
+                    color: isOnline ? C.text : C.muted,
+                  ),
+                )),
+                if (_busy)
+                  const SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: C.green),
+                  )
+                else
+                  Switch(
+                    value: isOnline,
+                    activeColor: C.green,
+                    onChanged: _handleToggle,
+                  ),
+              ]),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            isOnline ? tr('available_for_jobs_desc') : tr('unavailable_for_jobs_desc'),
+            style: const TextStyle(fontSize: 11, color: C.muted),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// SECTION LABEL
+// ════════════════════════════════════════════════════════════
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(text, style: const TextStyle(
+          fontSize: 12, fontWeight: FontWeight.w800, color: C.muted,
+          letterSpacing: 0.3,
+        )),
+      ),
     );
   }
 }
