@@ -16,6 +16,8 @@ import 'booking_repository.dart';
 import 'provider_details_screen.dart';
 import 'review_screen.dart';
 import 'tracking_screen.dart';
+import 'widgets/app_button.dart';
+import 'widgets/app_card.dart';
 
 class BookingDetailScreen extends StatefulWidget {
   final String bookingId;
@@ -82,9 +84,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       await _customerBookingRepo.cancelBooking(
           widget.bookingId, reason.isEmpty ? 'ລູກຄ້າຍົກເລີກ' : reason);
       if (!mounted) return;
+      // 🔒 [PHASE1] navy → AppColors.success — ນີ້ຄື feedback ວ່າ "ສຳເລັດ",
+      // ບໍ່ແມ່ນ brand/navigation context ທີ່ navy ຄວນໃຊ້
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(tr('cancel_booking_success')),
-        backgroundColor: C.navy,
+        backgroundColor: C.success,
       ));
       Navigator.pop(context);
     } catch (e) {
@@ -102,10 +106,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: C.background,
+      // 🔒 [PHASE1] title style ເຄີຍພິມຄືນຄ່າ AppTypography.appBarTitle ດ້ວຍມື —
+      // AppBarTheme ຕັ້ງຄ່ານີ້ໃຫ້ແລ້ວ, drop override ໃຫ້ອີງໃສ່ theme ໂດຍກົງ
       appBar: AppBar(
         elevation: 0,
-        title: Text(tr('booking_detail_title'), style: const TextStyle(
-            color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),
+        title: Text(tr('booking_detail_title')),
         centerTitle: true,
       ),
       body: StreamBuilder<DocumentSnapshot>(
@@ -131,13 +136,13 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                 Text(tr('load_failed'),
                     style: const TextStyle(color: C.muted, fontSize: 15)),
                 const SizedBox(height: 16),
-                OutlinedButton.icon(
+                // 🔒 [PHASE1] navy foreground/border ຄືກັນເປ໊ະກັບ
+                // OutlinedButtonTheme default ຢູ່ແລ້ວ — override ນີ້ບໍ່ຈຳເປັນ
+                AppButton.outline(
+                  label: tr('retry'),
+                  icon: Icons.refresh,
+                  fullWidth: false,
                   onPressed: () => setState(() {}),
-                  icon: const Icon(Icons.refresh),
-                  label: Text(tr('retry')),
-                  style: OutlinedButton.styleFrom(
-                      foregroundColor: C.navy,
-                      side: const BorderSide(color: C.navy)),
                 ),
               ],
             ));
@@ -275,7 +280,12 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                   )),
                   if (bookingIsTrackable(status)) ...[
                     const SizedBox(width: 8),
-                    ElevatedButton.icon(
+                    // 🔒 [PHASE1] navy → AppButton.primary (brand green) —
+                    // ຄືກັນກັບ CTA color drift ທີ່ພົບຢູ່ Quick Booking
+                    AppButton.primary(
+                      label: tr('track_btn'),
+                      icon: Icons.map_rounded,
+                      fullWidth: false,
                       onPressed: () => Navigator.push(context, MaterialPageRoute(
                           builder: (_) => TrackingScreen(
                             bookingId:    doc.id,
@@ -286,13 +296,6 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                                 b['category'] as String? ?? ''),
                             address:      b['address'] as String? ?? '',
                           ))),
-                      icon: const Icon(Icons.map_rounded, size: 16),
-                      label: Text(tr('track_btn')),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: C.navy, foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                      ),
                     ),
                   ],
                 ])),
@@ -342,27 +345,18 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
 
               if (status == 'completed' &&
                   (b['reviewed'] as bool? ?? false) == false)
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => ReviewScreen(
-                          bookingId:    doc.id,
-                          provider:     providerFromBooking(b),
-                          serviceName:  bookingServiceName(b),
-                          serviceIcon:  serviceIconForCategory(
-                              b['category'] as String? ?? ''),
-                        ))),
-                    icon: const Icon(Icons.star_rounded, color: C.yellow),
-                    label: Text(tr('rate'), style: const TextStyle(
-                        fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: C.navy, foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
+                // 🔒 [PHASE1] navy → AppButton.primary (brand green)
+                AppButton.primary(
+                  label: tr('rate'),
+                  icon: Icons.star_rounded,
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(
+                      builder: (_) => ReviewScreen(
+                        bookingId:    doc.id,
+                        provider:     providerFromBooking(b),
+                        serviceName:  bookingServiceName(b),
+                        serviceIcon:  serviceIconForCategory(
+                            b['category'] as String? ?? ''),
+                      ))),
                 ),
 
               // ▸ ປຸ່ມຍົກເລີກ — ສະແດງສະເພາະຕອນ status == 'pending' ເທົ່ານັ້ນ,
@@ -399,17 +393,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     );
   }
 
-  Widget _card({required Widget child}) => Container(
+  // 🔒 [PHASE1] ເຄີຍ hand-roll Container(radius:18, custom 4%-opacity shadow)
+  // ຂອງຕົນເອງ — ບໍ່ກົງກັບ AppCard/CardTheme (radius 16, 6%-opacity shadow).
+  // ດຽວນີ້ delegate ໄປ AppCard ບ່ອນດຽວ ບໍ່ຕ້ອງແກ້ທຸກຈຸດທີ່ເອີ້ນ _card()
+  Widget _card({required Widget child}) => SizedBox(
     width: double.infinity,
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      boxShadow: [BoxShadow(
-        color: Colors.black.withValues(alpha: 0.04),
-        blurRadius: 8, offset: const Offset(0, 3),
-      )],
-    ),
-    child: child,
+    child: AppCard(child: child),
   );
 }
