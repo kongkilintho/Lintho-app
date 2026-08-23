@@ -23,6 +23,7 @@ import 'Booking.dart';
 import 'booking_provider.dart';
 import 'cloudinary_service.dart';
 import 'earnings_tab.dart';
+import 'fcm_service.dart';
 import 'language_selector.dart';
 import 'online_provider.dart';
 import 'support_help.dart';
@@ -279,6 +280,9 @@ class _ProfileBody extends ConsumerWidget {
               // ຈັງຫວະ auth-state stream ຢ່າງດຽວ.
               Navigator.of(context, rootNavigator: true)
                   .popUntil((route) => route.isFirst);
+              // 🔒 [AUDIT N-06 / 2026-08-08] removeToken() ຖືກເອີ້ນກ່ອນ
+              // signOut() ສະເໝີ — ຕ້ອງເອີ້ນຕອນຍັງ login ຢູ່ (ອ່ານ currentUser).
+              await FCMService.instance.removeToken();
               await FirebaseAuth.instance.signOut();
               if (!context.mounted) return;
               Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(

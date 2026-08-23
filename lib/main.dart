@@ -344,7 +344,12 @@ class _IncompleteRegistrationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 28),
               ElevatedButton(
-                onPressed: () => FirebaseAuth.instance.signOut(),
+                // 🔒 [AUDIT N-06 / 2026-08-08] removeToken() ຖືກເອີ້ນກ່ອນ
+                // signOut() ສະເໝີ — ຕ້ອງເອີ້ນຕອນຍັງ login ຢູ່ (ອ່ານ currentUser).
+                onPressed: () async {
+                  await FCMService.instance.removeToken();
+                  await FirebaseAuth.instance.signOut();
+                },
                 child: Text(tr('back_to_registration')),
               ),
             ],
@@ -2964,6 +2969,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // ບໍ່ອີງໃສ່ຈັງຫວະ auth-state stream ຢ່າງດຽວ.
               Navigator.of(context, rootNavigator: true)
                   .popUntil((route) => route.isFirst);
+              // 🔒 [AUDIT N-06 / 2026-08-08] removeToken() ຖືກເອີ້ນກ່ອນ
+              // signOut() ສະເໝີ — ຕ້ອງເອີ້ນຕອນຍັງ login ຢູ່ (ອ່ານ currentUser).
+              await FCMService.instance.removeToken();
               await FirebaseAuth.instance.signOut();
               if (!context.mounted) return;
               Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
@@ -4584,7 +4592,12 @@ class _AdminRedirectScreen extends StatelessWidget {
             ),
             const SizedBox(height: 32),
             TextButton(
-              onPressed: () => FirebaseAuth.instance.signOut(),
+              // 🔒 [AUDIT N-06 / 2026-08-08] removeToken() ຖືກເອີ້ນກ່ອນ
+              // signOut() ສະເໝີ — ຕ້ອງເອີ້ນຕອນຍັງ login ຢູ່ (ອ່ານ currentUser).
+              onPressed: () async {
+                await FCMService.instance.removeToken();
+                await FirebaseAuth.instance.signOut();
+              },
               child: const Text('ອອກຈາກລະບົບ',
                   style: TextStyle(color: Colors.white38)),
             ),

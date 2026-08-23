@@ -42,7 +42,6 @@ class FCMService {
   static GlobalKey<NavigatorState>? navigatorKey;
 
   bool _initialized = false;
-  StreamSubscription? _queueSub;
 
   Future<void> init() async {
     if (_initialized) return;
@@ -64,46 +63,16 @@ class FCMService {
 
     final initial = await _messaging.getInitialMessage();
     if (initial != null) _onTap(initial);
-
-    _watchFCMQueue();
   }
 
-  void _watchFCMQueue() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    _queueSub?.cancel();
-    _queueSub = _db
-        .collection('fcm_queue')
-        .where('targetUserId', isEqualTo: uid)
-        .where('sent', isEqualTo: false)
-        .snapshots()
-        .listen((snap) async {
-      for (final doc in snap.docs) {
-        final data      = doc.data();
-        final title     = data['title']     as String? ?? 'LinTho';
-        final body      = data['body']      as String? ?? '';
-        final type      = data['type']      as String? ?? '';
-        final bookingId = data['bookingId'] as String? ?? '';
-
-        _showInAppBanner(
-            title: title, body: body,
-            type: type, bookingId: bookingId);
-        // ✅ [FIX] ບໍ່ມີ try/catch ມາກ່ອນ — ຖ້າ update() ລົ້ມເຫລວ (offline/
-        // permission) doc ນີ້ຈະຄ້າງ sent=false ຕະຫຼອດໄປ ແລະ banner ອາດຂຶ້ນຊ້ຳ
-        // ທຸກຄັ້ງທີ່ snapshot ອັບເດດໃໝ່
-        try {
-          await doc.reference.update({'sent': true});
-        } catch (e) {
-          debugPrint('FCMService: failed to mark fcm_queue doc as sent: $e');
-        }
-      }
-    }, onError: (Object e) {
-      // ✅ [FIX] ບໍ່ມີ onError ມາກ່ອນ — stream listener error (ເຊັ່ນ Firestore
-      // permission-denied) ຈະກາຍເປັນ unhandled async error ແທນທີ່ຈະຖືກ log
-      debugPrint('FCMService: fcm_queue listener error: $e');
-    });
-  }
+  // 🔒 [AUDIT N-02 / 2026-08-08 — High, notification E2E audit] _watchFCMQueue()
+  // ເຄີຍຢູ່ບ່ອນນີ້ — listener ໃສ່ collection('fcm_queue') ຂອງຕົນເອງ, ຫວັງໃຫ້ຂຶ້ນ
+  // in-app banner ທັນທີທີ່ doc ຖືກ queue. firestore.rules ຂອງ fcm_queue ແມ່ນ
+  // `allow read: if false` ສະເໝີ (ຖືກຕັ້ງໃຈ — doc ອາດມີ title/body ຂອງ user ຄົນອື່ນ
+  // ຢູ່ຊ່ວງ sent==false) ຈຶ່ງ permission-denied ທຸກຄັ້ງ, ຖືກ catch ໄວ້ໃນ onError
+  // ແລ້ວ debugPrint ຖິ້ມ — ບໍ່ເຄີຍເຮັດວຽກຈັກເທື່ອ, ບໍ່ມີຜົນຫຍັງຕໍ່ user ຈິງ. In-app
+  // banner ຕົວຈິງມາຈາກ FirebaseMessaging.onMessage (_onForeground ຂ້າງລຸ່ມ) ເຊິ່ງ
+  // ບໍ່ອີງໃສ່ການອ່ານ Firestore ເລີຍ ແລະ ເຮັດວຽກປົກກະຕິຢູ່ແລ້ວ — ລຶບ dead code ນີ້ອອກ.
 
   void _showInAppBanner({
     required String title,
@@ -160,19 +129,17 @@ class FCMService {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
+    // 🔒 [AUDIT N-11 / 2026-08-08 — Medium, notification E2E audit] ກ່ອນໜ້ານີ້
+    // token ຖືກ mirror ໃສ່ providers/{uid} ນຳ (ນອກເໜືອຈາກ users/{uid}) —
+    // providers/{uid} ອ່ານໄດ້ໂດຍ user login ຄົນໃດກໍໄດ້ (firestore.rules, ຈຳເປັນ
+    // ສຳລັບ job board) ຈຶ່ງເຮັດໃຫ້ FCM token ຂອງທຸກຊ່າງຮົ່ວອອກໄປໃຫ້ທຸກຄົນອ່ານໄດ້.
+    // users/{uid} ອ່ານໄດ້ສະເພາະເຈົ້າຂອງ/admin ຢູ່ແລ້ວ (ບໍ່ຮົ່ວ) ແລະ
+    // processFCMQueue (functions/index.js) ຕອນນີ້ອ່ານ token ຈາກ users/{uid}
+    // ສະເໝີບໍ່ວ່າ role ໃດ — mirror ໃສ່ providers/{uid} ຈຶ່ງບໍ່ຈຳເປັນອີກຕໍ່ໄປ, ລຶບອອກ.
     await _db.collection('users').doc(uid).set({
       'fcmTokens':        FieldValue.arrayUnion([token]),
       'lastTokenUpdated': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-
-    final doc  = await _db.collection('users').doc(uid).get();
-    final role = doc.data()?['role'] as String? ?? 'customer';
-    if (role == 'provider') {
-      await _db.collection('providers').doc(uid).set({
-        'fcmTokens':        FieldValue.arrayUnion([token]),
-        'lastTokenUpdated': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    }
   }
 
   Future<void> removeToken() async {
@@ -182,6 +149,17 @@ class FCMService {
     await _db.collection('users').doc(uid).update({
       'fcmTokens': FieldValue.arrayRemove([token]),
     });
+    // 🔒 [AUDIT N-06 / N-11 / 2026-08-08] ບໍ່ຖືກເອີ້ນຈັກເທື່ອມາກ່ອນ (dead code) —
+    // ຕອນນີ້ຖືກເອີ້ນຈາກທຸກ logout call site (main.dart/profile_tab.dart/
+    // pending_approval_screen.dart). ຄ້າຍໆນຳ providers/{uid}.fcmTokens ນຳ
+    // best-effort — token ເກົ່າອາດຍັງຄ້າງຢູ່ນັ້ນຈາກກ່ອນ N-11 fix (saveToken()
+    // ບໍ່ຂຽນໃສ່ບ່ອນນັ້ນອີກຕໍ່ໄປ) — ລ້າງອອກເທື່ອລະໜ້ອຍຕອນຜູ້ໃຊ້ logout. ບໍ່ແມ່ນ
+    // provider ຫຼື doc ບໍ່ມີ field ນີ້ → update() throw, ຖືກ catch ຖິ້ມໄດ້ຢ່າງປອດໄພ.
+    try {
+      await _db.collection('providers').doc(uid).update({
+        'fcmTokens': FieldValue.arrayRemove([token]),
+      });
+    } catch (_) {}
     await _messaging.deleteToken();
   }
 
@@ -275,6 +253,13 @@ class FCMService {
             .read(navIndexProvider.notifier).state = 2;
         if (!ctx.mounted) return;
         nav.push(MaterialPageRoute(builder: (_) => const ProviderDashboard()));
+      } else {
+        // 🔒 [AUDIT N-07 / 2026-08-08 — Medium, notification E2E audit] type
+        // ທີ່ບໍ່ຮູ້ຈັກ (ໂດຍສະເພາະ 'admin_broadcast' — Admin Panel ບໍ່ເຄີຍສົ່ງ
+        // ປາຍທາງມານຳ) ບໍ່ເຄີຍມີ branch ຈັດການ — ກົດ notification ແລ້ວບໍ່ເຮັດ
+        // ຫຍັງເລີຍ. ຕອນນີ້ກັບໄປໜ້າຫຼັກ (pattern ດຽວກັນກັບ popUntil ຕອນ logout
+        // ຢູ່ main.dart/profile_tab.dart) ແທນທີ່ຈະປ່ອຍໃຫ້ການກົດບໍ່ມີຜົນຫຍັງເລີຍ.
+        nav.popUntil((route) => route.isFirst);
       }
     } on TimeoutException {
       showNavError();

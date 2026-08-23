@@ -62,6 +62,33 @@ service cloud.firestore {
         get(/databases/$(database)/documents/providers/$(request.auth.uid)).data.kycStatus == 'verified';
     }
 
+    // 🔒 [AUDIT N-01 / 2026-08-08 — Critical, notification E2E audit] fcm_queue's
+    // old create rule only checked document SHAPE (sent==false, targetUserId is
+    // string) — not sender authority or any relationship to the target. Any
+    // authenticated customer/provider could enqueue a doc with an arbitrary
+    // targetUserId and type:'admin_broadcast', and processFCMQueue (Cloud
+    // Function, functions/index.js) would blindly dispatch a real FCM push
+    // indistinguishable from a genuine admin broadcast — full notification
+    // spoofing against any user. The only legitimate client-side callers are
+    // NotificationSender.chatMessage/reviewReceived/additionalCharges
+    // (fcm_service.dart) — each one is always tied to a real booking, sent by
+    // one party of that booking, targeting the other party. This function
+    // verifies exactly that relationship so those 3 flows keep working while
+    // everything else (including any 'admin_broadcast' from a non-admin) is
+    // rejected. get() results for the same path are cached within one rule
+    // evaluation, so referencing the booking doc twice below doesn't cost an
+    // extra document-access call.
+    function fcmBookingAuthorized(bookingId, targetUserId) {
+      let bpath = /databases/$(database)/documents/bookings/$(bookingId);
+      return bookingId is string && bookingId != '' &&
+        exists(bpath) &&
+        (get(bpath).data.customerId == request.auth.uid ||
+          get(bpath).data.providerId == request.auth.uid) &&
+        (get(bpath).data.customerId == targetUserId ||
+          get(bpath).data.providerId == targetUserId) &&
+        targetUserId != request.auth.uid;
+    }
+
     // ກວດຄ່າ lat/lng ໃຫ້ຖືກປະເພດ ແລະ ຢູ່ໃນຂອບເຂດທີ່ເປັນໄປໄດ້
     // (ໃຊ້ໃນ booking create) — ອະນຸຍາດໃຫ້ບໍ່ມີ lat/lng ໄດ້ (ກໍລະນີລູກຄ້າພິມທີ່ຢູ່ເອງ
     // ບໍ່ໄດ້ກົດ GPS) ແຕ່ຖ້າມີຄ່າມາ ຕ້ອງເປັນ number ແລະ ຢູ່ໃນຂອບເຂດທີ່ຖືກຕ້ອງ
@@ -944,10 +971,26 @@ service cloud.firestore {
     // ເບິ່ງ NotificationSender._send() ໃນ fcm_service.dart) ຖືກປະຕິເສດງຽບໆທຸກຄັ້ງ.
     // ອະນຸຍາດໃຫ້ user login ແລ້ວສ້າງ entry ໄດ້ (ຕ້ອງມີ targetUserId ແລະ sent==false
     // ສະເໝີ), ອ່ານ/ແກ້ໄຂ/ລຶບໄດ້ສະເພາະ Cloud Function (Admin SDK) ທີ່ processing queue.
+    // 🔒 [AUDIT N-01 / 2026-08-08 — Critical, notification E2E audit] ຂ້າງເທິງນີ້
+    // ອະນຸຍາດໃຫ້ user login ຄົນໃດກໍໄດ້ສ້າງ doc ໄດ້ໂດຍບໍ່ກວດວ່າເປັນ admin ຫຼືກ່ຽວຂ້ອງ
+    // ກັບ targetUserId ຫຼືບໍ່ — ໝາຍຄວາມວ່າລູກຄ້າ/ຊ່າງຄົນໃດກໍໄດ້ສາມາດປອມແປງ
+    // type:'admin_broadcast' ສົ່ງ push ຫາຜູ້ໃຊ້ຄົນອື່ນຄົນໃດກໍໄດ້ (processFCMQueue
+    // ຈະສົ່ງ FCM ຈິງໂດຍບໍ່ກວດຫຍັງເພີ່ມ). ຕອນນີ້ຈຳກັດ create ໃຫ້ພຽງ 2 ເສັ້ນທາງ:
+    // (1) isAdmin() — Admin Panel broadcast/specific/role send (useSendNotification,
+    // lintho-admin), ຫຼື (2) fcmBookingAuthorized() — client-side flow ທີ່ຜູກກັບ
+    // booking ຈິງ ແລະ type ຢູ່ໃນ allow-list ຂອງ 3 flow ທີ່ໃຊ້ຈິງເທົ່ານັ້ນ
+    // (chat/review/additional_charges — ເບິ່ງ NotificationSender ໃນ fcm_service.dart).
     match /fcm_queue/{queueId} {
       allow create: if isAuth() &&
         request.resource.data.sent == false &&
-        request.resource.data.targetUserId is string;
+        request.resource.data.targetUserId is string &&
+        (
+          isAdmin() ||
+          (
+            request.resource.data.type in ['chat', 'review', 'additional_charges'] &&
+            fcmBookingAuthorized(request.resource.data.bookingId, request.resource.data.targetUserId)
+          )
+        );
       allow read, update, delete: if false;
     }
 

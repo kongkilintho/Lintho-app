@@ -75,30 +75,86 @@ async function queueNotification({ targetUserId, targetRole, type, bookingId, ti
   return ref;
 }
 
+// 🔒 [AUDIT N-09/N-10/N-11 / 2026-08-08 — Medium, notification E2E audit]
+// Shared by processFCMQueue (onCreate) and retryFailedFcmQueue (scheduled
+// sweep) so both paths behave identically. Three fixes bundled here:
+//   N-11: token lookup now always reads users/{targetUserId} regardless of
+//   targetRole — saveToken() (fcm_service.dart) already writes every user's
+//   token there unconditionally; the old providers/{uid} mirror this used to
+//   read from is being retired because that document is world-readable
+//   (needed for the job board), which was leaking every provider's raw FCM
+//   tokens to any logged-in user.
+//   N-09: sendEachForMulticast's per-token result is now inspected —
+//   tokens FCM reports as dead (uninstalled/reinstalled/revoked) are pruned
+//   from fcmTokens instead of being retried forever.
+//   N-10: a thrown error (network/quota/auth-level failure — not a per-token
+//   failure, those come back in `result.responses` without throwing) used to
+//   be marked sent:true unconditionally, permanently dropping a notification
+//   that may only have failed transiently. Now retried up to
+//   MAX_FCM_RETRIES times by retryFailedFcmQueue before being given up on.
+const MAX_FCM_RETRIES = 5;
+
+async function attemptFcmDelivery(ref, data) {
+  const { targetUserId, title, body } = data;
+  const msgData = data.data || {};
+  try {
+    const userDoc = await db.collection('users').doc(targetUserId).get();
+    if (!userDoc.exists) return ref.update({ sent: true });
+    const tokens = userDoc.data().fcmTokens || [];
+    if (tokens.length === 0) return ref.update({ sent: true });
+
+    const result = await messaging.sendEachForMulticast({
+      notification: { title, body },
+      data: msgData,
+      android: { priority: 'high', notification: { sound: 'default', channelId: _getChannelId(data.type) } },
+      apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+      tokens,
+    });
+
+    const deadTokens = [];
+    result.responses.forEach((resp, idx) => {
+      const code = resp.error && resp.error.code;
+      if (!resp.success && (code === 'messaging/registration-token-not-registered' ||
+          code === 'messaging/invalid-registration-token')) {
+        deadTokens.push(tokens[idx]);
+      }
+    });
+    if (deadTokens.length > 0) {
+      await db.collection('users').doc(targetUserId)
+        .update({ fcmTokens: admin.firestore.FieldValue.arrayRemove(...deadTokens) });
+    }
+
+    return ref.update({ sent: true, successCount: result.successCount });
+  } catch (err) {
+    const retryCount = (data.retryCount || 0) + 1;
+    if (retryCount >= MAX_FCM_RETRIES) {
+      return ref.update({ sent: true, error: err.message, retryCount, giveUp: true });
+    }
+    return ref.update({ sent: false, error: err.message, retryCount });
+  }
+}
+
 exports.processFCMQueue = functions.firestore
   .document('fcm_queue/{docId}')
   .onCreate(async (snap) => {
     const data = snap.data();
     if (!data || data.sent) return null;
-    const { targetUserId, targetRole, title, body } = data;
-    const msgData = data.data || {};
-    try {
-      const col = targetRole === 'provider' ? 'providers' : 'users';
-      const userDoc = await db.collection(col).doc(targetUserId).get();
-      if (!userDoc.exists) return snap.ref.update({ sent: true });
-      const tokens = userDoc.data().fcmTokens || [];
-      if (tokens.length === 0) return snap.ref.update({ sent: true });
-      const result = await messaging.sendEachForMulticast({
-        notification: { title, body },
-        data: msgData,
-        android: { priority: 'high', notification: { sound: 'default', channelId: _getChannelId(data.type) } },
-        apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-        tokens,
-      });
-      return snap.ref.update({ sent: true, successCount: result.successCount });
-    } catch (err) {
-      return snap.ref.update({ sent: true, error: err.message });
-    }
+    return attemptFcmDelivery(snap.ref, data);
+  });
+
+// retryCount > 0 restricts this to docs processFCMQueue already attempted
+// and failed on (onCreate only fires once per doc, so it can never race a
+// freshly-created doc that hasn't been attempted yet — those always have
+// retryCount unset).
+exports.retryFailedFcmQueue = functions.pubsub
+  .schedule('every 10 minutes')
+  .onRun(async () => {
+    const snap = await db.collection('fcm_queue')
+      .where('sent', '==', false)
+      .where('retryCount', '>', 0)
+      .get();
+    if (snap.empty) return null;
+    return Promise.all(snap.docs.map((doc) => attemptFcmDelivery(doc.ref, doc.data())));
   });
 
 exports.onBookingStatusChange = functions.firestore

@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
+import 'fcm_service.dart';
 import 'profile_tab.dart' show KycScreen;
 
 class PendingApprovalScreen extends StatelessWidget {
@@ -107,7 +108,12 @@ class _PendingApprovalBody extends StatelessWidget {
               SizedBox(
                 width: double.infinity, height: 50,
                 child: OutlinedButton(
-                  onPressed: () => FirebaseAuth.instance.signOut(),
+                  // 🔒 [AUDIT N-06 / 2026-08-08] removeToken() ຖືກເອີ້ນກ່ອນ
+                  // signOut() ສະເໝີ — ຕ້ອງເອີ້ນຕອນຍັງ login ຢູ່ (ອ່ານ currentUser).
+                  onPressed: () async {
+                    await FCMService.instance.removeToken();
+                    await FirebaseAuth.instance.signOut();
+                  },
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: C.border),
                     shape: RoundedRectangleBorder(
