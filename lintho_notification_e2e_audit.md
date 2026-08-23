@@ -378,7 +378,7 @@ Every Provider account also has a mirrored doc in `users/{uid}` with `role:'prov
 
 ### LOW
 
-**Issue ID:** N-12
+**Issue ID:** N-12 — ✅ **FIXED 2026-08-08**
 **Severity:** Low
 **System:** Admin Panel / Auditability
 **Exact file:** `lintho-admin/src/lib/hooks/index.ts` lines 998-1013, 817-839
@@ -389,9 +389,11 @@ Every Provider account also has a mirrored doc in `users/{uid}` with `role:'prov
 **Root Cause:** Schema omission.
 **Recommended Fix:** Add `sentBy: { id, name, role }` directly onto the `notifications` doc at write time (still client-asserted unless moved server-side, but at least co-located with the record it describes).
 
+**Fix applied (2026-08-08):** `useSendNotification` (lintho-admin/src/lib/hooks/index.ts) now reads `useAuthStore.getState().user` (same source `writeAuditLog` already uses) and writes `sentBy: { id, name, role }` onto the `notifications` doc; `useNotificationHistory`'s read mapping and the `NotificationTemplate` type (`src/types/index.ts`) were updated to carry it through, and the history list (`notifications/page.tsx`) now shows "by {name}" next to each entry. Still client-asserted, not server-verified — same known limitation as `writeAuditLog`, not a new gap introduced here. Verified with `npx tsc --noEmit` (exit 0) and a clean `next dev` boot with no compile errors.
+
 ---
 
-**Issue ID:** N-13
+**Issue ID:** N-13 — ✅ **FIXED 2026-08-08**
 **Severity:** Low
 **System:** Customer/Provider App — iOS
 **Exact file:** `lintho-app/lib/fcm_service.dart` lines 54-57, 188-197
@@ -402,9 +404,11 @@ Every Provider account also has a mirrored doc in `users/{uid}` with `role:'prov
 **Root Cause:** Both presentation paths are enabled without disabling one for iOS specifically.
 **Recommended Fix:** Set `alert:false` in `setForegroundNotificationPresentationOptions` on iOS (keep badge/sound) so only the in-app banner shows while foregrounded, matching Android's behavior.
 
+**Fix applied (2026-08-08):** `lib/fcm_service.dart` — `setForegroundNotificationPresentationOptions` now passes `alert: false` (kept `badge: true, sound: true`). No platform check was needed: this API is iOS/macOS-only and is a documented no-op on Android, so the same call already safely covers both platforms. Verified with `flutter analyze` — no issues found. Still not live-device-confirmed (no iOS device/simulator with APNs available in this environment).
+
 ---
 
-**Issue ID:** N-14
+**Issue ID:** N-14 — ✅ **PARTIALLY FIXED 2026-08-08** — see note (real fix still blocked on N-08)
 **Severity:** Low
 **System:** Backend
 **Exact file:** `lintho-app/functions/index.js` line 95
@@ -414,6 +418,8 @@ Every Provider account also has a mirrored doc in `users/{uid}` with `role:'prov
 **Actual:** Badge always resets/shows `1` regardless of how many unread notifications exist.
 **Root Cause:** Static value, no unread-count tracking exists anywhere in the system (consistent with N-08 — there is no notification history/read-state model at all).
 **Recommended Fix:** Low priority given N-08 is unresolved; would need an actual unread-count source to fix meaningfully.
+
+**Fix applied (2026-08-08):** `functions/index.js` — removed the hardcoded `badge: 1` from the `apns.payload.aps` object entirely rather than replacing it with a real count (no real count exists to compute — see N-08). Omitting the `badge` key leaves iOS's existing app-icon badge untouched instead of actively overwriting it to `1` on every push (which could visibly *undercount*, e.g. resetting a real backlog of 5 down to 1). This closes the "actively lying" half of the finding; a real incrementing/accurate badge still needs N-08's unread-tracking model to exist first — that part remains open by design. Verified with `node -c index.js` — syntax OK.
 
 ---
 

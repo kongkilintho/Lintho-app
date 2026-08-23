@@ -107,7 +107,16 @@ async function attemptFcmDelivery(ref, data) {
       notification: { title, body },
       data: msgData,
       android: { priority: 'high', notification: { sound: 'default', channelId: _getChannelId(data.type) } },
-      apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+      // 🔒 [AUDIT N-14 / 2026-08-08 — Low, notification E2E audit] badge was
+      // hardcoded to 1 on every single push, actively overwriting whatever
+      // real unread count iOS was already showing (e.g. 5 unread -> a 6th
+      // push resets the icon to "1", undercounting). No real per-user unread
+      // count exists anywhere in this system (see N-08 — no notification
+      // history/read-state model), so there is nothing correct to compute
+      // here yet. Omitting `badge` entirely leaves the OS-tracked badge
+      // count untouched instead of lying about it — a real value can be
+      // wired in once N-08 gives this something meaningful to read from.
+      apns: { payload: { aps: { sound: 'default' } } },
       tokens,
     });
 

@@ -50,9 +50,15 @@ class FCMService {
     await _messaging.requestPermission(
       alert: true, badge: true, sound: true,
     );
+    // 🔒 [AUDIT N-13 / 2026-08-08 — Low, notification E2E audit] alert:true
+    // ນີ້ມີຜົນສະເພາະ iOS/macOS ເທົ່ານັ້ນ (Android ບໍ່ໃຊ້ API ນີ້ເລີຍ, ຈຶ່ງປ່ຽນ
+    // ໂດຍບໍ່ຕ້ອງ platform-check) — ກ່ອນໜ້ານີ້ iOS ຈະສະແດງທັງ native banner
+    // (ຈາກ flag ນີ້) ແລະ custom SnackBar (_onForeground → _showInAppBanner)
+    // ພ້ອມກັນ ສຳລັບ push ດຽວກັນ. alert:false ປິດ native banner, ເຫຼືອແຕ່
+    // custom banner ດຽວ — ຄືກັນກັບພຶດຕິກຳຂອງ Android ຢູ່ແລ້ວ.
     await FirebaseMessaging.instance
         .setForegroundNotificationPresentationOptions(
-      alert: true, badge: true, sound: true,
+      alert: false, badge: true, sound: true,
     );
     final token = await _messaging.getToken();
     if (token != null) await saveToken(token);
