@@ -45,11 +45,30 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('ເລືອກ "ລູກຄ້າ" → ໄປ CustomerRegisterFlow, step 0 = ເບີໂທ',
+    testWidgets(
+        'ບໍ່ຕິກຍອມຮັບເງື່ອນໄຂ → ກົດ "ລູກຄ້າ" ຄ້າງຢູ່ RegisterPage ພ້ອມ SnackBar ເຕືອນ',
         (tester) async {
       await tester.pumpWidget(_wrap(const RegisterPage()));
       await tester.pumpAndSettle();
 
+      await tester.tap(find.text('ລູກຄ້າ'));
+      await tester.pump();
+
+      expect(find.byType(RegisterPage), findsOneWidget);
+      expect(find.byType(CustomerRegisterFlow), findsNothing);
+      expect(find.text('ກະລຸນາກວດສອບ ແລະ ຕິກຍອມຮັບເງື່ອນໄຂກ່ອນດຳເນີນການ'),
+          findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'ຕິກຍອມຮັບເງື່ອນໄຂ ແລ້ວເລືອກ "ລູກຄ້າ" → ໄປ CustomerRegisterFlow, step 0 = ເບີໂທ',
+        (tester) async {
+      await tester.pumpWidget(_wrap(const RegisterPage()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(Checkbox));
+      await tester.pump();
       await tester.tap(find.text('ລູກຄ້າ'));
       await tester.pumpAndSettle();
 
@@ -57,11 +76,14 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('ເລືອກ "ຊ່າງ" → ໄປ TechnicianRegisterScreen, step 0 = ເບີໂທ',
+    testWidgets(
+        'ຕິກຍອມຮັບເງື່ອນໄຂ ແລ້ວເລືອກ "ຊ່າງ" → ໄປ TechnicianRegisterScreen, step 0 = ເບີໂທ',
         (tester) async {
       await tester.pumpWidget(_wrap(const RegisterPage()));
       await tester.pumpAndSettle();
 
+      await tester.tap(find.byType(Checkbox));
+      await tester.pump();
       await tester.tap(find.text('ຊ່າງ'));
       await tester.pumpAndSettle();
 

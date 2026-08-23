@@ -30,6 +30,8 @@ class _RegisterPageState extends State<RegisterPage> {
   // ✅ [FIX Medium-9] ກັນກົດຮ້ອງທັນທີໆຫຼາຍເທື່ອ — ບໍ່ໃຫ້ push route ຊ້ຳກັນ
   bool _navigating = false;
 
+  bool isAccepted = false;
+
   late final TapGestureRecognizer _termsTap;
   late final TapGestureRecognizer _privacyTap;
 
@@ -49,6 +51,11 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Future<void> _push(Widget page) async {
     if (_navigating) return;
+    if (!isAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(tr('must_accept_terms'))));
+      return;
+    }
     _navigating = true;
     await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
     if (mounted) _navigating = false;
@@ -125,28 +132,46 @@ class _RegisterPageState extends State<RegisterPage> {
           ]),
           const SizedBox(height: 20),
 
-          // ── Terms & Privacy footer ──
-          SizedBox(
-            width: double.infinity,
-            child: Text.rich(
-              TextSpan(children: [
-                TextSpan(text: tr('register_legal_prefix')),
-                TextSpan(
-                  text: tr('terms_conditions_full'),
-                  style: const TextStyle(color: C.navy, fontWeight: FontWeight.w800),
-                  recognizer: _termsTap,
+          // ── Terms & Privacy acceptance checkbox ──
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Transform.scale(
+                scale: 1.1,
+                child: Checkbox(
+                  value: isAccepted,
+                  activeColor: C.primary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
+                  onChanged: (v) => setState(() => isAccepted = v ?? false),
                 ),
-                TextSpan(text: tr('register_legal_and')),
-                TextSpan(
-                  text: tr('privacy_policy'),
-                  style: const TextStyle(color: C.navy, fontWeight: FontWeight.w800),
-                  recognizer: _privacyTap,
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 14),
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(text: tr('accept_terms_prefix')),
+                      TextSpan(
+                        text: tr('terms_conditions_full'),
+                        style: const TextStyle(
+                            color: C.primary, fontWeight: FontWeight.bold),
+                        recognizer: _termsTap,
+                      ),
+                      TextSpan(text: ' ${tr('and')} '),
+                      TextSpan(
+                        text: tr('privacy_policy'),
+                        style: const TextStyle(
+                            color: C.primary, fontWeight: FontWeight.bold),
+                        recognizer: _privacyTap,
+                      ),
+                      TextSpan(text: tr('accept_terms_suffix')),
+                    ]),
+                    style: const TextStyle(color: C.muted, fontSize: 13, height: 1.5),
+                  ),
                 ),
-                TextSpan(text: tr('register_legal_suffix')),
-              ]),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: C.muted, fontSize: 12, height: 1.5),
-            ),
+              ),
+            ],
           ),
         ]),
       ),

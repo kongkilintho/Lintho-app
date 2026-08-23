@@ -437,6 +437,8 @@ final _strings = <AppLang, Map<String, String>>{
     'go_to_login': 'ໄປໜ້າເຂົ້າສູ່ລະບົບ',
     'or_continue_with':    'ຫຼື',
     'continue_with_google': 'ສືບຕໍ່ດ້ວຍ Google',
+    'no_account_yet':      'ຍັງບໍ່ມີບັນຊີ? ',
+    'register_now':        'ລົງທະບຽນ',
     'phone_hint':          '020 XXXXXXXX',
     // ── Phone-verified booking (contactPhone) ──────────────────
     'phone_verification_required_title': 'ກະລຸນາຢືນຢັນເບີໂທກ່ອນຈອງບໍລິການ',
@@ -451,10 +453,11 @@ final _strings = <AppLang, Map<String, String>>{
     'chat_customer_semantic': 'ສົນທະນາ',
     'phone_copied_msg':    'ຄັດລອກເບີໂທແລ້ວ',
     'copied_to_clipboard': '✅ ຄັດລອກແລ້ວ', // 🔒 [AUDIT UI-10 / 2026-08-02]
-    'accept_terms_prefix': 'ຂ້ອຍຍອມຮັບ',
+    'accept_terms_prefix': 'ຂ້ອຍຍອມຮັບ ',
+    'accept_terms_suffix': ' ຂອງ LinTho',
     'terms_conditions':    'ເງື່ອນໄຂ',
     'and':                 'ແລະ',
-    'must_accept_terms':   'ກະລຸນາຍອມຮັບເງື່ອນໄຂ ແລະ ນະໂຍບາຍການບໍລິການ',
+    'must_accept_terms':   'ກະລຸນາກວດສອບ ແລະ ຕິກຍອມຮັບເງື່ອນໄຂກ່ອນດຳເນີນການ',
 
     // ── Booking form / Home tab additions ──────────────────────
     'enable_gps_first':    'ກະລຸນາເປີດ GPS ກ່ອນ',
@@ -1305,6 +1308,8 @@ final _strings = <AppLang, Map<String, String>>{
     'reset_link_sent':     '✅ Password reset link sent to your email',
     'or_continue_with':    'or',
     'continue_with_google': 'Continue with Google',
+    'no_account_yet':      "Don't have an account? ",
+    'register_now':        'Register',
     'phone_hint':          '020 XXXXXXXX',
     // ── Phone-verified booking (contactPhone) ──────────────────
     'phone_verification_required_title': 'Please verify your phone number before booking',
@@ -1319,10 +1324,11 @@ final _strings = <AppLang, Map<String, String>>{
     'chat_customer_semantic': 'Chat',
     'phone_copied_msg':    'Phone number copied',
     'copied_to_clipboard': 'Copied',
-    'accept_terms_prefix': 'I accept the',
+    'accept_terms_prefix': 'I accept the ',
+    'accept_terms_suffix': ' of LinTho',
     'terms_conditions':    'Terms & Conditions',
     'and':                 'and',
-    'must_accept_terms':   'Please accept the Terms & Privacy Policy',
+    'must_accept_terms':   'Please check and accept the terms before continuing',
 
     // ── Booking form / Home tab additions ──────────────────────
     'enable_gps_first':    'Please enable GPS first',
@@ -2155,6 +2161,8 @@ final _strings = <AppLang, Map<String, String>>{
     'reset_link_sent':     '✅ ส่งลิงก์กู้คืนรหัสผ่านไปยังอีเมลแล้ว',
     'or_continue_with':    'หรือ',
     'continue_with_google': 'เข้าสู่ระบบด้วย Google',
+    'no_account_yet':      'ยังไม่มีบัญชี? ',
+    'register_now':        'ลงทะเบียน',
     'phone_hint':          '020 XXXXXXXX',
     // ── Phone-verified booking (contactPhone) ──────────────────
     'phone_verification_required_title': 'กรุณายืนยันเบอร์โทรก่อนจองบริการ',
@@ -2169,10 +2177,11 @@ final _strings = <AppLang, Map<String, String>>{
     'chat_customer_semantic': 'สนทนา',
     'phone_copied_msg':    'คัดลอกเบอร์โทรแล้ว',
     'copied_to_clipboard': 'คัดลอกแล้ว',
-    'accept_terms_prefix': 'ฉันยอมรับ',
+    'accept_terms_prefix': 'ฉันยอมรับ ',
+    'accept_terms_suffix': ' ของ LinTho',
     'terms_conditions':    'ข้อกำหนดและเงื่อนไข',
     'and':                 'และ',
-    'must_accept_terms':   'กรุณายอมรับข้อกำหนดและนโยบายความเป็นส่วนตัว',
+    'must_accept_terms':   'กรุณาตรวจสอบและติ๊กยอมรับเงื่อนไขก่อนดำเนินการ',
 
     // ── Booking form / Home tab additions ──────────────────────
     'enable_gps_first':    'กรุณาเปิด GPS ก่อน',
@@ -3005,6 +3014,8 @@ final _strings = <AppLang, Map<String, String>>{
     'reset_link_sent':     '✅ 密码重置链接已发送至您的邮箱',
     'or_continue_with':    '或',
     'continue_with_google': '使用 Google 继续',
+    'no_account_yet':      '还没有账户？ ',
+    'register_now':        '注册',
     'phone_hint':          '020 XXXXXXXX',
     // ── Phone-verified booking (contactPhone) ──────────────────
     'phone_verification_required_title': '请先验证手机号码再预订服务',
@@ -3020,9 +3031,10 @@ final _strings = <AppLang, Map<String, String>>{
     'phone_copied_msg':    '已复制手机号码',
     'copied_to_clipboard': '已复制',
     'accept_terms_prefix': '我接受',
+    'accept_terms_suffix': ' LinTho 的规定',
     'terms_conditions':    '条款与条件',
     'and':                 '和',
-    'must_accept_terms':   '请接受条款与隐私政策',
+    'must_accept_terms':   '请勾选并接受条款后再继续',
 
     // ── Booking form / Home tab additions ──────────────────────
     'enable_gps_first':    '请先开启 GPS',

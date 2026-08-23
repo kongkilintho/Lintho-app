@@ -43,6 +43,7 @@ import 'booking_form_screen.dart';
 import 'booking_display_helpers.dart';
 import 'booking_provider.dart' show customerBookingCountProvider;
 import 'map_picker_screen.dart';
+import 'register_otp.dart' show RegisterPage;
 import 'saved_address.dart';
 import 'booking_detail_screen.dart';
 import 'pricing_repository.dart';
@@ -474,7 +475,15 @@ class _LoginPageState extends State<LoginPage>
       await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email, password: pass);
       if (!mounted) return;
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      // 🔒 [FIX] popUntil(isFirst) ອີງໃສ່ StreamBuilder<User?> ຢູ່ root
+      // (LinThoApp) ອັບເດດ home widget ໃຫ້ທັນເວລາກ່ອນ pop animation ຈະແລ້ວ —
+      // ຖ້າ authStateChanges() event ມາຊ້າກວ່າ (race), ໜ້າ WelcomeScreen ເກົ່າ
+      // ຈະຄ້າງໂຜ່ຢູ່ຈົນກວ່າຈະ hot reload/rebuild. Navigate ໄປ MainShell ກົງໆ
+      // ແລະລຶບ route stack ທັງໝົດ ບໍ່ຕ້ອງອີງໃສ່ timing ຂອງ stream ເລີຍ.
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const MainShell()),
+        (route) => false,
+      );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       setState(() => _error = switch(e.code) {
@@ -552,7 +561,18 @@ class _LoginPageState extends State<LoginPage>
           (route) => false,
         );
       } else {
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        // 🔒 [BUG FIX] popUntil(isFirst) ອີງໃສ່ StreamBuilder<User?> ຢູ່ root
+        // (LinThoApp) rebuild home widget ຈາກ WelcomeScreen → RoleRouter ໃຫ້
+        // ທັນກ່ອນ pop animation ຈະແລ້ວ. Google Sign-In ຜ່ານ account picker
+        // (Custom Tab/WebView) ເຮັດໃຫ້ແອັບ pause/resume ກາງທາງ — authStateChanges()
+        // event ບາງຄັ້ງມາຊ້າກວ່າ pop ນີ້ (race condition), ເຮັດໃຫ້ WelcomeScreen
+        // ເກົ່າຄ້າງໂຜ່ຢູ່ຈົນກວ່າຈະ hot reload. ແກ້ໂດຍ navigate ໄປ MainShell ກົງໆ
+        // ແລະລຶບ route stack ທັງໝົດ (ຄືກັນກັບ branch 'provider' ຂ້າງເທິງ),
+        // ບໍ່ຕ້ອງອີງໃສ່ timing ຂອງ stream ເລີຍ.
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainShell()),
+          (route) => false,
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -889,6 +909,35 @@ class _LoginPageState extends State<LoginPage>
                               ),
                       ),
                     ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(tr('no_account_yet'),
+                            style: TextStyle(
+                                color: Colors.grey[600], fontSize: 14)),
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: _loading || _googleLoading
+                                ? null
+                                : () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                        builder: (_) => const RegisterPage())),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 4, horizontal: 2),
+                              child: Text(tr('register_now'),
+                                  style: const TextStyle(
+                                      color: C.primary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -939,7 +988,7 @@ class _MainShellState extends ConsumerState<MainShell> {
         top: false,
         minimum: EdgeInsets.zero,
         child: Padding(
-          padding: const EdgeInsets.only(left: 16, right: 16, bottom: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
           child: _FloatingNavBar(
             index: idx,
             onTap: (i) => ref.read(mainShellTabIndexProvider.notifier).state = i,
@@ -965,16 +1014,16 @@ class _FloatingNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 64,
+      height: 60,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(32),
         boxShadow: [BoxShadow(
           color: Colors.black.withValues(alpha: 0.10),
           blurRadius: 24, offset: const Offset(0, 6),
         )],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(32),
         // ✅ [Glassmorphism pass] sigma 10→12 + background ໂປ່ງແສງຫຼາຍຂຶ້ນ
         // (0.85→0.55 mint-tinted white) ໃຫ້ content ດ້ານຫຼັງເບິ່ງເຫັນມົວແທ້ໆຜ່ານ
         // BackdropFilter, ບໍ່ແມ່ນແຕ່ສີພື້ນທຶບໆຄືເກົ່າ
@@ -986,7 +1035,7 @@ class _FloatingNavBar extends StatelessWidget {
               // (alpha 0.55) ໃຫ້ blur ດ້ານຫຼັງເຫັນຜ່ານໄດ້ຈິງ
               color: Color.lerp(Colors.white, C.mint, 0.3)!
                   .withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(32),
               border: Border.all(
                   color: Colors.white.withValues(alpha: 0.4), width: 1.5),
             ),
@@ -1026,7 +1075,7 @@ class _FloatingNavBar extends StatelessWidget {
             decoration: BoxDecoration(
               // ✅ ແທັບທີ່ເລືອກໃຊ້ soft pill ສີຂຽວແບຣນ ໃຫ້ສອດຄ່ອງກັບ Grab/
               // Foodpanda/Airbnb ທີ່ໃຊ້ສີແບຣນຫຼັກເປັນຕົວບົ່ງບອກແທັບທີ່ເລືອກຢູ່
-              color: sel ? C.primary.withValues(alpha: 0.14) : Colors.transparent,
+              color: sel ? const Color(0xFFE8F5E9) : Colors.transparent,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
