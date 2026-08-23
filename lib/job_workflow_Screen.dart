@@ -398,7 +398,12 @@ class _CustomerCard extends ConsumerWidget {
             backgroundImage: b.customerPhotoUrl != null
                 ? NetworkImage(b.customerPhotoUrl!) : null,
             child: b.customerPhotoUrl == null
-                ? Text(b.customerName[0].toUpperCase(),
+                // 🔒 [PHASE0 P0-2] customerName[0] crashes with RangeError when
+                // the field is '' (legacy/corrupted docs fall back to '' in
+                // Booking._str()) — guard the same way chat_screen.dart/
+                // Booking.avatarLetter already do elsewhere in this codebase.
+                ? Text(b.customerName.isNotEmpty
+                    ? b.customerName[0].toUpperCase() : '?',
                 style: const TextStyle(
                     color: C.navy, fontWeight: FontWeight.w800,
                     fontSize: 16))

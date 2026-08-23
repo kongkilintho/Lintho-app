@@ -1654,7 +1654,10 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
               CircleAvatar(
                 radius:          18,
                 backgroundColor: C.navy.withValues(alpha: 0.1),
-                child: Text(r.customerName[0].toUpperCase(),
+                // 🔒 [PHASE0 P0-2] guard empty customerName — same RangeError
+                // risk as job_workflow_Screen.dart's customer avatar fallback.
+                child: Text(r.customerName.isNotEmpty
+                    ? r.customerName[0].toUpperCase() : '?',
                     style: const TextStyle(
                         color: C.navy,
                         fontWeight: FontWeight.w800)),
