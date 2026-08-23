@@ -15,6 +15,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../theme/app_theme.dart';
 
 class AppTextField extends StatelessWidget {
   final TextEditingController? controller;
@@ -49,6 +50,13 @@ class AppTextField extends StatelessWidget {
   final EdgeInsetsGeometry? contentPadding;
   final bool hideCounter;
 
+  // 🔒 [PHASE1] AppInput ຕາມ Master Prompt ຕ້ອງການ label/hint/error/focus —
+  // errorText ບໍ່ເຄີຍມີມາກ່ອນ (screen ທີ່ຕ້ອງການ validation ຂຽນ error message
+  // ແຍກຕ່າງຫາກເອງທັງໝົດ). errorColor null ຫຼົ້ນເປັນ theme's errorBorder
+  // (AppColors.red) ຄືກັນກັບ pattern ຂອງ override parameter ອື່ນໆຂ້າງເທິງ.
+  final String? errorText;
+  final Color? errorColor;
+
   const AppTextField({
     super.key,
     this.controller,
@@ -79,6 +87,8 @@ class AppTextField extends StatelessWidget {
     this.iconSize,
     this.contentPadding,
     this.hideCounter = false,
+    this.errorText,
+    this.errorColor,
   });
 
   OutlineInputBorder? _border(Color? color, double width) =>
@@ -119,6 +129,9 @@ class AppTextField extends StatelessWidget {
         border: _border(borderColor, 1),
         enabledBorder: _border(borderColor, 1),
         focusedBorder: _border(focusedBorderColor, focusedBorderWidth),
+        errorText: errorText,
+        errorBorder: _border(errorColor ?? AppColors.red, 1.4),
+        focusedErrorBorder: _border(errorColor ?? AppColors.red, 1.6),
       ),
     );
   }
