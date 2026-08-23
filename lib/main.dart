@@ -57,6 +57,7 @@ import 'package:intl/intl.dart';
 import 'lao_phone.dart';
 import 'widgets/pulsing_fade.dart';
 import 'widgets/error_state_view.dart';
+import 'widgets/app_section.dart';
 import 'theme/app_theme.dart';
 import 'app_navigation_state.dart';
 import 'phone_verification.dart';
@@ -1230,13 +1231,20 @@ class _PromoCarouselState extends State<_PromoCarousel> {
   int _page = 0;
   bool _userInteracting = false;
 
+  // 🔒 [PHASE1] promoBannerBlue/Green/Orange (app_theme.dart) ຖືກສ້າງຂຶ້ນ
+  // ສະເພາະສຳລັບ carousel ນີ້ ("Home promo banner carousel" ຕາມ doc comment
+  // ຂອງມັນເອງ) ແຕ່ບໍ່ເຄີຍຖືກໃຊ້ຈັກເທື່ອ — ທຸກ banner ໃຊ້ C.primary/C.navy ຊ້ຳກັນ
+  // ແທນ. ດຽວນີ້ແຕ່ລະ banner ມີສີຂອງຕົນເອງ, ຈັບຄູ່ກັບຄວາມໝາຍ (AC=blue ຄືກັນກັບ
+  // categoryAcAccent, ທຳຄວາມສະອາດ=green ຄືກັນກັບ categoryCleanAccent,
+  // promotion=orange ຄື convention ທົ່ວໄປສຳລັບ urgency/promo) — membership
+  // ຄົງ navy ໄວ້ໂດຍເຈດຕະນາ (premium/VIP branding, ບໍ່ແມ່ນໜຶ່ງໃນ 3 token ນີ້)
   List<_PromoBannerData> get _banners => [
     _PromoBannerData(
       title:    tr('promo_ac_title'),
       subtitle: tr('promo_ac_sub'),
       ctaLabel: tr('cta_book_now'),
       imageUrl: _acCleaningBannerImg,
-      overlayColor: C.primary,
+      overlayColor: C.promoBannerBlue,
       onTap: (context) => Navigator.push(context, MaterialPageRoute(
           builder: (_) => BookingFormScreen(
               initialOrder: BookingOrder(category: ServiceCategory.acCleaning),
@@ -1247,7 +1255,7 @@ class _PromoCarouselState extends State<_PromoCarousel> {
       subtitle: tr('promo_clean_sub'),
       ctaLabel: tr('cta_choose_service'),
       imageUrl: _homeCleaningBannerImg,
-      overlayColor: C.navy,
+      overlayColor: C.promoBannerGreen,
       onTap: (context) => Navigator.push(context, MaterialPageRoute(
           builder: (_) => BookingFormScreen(
               initialOrder: BookingOrder(category: ServiceCategory.homeCleaning),
@@ -1258,7 +1266,7 @@ class _PromoCarouselState extends State<_PromoCarousel> {
       subtitle: tr('promo_promotion_sub'),
       ctaLabel: tr('cta_view_promotion'),
       imageUrl: _promotionBannerImg,
-      overlayColor: C.primary,
+      overlayColor: C.promoBannerOrange,
       onTap: (context) => Navigator.push(context, MaterialPageRoute(
           builder: (_) => const CouponListScreen())),
     ),
@@ -1464,7 +1472,14 @@ class _HomeSearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    // 🔒 [PHASE1] ເນື້ອຫາທີ່ເບິ່ງເຫັນທັງໝົດແມ່ນ _RotatingSearchHint ທີ່ປ່ຽນ
+    // ຂໍ້ຄວາມທຸກ 2.8s — ບໍ່ມີ static label ໃຫ້ screen reader ມາກ່ອນ, ໝາຍຄວາມວ່າ
+    // ຊື່ທີ່ປະກາດອາດປ່ຽນລະຫວ່າງທີ່ຜູ້ໃຊ້ກຳລັງໂຕ້ຕອບຢູ່. ຫຸ້ມ Semantics ດ້ວຍ
+    // label ຄົງທີ່ (ຄືກັນກັບ notification bell ຂ້າງເທິງທີ່ແກ້ໄປແລ້ວ)
+    return Semantics(
+      button: true,
+      label: tr('search_placeholder'),
+      child: Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
@@ -1493,6 +1508,7 @@ class _HomeSearchBar extends StatelessWidget {
             ])),
           ]),
         ),
+      ),
       ),
     );
   }
@@ -1861,8 +1877,13 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ]),
                     const SizedBox(height: 2),
-                    Text(tr('greeting_subtitle'), style: const TextStyle(
-                        color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.w500)),
+                    // 🔒 [PHASE1] Colors.white70 ເທິງ gradient ຂຽວ/ຟ້າ ≈ 2:1
+                    // contrast — ຕ່ຳກວ່າ WCAG AA (4.5:1). ໃຊ້ opacity ດຽວກັນ
+                    // ກັບ Quick-Book banner subtitle ຂ້າງລຸ່ມ (fix UI-3) ທີ່
+                    // ແກ້ບັນຫາດຽວກັນນີ້ໄປແລ້ວແຕ່ບໍ່ໄດ້ຍົກຂຶ້ນມາຫາ header ນີ້
+                    Text(tr('greeting_subtitle'), style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.92),
+                        fontSize: 12.5, fontWeight: FontWeight.w500)),
                     const SizedBox(height: 10),
                     const _LocationSelector(),
                     const SizedBox(height: 12),
@@ -1944,10 +1965,10 @@ class HomeScreen extends StatelessWidget {
           child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(tr('categories'), style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w800, color: C.text)),
-                const SizedBox(height: 16),
-                Builder(builder: (context) {
+                // 🔒 [PHASE1] AppSection ແທນ Text header ຂຽນມືອ — spacing ຄົງທີ່
+                AppSection(
+                  title: tr('categories'),
+                  child: Builder(builder: (context) {
                 final cats = _cats;
                 return IntrinsicHeight(
                   child: Row(
@@ -2002,10 +2023,15 @@ class HomeScreen extends StatelessWidget {
                                   Icon(cat['icon'] as IconData, size: 44,
                                       color: cat['accent'] as Color),
                                   const SizedBox(height: 12),
+                                  // 🔒 [PHASE1] C.sky → C.text — card title ນີ້
+                                  // ເປັນ blue ຄົນດຽວ ໃນຂະນະທີ່ card title ອື່ນ
+                                  // ທົ່ວໜ້ານີ້ (_PopularCard, _ActiveBookingCard)
+                                  // ໃຊ້ C.text ຢູ່ແລ້ວ — ອ່ານຄືເປັນ leftover
+                                  // ບໍ່ຕັ້ງໃຈ, ບໍ່ແມ່ນ accent ທີ່ຈົງໃຈ
                                   Text(cat['label'] as String, textAlign: TextAlign.center,
                                       style: const TextStyle(
                                       fontSize: 13, fontWeight: FontWeight.w800,
-                                      color: C.sky)),
+                                      color: C.text)),
                                   const SizedBox(height: 2),
                                   Text(cat['sub'] as String, textAlign: TextAlign.center,
                                       style: const TextStyle(
@@ -2023,29 +2049,22 @@ class HomeScreen extends StatelessWidget {
                     ),
                   );
                       }).toList()));
-                }),
+                  }),
+                ),
 
                 const SizedBox(height: 44),
-                Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(tr('popular'), style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w900, color: C.text)),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(4),
-                          onTap: () => Navigator.push(context, MaterialPageRoute(
-                              builder: (_) => const BookingFormScreen())),
-                          child: Text(tr('see_all'), style: const TextStyle(
-                              color: C.sky,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13)),
-                        ),
-                      ),
-                    ]),
-                const SizedBox(height: 16),
-                ..._popular.map((s) => _PopularCard(service: s)),
+                // 🔒 [PHASE1] AppSection ແທນ Row+Text header ຂຽນມືອ — "ເບິ່ງທັງໝົດ"
+                // ດຽວນີ້ຜ່ານ AppSection's actionLabel (44dp tap target ບັງຄັບ
+                // ໃນຕົວ, ອັນເກົ່າ borderRadius:4 ອ້ອມ Text ຢ່າງດຽວແຄບກວ່ານັ້ນຫຼາຍ)
+                AppSection(
+                  title: tr('popular'),
+                  actionLabel: tr('see_all'),
+                  onAction: () => Navigator.push(context, MaterialPageRoute(
+                      builder: (_) => const BookingFormScreen())),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: _popular.map((s) => _PopularCard(service: s)).toList()),
+                ),
               ]),
         )),
       ]),
@@ -2128,24 +2147,39 @@ class _PopularCard extends StatelessWidget {
 // ອາດຄາດເຄື່ອນຈາກລາຄາຈິງທີ່ admin ຕັ້ງໄວ້. ຕອນນີ້ດຶງຈາກ PricingRepository ດຽວກັນ
 // ກັບ booking_form_screen.dart (ServicePricing.startingPrice — ຄ່າຕ່ຳສຸດຈິງ
 // ຈາກທຸກ tier), ບໍ່ສະແດງຫຍັງເລີຍຖ້າ fetch ບໍ່ໄດ້/ບໍ່ມີຂໍ້ມູນ.
-class _PriceLine extends StatelessWidget {
+// 🔒 [PHASE1] ເຄີຍເປັນ StatelessWidget ທີ່ເອີ້ນ fetchPricing() ໂດຍກົງໃນ
+// build() — ເຖິງແມ່ນ PricingRepository ຈະ cache ພາຍໃນ (TTL 5 ນາທີ), ການເອີ້ນ
+// async function ຄືນໃໝ່ທຸກຄັ້ງຍັງສ້າງ Future object ໃໝ່ສະເໝີ (async function
+// ຄືນ Future ໃໝ່ທຸກຄັ້ງ ເຖິງແມ່ນ resolve ທັນທີ). MainShell ສ້າງ HomeScreen()
+// instance ໃໝ່ທຸກຄັ້ງທີ່ rebuild (ປ່ຽນ tab/ພາສາ), ດັ່ງນັ້ນລາຄາຈະກະພິບຫາຍໄປ
+// ແລ້ວກັບມາທຸກຄັ້ງທີ່ກັບຄືນມາ Home tab. ດຽວນີ້ສ້າງ Future ຄັ້ງດຽວໃນ initState()
+// ແທນ.
+class _PriceLine extends StatefulWidget {
   final ServiceCategory category;
   final bool compact;
   const _PriceLine({required this.category, this.compact = false});
 
   @override
+  State<_PriceLine> createState() => _PriceLineState();
+}
+
+class _PriceLineState extends State<_PriceLine> {
+  late final Future<ServicePricing?> _future =
+      PricingRepository.instance.fetchPricing(widget.category.key);
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<ServicePricing?>(
-      future: PricingRepository.instance.fetchPricing(category.key),
+      future: _future,
       builder: (context, snap) {
         final price = snap.data?.startingPrice;
         if (price == null) return const SizedBox.shrink();
         final text =
             '${tr('starting_from')} ₭${NumberFormat('#,###').format(price)}';
         return Text(text,
-            textAlign: compact ? TextAlign.center : TextAlign.start,
+            textAlign: widget.compact ? TextAlign.center : TextAlign.start,
             style: TextStyle(
-                fontSize: compact ? 11 : 14,
+                fontSize: widget.compact ? 11 : 14,
                 fontWeight: FontWeight.w900,
                 color: C.blue));
       },
