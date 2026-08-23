@@ -23,6 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_colors.dart';
@@ -31,6 +32,7 @@ import 'brand_mark_tile.dart';
 import 'cloudinary_service.dart';
 import 'lao_phone.dart';
 import 'main.dart' show LoginPage;
+import 'map_picker_screen.dart';
 import 'widgets/app_text_field.dart';
 
 // 🔒 [AUDIT PROV-1 / 2026-08-02 — Critical, fresh re-audit] ກ່ອນໜ້ານີ້ id
@@ -441,6 +443,23 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
       if (!mounted) return;
       setState(() { _loading = false; _error = tr('location_error'); });
     }
+  }
+
+  // 🔒 [PHASE0 P1] ກ່ອນໜ້ານີ້ ຖ້າ GPS ຖືກປະຕິເສດຖາວອນ (deniedForever) ຫຼືບໍ່ມີ
+  // GPS ເລີຍ, ມີແຕ່ປຸ່ມ "Open Settings" — ຖ້າຜູ້ໃຊ້ບໍ່ຢາກ/ບໍ່ສາມາດປ່ຽນ setting
+  // (ຫຼືອຸປະກອນບໍ່ມີ GPS), ການລົງທະບຽນ provider ຈະຄ້າງຢູ່ຂັ້ນຕອນນີ້ຖາວອນ —
+  // _finish() ຕ້ອງການ _lat/_lng ສະເໝີ. ໃຊ້ MapPickerScreen ອັນດຽວກັນກັບຝັ່ງ
+  // ລູກຄ້າ (quick_booking_screen.dart/booking_form_screen.dart) ເປັນທາງເລືອກ
+  // ໃສ່ຕຳແໜ່ງດ້ວຍມື — ບໍ່ສ້າງລະບົບທີ່ຢູ່ໃໝ່.
+  Future<void> _pickOnMap() async {
+    final picked = await Navigator.push<LatLng>(context,
+        MaterialPageRoute(builder: (_) => const MapPickerScreen()));
+    if (picked == null || !mounted) return;
+    setState(() {
+      _lat = picked.latitude;
+      _lng = picked.longitude;
+      _error = null;
+    });
   }
 
   // ── Finalize: ບັນທຶກ Firestore (status: pending) ────────
@@ -974,6 +993,24 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
         ),
       ),
     ],
+    // 🔒 [PHASE0 P1] Manual fallback — ສະເໝີເບິ່ງເຫັນ (ບໍ່ພຽງແຕ່ຕອນ
+    // deniedForever) ດັ່ງນັ້ນອຸປະກອນທີ່ບໍ່ມີ GPS ຫຼືຜູ້ໃຊ້ທີ່ບໍ່ຢາກເປີດ
+    // location permission ຍັງລົງທະບຽນສຳເລັດໄດ້. ໃຊ້ MapPickerScreen ອັນດຽວກັນ
+    // ກັບຝັ່ງລູກຄ້າ — ບໍ່ສ້າງລະບົບທີ່ຢູ່ໃໝ່.
+    const SizedBox(height: 12),
+    SizedBox(
+      width: double.infinity, height: 46,
+      child: OutlinedButton.icon(
+        onPressed: _loading ? null : _pickOnMap,
+        icon: const Icon(Icons.map_outlined, color: C.navy, size: 18),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: C.border),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+        label: Text(tr('pick_location_on_map'), style: const TextStyle(
+            color: C.navy, fontWeight: FontWeight.w700)),
+      ),
+    ),
   ];
 
   Widget _fieldLabel(String text) => Text(text, style: const TextStyle(
