@@ -87,6 +87,9 @@ final _strings = <AppLang, Map<String, String>>{
     'selfie_hint':            'ກະລຸນາຖ່າຍຮູບໃບໜ້າຂອງທ່ານໃຫ້ຊັດເຈນ',
     'must_take_selfie':       'ກະລຸນາຖ່າຍຮູບເຊວຟີຢືນຢັນຕົວຕົນ',
     'use_current_location':   'ໃຊ້ຕຳແໜ່ງປັດຈຸບັນ',
+    // 🔒 [PHASE0 P1] GPS fallback ສຳລັບ technician_register_screen.dart —
+    // ໃຊ້ MapPickerScreen ອັນດຽວກັນກັບຝັ່ງລູກຄ້າ
+    'pick_location_on_map':   'ເລືອກຕຳແໜ່ງໃນແຜນທີ່ດ້ວຍຕົນເອງ',
     'location_hint':          'ອະນຸຍາດໃຫ້ແອັບເຂົ້າເຖິງຕຳແໜ່ງ GPS ຂອງທ່ານ',
     'location_acquired':      'ໄດ້ຮັບຕຳແໜ່ງແລ້ວ',
     'must_enable_location':   'ກະລຸນາເປີດສິດເຂົ້າເຖິງຕຳແໜ່ງ GPS',
@@ -493,6 +496,10 @@ final _strings = <AppLang, Map<String, String>>{
     'currently_offline':  'ທ່ານກຳລັງອອບລາຍ',
     'go_online_to_receive': 'ກະລຸນາອອນລາຍເພື່ອຮັບງານ',
     'go_online':           'ອອນລາຍ',
+    // 🔒 [PHASE0 P1] provider (ຊ່າງ) offline — ແຍກຈາກ 'currently_offline'
+    // ຂ້າງເທິງ (ນັ້ນແມ່ນ device ຂອງຜູ້ໃຊ້ເອງອອບລາຍ, ນີ້ແມ່ນ provider ອອບລາຍ)
+    'provider_currently_offline': 'ຊ່າງຄົນນີ້ອອບລາຍຢູ່ຕອນນີ້',
+    'provider_offline_choose_another': 'ຊ່າງຄົນນີ້ອອບລາຍຢູ່ຕອນນີ້, ກະລຸນາເລືອກຊ່າງອື່ນ ຫຼື ລອງໃໝ່ພາຍຫຼັງ',
 
     // ── Localization audit additions (Home / Quick Booking / Booking History) ──
     'city_picker_title':   'ເລືອກພື້ນທີ່ໃຫ້ບໍລິການ',
@@ -665,9 +672,13 @@ final _strings = <AppLang, Map<String, String>>{
     'bill_pending_provider': 'ລໍຖ້າ Provider',
     'searching_title':       'ກຳລັງຊອກຊ່າງ...',
     'searching_continue_prefix': 'ຍັງຄົ້ນຫາຕໍ່ອີກ',
-    'info_chip_online_techs': '12+ ຊ່າງ Online',
-    'info_chip_avg_rating':  '4.8★ ສະເລ່ຍ',
-    'info_chip_fast_eta':    '< 30 ນາທີ',
+    // 🔒 [PHASE0 P1] ເຄີຍເປັນຕົວເລກຄົງທີ່ ('12+', '4.8★', '<30min') ສະແດງຄື
+    // ຂໍ້ມູນ real-time ທັງທີ່ບໍ່ມີ query ໃດຢູ່ເບື້ອງຫຼັງ (ຫຼັກຖານ: ລູກຄ້າອາດເຫັນ
+    // ຕົວເລກນີ້ແລ້ວຫຼັງຈາກນັ້ນເຫັນ "ບໍ່ພົບຊ່າງ" ທັນທີ) — ປ່ຽນເປັນຂໍ້ຄວາມທີ່ບໍ່
+    // ອ້າງຕົວເລກສະເພາະ, ຍັງໃຫ້ຄວາມໝັ້ນໃຈໄດ້ໂດຍບໍ່ຫຼອກລວງ.
+    'info_chip_online_techs': 'ກຳລັງກວດຊ່າງໃກ້ຄຽງ',
+    'info_chip_avg_rating':  'ຊ່າງຜ່ານການກວດສອບ',
+    'info_chip_fast_eta':    'ຕອບກັບໄວ',
     'cancel_search':         'ຍົກເລີກການຊອກ',
     'sent_request_prefix':   'ສົ່ງຄຳຂໍໄປ',
     'first_come_first_served': 'ໃຜຮັບກ່ອນໄດ້ກ່ອນ',
@@ -687,6 +698,9 @@ final _strings = <AppLang, Map<String, String>>{
     'cancel_booking_btn':    'ຍົກເລີກການຈອງ',
     'provider_coming_suffix': 'ກຳລັງໄປຫາທ່ານ',
     'eta_estimate_prefix':   'ຄາດວ່າຈະຮອດ ≈',
+    // 🔒 [PHASE0 P1] ເຄີຍສະແດງ "20 ນາທີ" ຄົງທີ່ (ບໍ່ແມ່ນຄ່າຄິດໄລ່ແທ້ — ProviderModel
+    // ບໍ່ມີຟິልด์ estimatedMinutes ເລີຍ) — ປ່ຽນເປັນຂໍ້ຄວາມທີ່ບໍ່ອ້າງຕົວເລກ
+    'eta_on_the_way':        'ຊ່າງກຳລັງເດີນທາງມາຫາທ່ານ',
     'status_provider_going_suffix': 'ກຳລັງໄປ',
     'status_step_arrived':   'ຮອດໜ້ານາງ',
     'status_step_started':   'ເລີ່ມເຮັດວຽກ',
@@ -1211,6 +1225,7 @@ final _strings = <AppLang, Map<String, String>>{
     'selfie_hint':            'Please take a clear photo of your face',
     'must_take_selfie':       'Please take a selfie to verify your identity',
     'use_current_location':   'Use current location',
+    'pick_location_on_map':   'Enter location manually on map',
     'location_hint':          'Allow the app to access your GPS location',
     'location_acquired':      'Location acquired',
     'must_enable_location':   'Please enable GPS location access',
@@ -1364,6 +1379,8 @@ final _strings = <AppLang, Map<String, String>>{
     'currently_offline':  'You are currently offline.',
     'go_online_to_receive': 'Please go online to start receiving jobs.',
     'go_online':           'Go Online',
+    'provider_currently_offline': 'This technician is currently offline',
+    'provider_offline_choose_another': 'This technician is currently offline. Please choose another provider or try again later.',
 
     // ── Localization audit additions (Home / Quick Booking / Booking History) ──
     'city_picker_title':   'Select Service Area',
@@ -1536,9 +1553,9 @@ final _strings = <AppLang, Map<String, String>>{
     'bill_pending_provider': 'Pending Provider',
     'searching_title':       'Finding a technician...',
     'searching_continue_prefix': 'Still searching for',
-    'info_chip_online_techs': '12+ Techs Online',
-    'info_chip_avg_rating':  '4.8★ Average',
-    'info_chip_fast_eta':    '< 30 min',
+    'info_chip_online_techs': 'Checking nearby technicians',
+    'info_chip_avg_rating':  'Verified technicians',
+    'info_chip_fast_eta':    'Fast response',
     'cancel_search':         'Cancel Search',
     'sent_request_prefix':   'Sent request to',
     'first_come_first_served': 'First to accept wins',
@@ -1558,6 +1575,7 @@ final _strings = <AppLang, Map<String, String>>{
     'cancel_booking_btn':    'Cancel booking',
     'provider_coming_suffix': 'is on the way to you',
     'eta_estimate_prefix':   'Estimated arrival ≈',
+    'eta_on_the_way':        'The technician is on the way',
     'status_provider_going_suffix': 'is on the way',
     'status_step_arrived':   'Arrived at your door',
     'status_step_started':   'Started working',
@@ -2075,6 +2093,7 @@ final _strings = <AppLang, Map<String, String>>{
     'selfie_hint':            'กรุณาถ่ายรูปใบหน้าของท่านให้ชัดเจน',
     'must_take_selfie':       'กรุณาถ่ายรูปเซลฟี่ยืนยันตัวตน',
     'use_current_location':   'ใช้ตำแหน่งปัจจุบัน',
+    'pick_location_on_map':   'เลือกตำแหน่งบนแผนที่ด้วยตนเอง',
     'location_hint':          'อนุญาตให้แอปเข้าถึงตำแหน่ง GPS ของท่าน',
     'location_acquired':      'ได้รับตำแหน่งแล้ว',
     'must_enable_location':   'กรุณาเปิดสิทธิ์เข้าถึงตำแหน่ง GPS',
@@ -2216,6 +2235,8 @@ final _strings = <AppLang, Map<String, String>>{
     'status_change_failed':   'ไม่สามารถเปลี่ยนสถานะได้ กรุณาลองใหม่',
     'currently_offline':  'คุณกำลังออฟไลน์',
     'go_online_to_receive': 'กรุณาออนไลน์เพื่อเริ่มรับงาน',
+    'provider_currently_offline': 'ช่างคนนี้ออฟไลน์อยู่ในขณะนี้',
+    'provider_offline_choose_another': 'ช่างคนนี้ออฟไลน์อยู่ในขณะนี้ กรุณาเลือกช่างคนอื่น หรือลองใหม่ภายหลัง',
     'go_online':           'ออนไลน์',
 
     // ── Localization audit additions (Home / Quick Booking / Booking History) ──
@@ -2389,9 +2410,9 @@ final _strings = <AppLang, Map<String, String>>{
     'bill_pending_provider': 'รอช่าง',
     'searching_title':       'กำลังหาช่าง...',
     'searching_continue_prefix': 'ยังค้นหาต่ออีก',
-    'info_chip_online_techs': '12+ ช่าง Online',
-    'info_chip_avg_rating':  '4.8★ เฉลี่ย',
-    'info_chip_fast_eta':    '< 30 นาที',
+    'info_chip_online_techs': 'กำลังตรวจสอบช่างใกล้เคียง',
+    'info_chip_avg_rating':  'ช่างผ่านการตรวจสอบ',
+    'info_chip_fast_eta':    'ตอบกลับไว',
     'cancel_search':         'ยกเลิกการค้นหา',
     'sent_request_prefix':   'ส่งคำขอไป',
     'first_come_first_served': 'ใครรับก่อนได้ก่อน',
@@ -2411,6 +2432,7 @@ final _strings = <AppLang, Map<String, String>>{
     'cancel_booking_btn':    'ยกเลิกการจอง',
     'provider_coming_suffix': 'กำลังไปหาคุณ',
     'eta_estimate_prefix':   'คาดว่าจะถึง ≈',
+    'eta_on_the_way':        'ช่างกำลังเดินทางมาหาคุณ',
     'status_provider_going_suffix': 'กำลังเดินทาง',
     'status_step_arrived':   'ถึงหน้าบ้านแล้ว',
     'status_step_started':   'เริ่มทำงาน',
@@ -2928,6 +2950,7 @@ final _strings = <AppLang, Map<String, String>>{
     'selfie_hint':            '请清晰拍摄您的面部照片',
     'must_take_selfie':       '请拍摄自拍照以验证身份',
     'use_current_location':   '使用当前位置',
+    'pick_location_on_map':   '在地图上手动选择位置',
     'location_hint':          '允许应用访问您的GPS位置',
     'location_acquired':      '已获取位置',
     'must_enable_location':   '请开启GPS定位权限',
@@ -3069,6 +3092,8 @@ final _strings = <AppLang, Map<String, String>>{
     'status_change_failed':   '无法更改状态，请重试',
     'currently_offline':  '您当前处于离线状态',
     'go_online_to_receive': '请上线以开始接单',
+    'provider_currently_offline': '该技师当前离线',
+    'provider_offline_choose_another': '该技师当前离线，请选择其他技师或稍后再试',
     'go_online':           '上线',
 
     // ── Localization audit additions (Home / Quick Booking / Booking History) ──
@@ -3242,9 +3267,9 @@ final _strings = <AppLang, Map<String, String>>{
     'bill_pending_provider': '待分配技师',
     'searching_title':       '正在寻找技师...',
     'searching_continue_prefix': '继续搜索',
-    'info_chip_online_techs': '12+ 技师在线',
-    'info_chip_avg_rating':  '4.8★ 平均分',
-    'info_chip_fast_eta':    '< 30 分钟',
+    'info_chip_online_techs': '正在查找附近技师',
+    'info_chip_avg_rating':  '已认证技师',
+    'info_chip_fast_eta':    '响应迅速',
     'cancel_search':         '取消搜索',
     'sent_request_prefix':   '已发送请求给',
     'first_come_first_served': '先接单者优先',
@@ -3264,6 +3289,7 @@ final _strings = <AppLang, Map<String, String>>{
     'cancel_booking_btn':    '取消预订',
     'provider_coming_suffix': '正在赶往您这里',
     'eta_estimate_prefix':   '预计到达 ≈',
+    'eta_on_the_way':        '技师正在赶来',
     'status_provider_going_suffix': '正在前往',
     'status_step_arrived':   '已到达门口',
     'status_step_started':   '开始工作',
