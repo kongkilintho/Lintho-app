@@ -18,7 +18,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_colors.dart';
+import 'app_navigation_state.dart';
+import 'provider_details_screen.dart';
 import 'provider_model.dart';
 import 'fcm_service.dart';
 import 'widgets/pulsing_fade.dart';
@@ -404,11 +407,24 @@ class _ReviewScreenState extends State<ReviewScreen>
                 const SizedBox(height: 12),
 
                 // ── Book Again ──────────────────────────
+                // 🔒 [PHASE0 P0-1] ເຄີຍ Navigator.popUntil(isFirst) ອย่างດຽວ —
+                // ຄືກັນເປ໊ະກັບ View History ຂ້າງລຸ່ມ, ພາຜູ້ໃຊ້ໄປ Home ໂດຍບໍ່ໄດ້
+                // ຈອງຫຍັງເລີຍ. ຕອນນີ້ pop ກັບຄືນ MainShell ແລ້ວເປີດ
+                // ProviderDetailsScreen ຂອງ provider ຄົນເກົ່າ — ໜ້ານັ້ນອ່ານ
+                // isOnline ສົດຈາກ Firestore ຜ່ານ providerDetailProvider (ບໍ່ແມ່ນ
+                // ຄ່າເກົ່າຕອນ booking ຄັ້ງກ່ອນ) ແລະ ດຽວນີ້ block ການຈອງຖ້າ
+                // provider offline (ເບິ່ງ PHASE0 P1 fix ໃນ provider_details_screen.dart).
                 SizedBox(
                   width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.popUntil(
-                        context, (r) => r.isFirst),
+                  child: Consumer(builder: (context, ref, _) => OutlinedButton(
+                    onPressed: () {
+                      ref.read(mainShellTabIndexProvider.notifier).state = 0;
+                      Navigator.of(context).popUntil((r) => r.isFirst);
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => ProviderDetailsScreen(
+                            providerId: widget.provider.uid),
+                      ));
+                    },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: C.primary,
                       side:    const BorderSide(color: C.primary),
@@ -421,22 +437,23 @@ class _ReviewScreenState extends State<ReviewScreen>
                     child: const Text('📱 ຈອງອີກຄັ້ງ', style: TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w700,
                     )),
-                  ),
+                  )),
                 ),
 
                 const SizedBox(height: 12),
 
                 // ── View History ────────────────────────
-                Center(child: TextButton(
-                  onPressed: () => Navigator.popUntil(
-                      context, (r) => r.isFirst),
+                // 🔒 [PHASE0 P0-1] ຕອນນີ້ໄປ BookingScreen ແທ້ (MainShell tab 1)
+                // ຜ່ານ goToBookingTab() — ບໍ່ແມ່ນ Home ອີກຕໍ່ໄປ.
+                Center(child: Consumer(builder: (context, ref, _) => TextButton(
+                  onPressed: () => goToBookingTab(context, ref),
                   // ✅ [FIX-2] ແທນ tr('view_history')
                   child: const Text('ເບິ່ງປະຫວັດການຈອງ',
                       style: TextStyle(
                         fontSize: 14, color: C.muted,
                         fontWeight: FontWeight.w600,
                       )),
-                )),
+                ))),
 
                 const SizedBox(height: 20),
               ],
