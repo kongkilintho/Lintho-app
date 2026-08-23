@@ -520,7 +520,10 @@ class _MatchScreenState extends State<MatchScreen>
         'kycStatus':      'none',
         'completionRate': 0,
         'experienceYears':0,
-        'estimatedMinutes': data['estimatedMinutes'] ?? 20,
+        // 🔒 [PHASE0 P1] estimatedMinutes ຖືກລຶບອອກ — ProviderModel ບໍ່ມີຟິลด์
+        // ນີ້ (fromMap() ບໍ່ໄດ້ອ່ານມັນ), ດັ່ງນັ້ນຄ່ານີ້ຖືກຖິ້ມຢູ່ແລ້ວໂດຍງຽບ.
+        // ໜ້າ UI ທີ່ເຄີຍອີງໃສ່ຄ່ານີ້ (ETA display) ຕອນນີ້ໃຊ້ຂໍ້ຄວາມທີ່ບໍ່ອ້າງ
+        // ຕົວເລກແທນ — ເບິ່ງ eta_on_the_way.
       },
     );
 
@@ -1265,11 +1268,14 @@ class _ConfirmedViewState extends State<_ConfirmedView>
           ),
           child: Column(children: [
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const Icon(Icons.access_time_rounded,
+              const Icon(Icons.directions_car_filled_outlined,
                   color: C.yellow, size: 20),
               const SizedBox(width: 8),
+              // 🔒 [PHASE0 P1] ເຄີຍສະແດງ "ຄາດວ່າຈະຮອດ ≈ 20 ນາທີ" ຄົງທີ່ —
+              // ບໍ່ແມ່ນຄ່າຄິດໄລ່ແທ້ (ບໍ່ມີແຫຼ່ງຂໍ້ມູນໄລຍະທາງ/ຄວາມໄວແທ້ໆ). ໃຊ້
+              // ຂໍ້ຄວາມທີ່ບໍ່ອ້າງຕົວເລກແທນ.
               Text(
-                '${tr('eta_estimate_prefix')} 20 ${tr('minutes_unit')}',
+                tr('eta_on_the_way'),
                 style: const TextStyle(
                   color: C.yellow, fontSize: 16, fontWeight: FontWeight.w800,
                 ),
@@ -1747,7 +1753,10 @@ class _ProviderCard extends StatelessWidget {
       const SizedBox(height: 12),
       Row(children: [
         _StatCol(serviceIcon, serviceName, tr('services')),
-        _StatCol(Icons.access_time_rounded, '~20 ${tr('minutes_unit')}', 'ETA'),
+        // 🔒 [PHASE0 P1] ເຄີຍ "~20 ນາທີ" ຄົງທີ່ — ບໍ່ແມ່ນຄ່າຄິດໄລ່ແທ້, ນຳໃຊ້
+        // key ດຽວກັນກັບ step-1 status label ຂ້າງລຸ່ມ (ຄຳສັ້ນ, ບໍ່ອ້າງຕົວເລກ)
+        _StatCol(Icons.directions_car_filled_outlined,
+            tr('status_provider_going_suffix'), 'ETA'),
         _StatCol(Icons.near_me_outlined, tr('near_you'), tr('distance_label')),
       ]),
       if (address.isNotEmpty) ...[
