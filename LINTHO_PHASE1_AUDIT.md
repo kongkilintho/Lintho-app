@@ -216,3 +216,62 @@ components counted separately, +341 lines, 0 deletions — pure addition).
 
 No code beyond the 5 pilot screens and the new shared components has been
 changed.
+
+---
+
+## 10. Addendum — Typography/Spacing/Radius follow-up sweep
+
+Per explicit user request after this audit was first written, a dedicated
+follow-up pass converged the 5 pilot screens further on §5's flagged gap.
+Three commits, in order:
+
+1. **Radius** (`cc6a4a2`) — all ~151 `BorderRadius.circular(N)`/
+   `Radius.circular(N)` literals across the 5 screens snapped to the nearest
+   of the 3 official values (chip=8/card=16/sheet=24) by distance. **100%
+   converged** — `grep -c 'BorderRadius\.circular([0-9]'` across all 5 files
+   now returns 0.
+2. **Spacing** (`6a44033`) — `SizedBox(height/width:)`, `EdgeInsets.all()`,
+   and `EdgeInsets.symmetric(horizontal:/vertical:)` literals converted to
+   `AppSpacing.*` **only where the literal exactly equals a token value**
+   (4/8/12/16/24/32/48) — a zero-visual-change, lossless substitution. Values
+   that don't land on the grid (10, 20, 6, 14 — themselves common, e.g. "10"
+   appeared 60 times) were deliberately left as literals rather than forced
+   onto the nearest token, per the Master Prompt's own caution against
+   mechanically replacing spacing "blindly."
+3. **Typography** (`9e5dff1`) — ~44 `AppTypography.*` references added,
+   covering the clearest, most-repeated muted/label/body patterns
+   (`AppTypography.<role>` directly where color already matched the role's
+   default, `.copyWith(...)` where a color/weight override was needed,
+   including dynamic/conditional colors). `match_screen.dart` was
+   deliberately exempted in full — its TextStyles are almost entirely
+   one-off, colored white/yellow for its dark-gradient UI with no
+   consolidation value.
+
+**Final measured state** (`grep -c` per file, post-sweep):
+
+| File | AppRadius refs | AppSpacing refs | AppTypography refs | Raw `TextStyle(` remaining |
+|---|---|---|---|---|
+| quick_booking_screen.dart | 10 | 22 | 5 | 12 |
+| booking_detail_screen.dart | 7 | 17 | 5 | 17 |
+| tracking_screen.dart | 20 | 32 | 2 | 20 |
+| match_screen.dart | 23 | 61 | 0 (deliberate) | 46 |
+| booking_form_screen.dart | 94 | 88 | 32 | 73 |
+
+**Honest bottom line:** Radius is fully converged. Spacing is converged for
+every literal that could be losslessly mapped (a large majority of the
+grid-aligned instances) — the remaining literals are off-grid values that
+would need a real, reviewed layout decision to force onto the scale, not a
+mechanical refactor. Typography made real, verified progress (~44 sites) on
+the clearest wins, but a large tail of raw `TextStyle(` calls remains,
+concentrated in `booking_form_screen.dart` (73 remaining, the largest file)
+and in category-specific semantic-accent-colored text (e.g.
+`categoryAddonValueText`, `categoryAcAccent`, `noteWarningText`) that isn't
+a design-system violation so much as intentional per-category styling. A
+full typography convergence — every remaining `TextStyle(` literal
+individually reviewed and mapped — is a larger, separate effort; doing it
+safely by hand across ~170 more remaining call sites (vs. this sweep's ~45)
+was judged lower value than flagging it honestly here.
+
+`flutter analyze` (full project, post-sweep): 0 errors, 0 warnings, 70
+info-level issues (unchanged). `flutter test` (full project): same 12
+pre-existing failures, zero regressions across all three commits.
