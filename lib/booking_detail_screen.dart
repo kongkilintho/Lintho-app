@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' show NumberFormat;
 import 'Booking.dart' show serviceIconForCategory;
 import 'app_colors.dart';
-import 'theme/app_theme.dart' show AppRadius, AppSpacing;
+import 'theme/app_theme.dart' show AppRadius, AppSpacing, AppTypography;
 import 'app_locale.dart';
 import 'booking_display_helpers.dart';
 import 'booking_repository.dart';
@@ -135,7 +135,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                 const Icon(Icons.wifi_off_outlined, size: 48, color: C.muted),
                 const SizedBox(height: AppSpacing.md),
                 Text(tr('load_failed'),
-                    style: const TextStyle(color: C.muted, fontSize: 15)),
+                    style: AppTypography.body.copyWith(color: C.muted)),
                 const SizedBox(height: AppSpacing.lg),
                 // 🔒 [PHASE1] navy foreground/border ຄືກັນເປ໊ະກັບ
                 // OutlinedButtonTheme default ຢູ່ແລ້ວ — override ນີ້ບໍ່ຈຳເປັນ
@@ -150,7 +150,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           }
           if (!snapshot.hasData || !snapshot.data!.exists) {
             return Center(child: Text(tr('no_booking'),
-                style: const TextStyle(color: C.muted, fontSize: 15)));
+                style: AppTypography.body.copyWith(color: C.muted)));
           }
 
           final doc    = snapshot.data!;
@@ -227,7 +227,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                         size: 15, color: C.muted),
                     const SizedBox(width: 6),
                     Expanded(child: Text(b['address'] as String,
-                        style: const TextStyle(fontSize: 13, color: C.muted))),
+                        style: AppTypography.caption)),
                   ]),
                 ],
               ])),
@@ -322,7 +322,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                     const Icon(Icons.info_outline_rounded, size: 16, color: C.red),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(child: Text(b['cancelReason'] as String,
-                        style: const TextStyle(fontSize: 13, color: C.muted))),
+                        style: AppTypography.caption)),
                   ]),
                   // 🔒 [AUDIT CUST-7 / 2026-08-02 — Low, fresh re-audit]
                   // cancelFeeAmount was computed/persisted by

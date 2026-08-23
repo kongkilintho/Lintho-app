@@ -7,7 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'Booking.dart' show serviceIconForCategory;
 import 'app_colors.dart';
-import 'theme/app_theme.dart' show AppRadius, AppSpacing;
+import 'theme/app_theme.dart' show AppRadius, AppSpacing, AppTypography;
 import 'app_locale.dart';
 import 'app_navigation_state.dart';
 import 'map_picker_screen.dart';
@@ -141,7 +141,7 @@ class _StepService extends ConsumerWidget {
                             color: C.text)),
                     const SizedBox(height: 2),
                     Text(pkgDesc,
-                        style: const TextStyle(fontSize: 11, color: C.muted)),
+                        style: AppTypography.caption),
                   ],
                 )),
                 Text(formatKip(pkg['price'] as double),
@@ -374,7 +374,7 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                       child: Text(_address!,
-                          style: const TextStyle(fontSize: 13, color: C.text))),
+                          style: AppTypography.label.copyWith(fontWeight: FontWeight.w400))),
                 ]),
               ),
               const SizedBox(height: 10),
@@ -384,7 +384,7 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
                   onChanged: (v) => setState(() => _saveDefault = v ?? false),
                 ),
                 Text(tr('save_as_default_address'),
-                    style: const TextStyle(fontSize: 13, color: C.text)),
+                    style: AppTypography.label.copyWith(fontWeight: FontWeight.w400)),
                 if (_saveDefault) ...[
                   const SizedBox(width: 10),
                   Expanded(
@@ -693,7 +693,7 @@ class _SummaryCard extends StatelessWidget {
         const Divider(height: 24),
         if (discount != null && discount! > 0) ...[
           Row(children: [
-            Text(tr('price'), style: const TextStyle(fontSize: 13, color: C.muted)),
+            Text(tr('price'), style: AppTypography.caption),
             const Spacer(),
             Text(formatKip(price),
                 style: const TextStyle(
@@ -731,6 +731,6 @@ class _Row extends StatelessWidget {
         const SizedBox(width: AppSpacing.sm),
         Expanded(
             child: Text(text,
-                style: const TextStyle(fontSize: 13, color: C.text))),
+                style: AppTypography.label.copyWith(fontWeight: FontWeight.w400))),
       ]);
 }

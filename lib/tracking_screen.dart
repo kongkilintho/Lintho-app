@@ -21,7 +21,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'app_colors.dart';
-import 'theme/app_theme.dart' show AppRadius, AppSpacing;
+import 'theme/app_theme.dart' show AppRadius, AppSpacing, AppTypography;
 import 'app_locale.dart';
 import 'provider_model.dart';
 import 'review_screen.dart';
@@ -618,7 +618,7 @@ class _TrackingScreenState extends State<TrackingScreen>
           const SizedBox(height: 6),
           Text('₭${amount.toStringAsFixed(0)}'
               '${_additionalChargesNote != null && _additionalChargesNote!.isNotEmpty ? ' · ${_additionalChargesNote!}' : ''}',
-              style: const TextStyle(fontSize: 12, color: C.muted)),
+              style: AppTypography.caption),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -1114,7 +1114,7 @@ class _ProviderInfoRow extends StatelessWidget {
           // 🔒 [FOLLOWUP-J3] ໃຊ້ Material icon (serviceIcon) ແທນ emoji ດິບ —
           // ຄືກັນກັບ home_tab.dart/jobs_tab.dart/job_workflow_Screen.dart/
           // match_screen.dart ທີ່ຖືກແກ້ໄປແລ້ວກ່ອນໜ້ານີ້.
-          const Text('  ·  ', style: TextStyle(fontSize: 11, color: C.muted)),
+          const Text('  ·  ', style: AppTypography.caption),
           Icon(serviceIcon, size: 12, color: C.muted),
           const SizedBox(width: 3),
           Text(serviceName,

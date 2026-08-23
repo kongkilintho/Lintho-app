@@ -34,7 +34,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'app_colors.dart';
-import 'theme/app_theme.dart' show AppRadius, AppSpacing;
+import 'theme/app_theme.dart' show AppRadius, AppSpacing, AppTypography;
 import 'app_locale.dart';
 import 'app_navigation_state.dart';
 import 'booking_provider.dart';
@@ -1381,7 +1381,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             maxLength: 300, // ✅ [FIX ME-11]
             decoration: InputDecoration(
               hintText:  tr('hint_maid_notes'),
-              hintStyle: const TextStyle(color: C.muted, fontSize: 13),
+              hintStyle: AppTypography.caption,
               counterText: '',
               filled: true, fillColor: C.white,
               border: OutlineInputBorder(
@@ -1399,7 +1399,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           const SizedBox(height: 10),
           Text(
             tr('cleaning_price_disclaimer'),
-            style: const TextStyle(fontSize: 11, color: C.muted),
+            style: AppTypography.caption,
           ),
         ],
       ],
@@ -1496,7 +1496,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
               Text(
                 '${tr("pest_sqm_dialog_hint")} '
                 '${AppPricing.fmt(AppPricing.pestSqmMin)}–${AppPricing.fmt(AppPricing.pestSqmMax)} ${tr("kip_currency")}/${tr("unit_sqm")}',
-                style: const TextStyle(fontSize: 12, color: C.muted),
+                style: AppTypography.caption,
               ),
               const SizedBox(height: AppSpacing.lg),
               TextField(
@@ -1703,12 +1703,10 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(tr('current_address_gps'),
-                    style: const TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.w600, color: C.muted)),
+                    style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
                 Text(o.address, maxLines: 2, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700, color: C.textPrimary)),
+                    style: AppTypography.label.copyWith(fontWeight: FontWeight.w700)),
               ],
             )),
             TextButton(
@@ -1748,7 +1746,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         maxLength: 100, // ✅ [FIX ME-11]
         decoration: InputDecoration(
           hintText:  tr('hint_landmark'),
-          hintStyle: const TextStyle(color: C.muted, fontSize: 13),
+          hintStyle: AppTypography.caption,
           prefixIcon: const Icon(Icons.signpost_outlined, color: C.muted, size: 20),
           counterText: '',
           filled: true, fillColor: C.white,
@@ -1783,7 +1781,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         maxLength: 200, // ✅ [FIX ME-11]
         decoration: InputDecoration(
           hintText:  tr('hint_manual_address'),
-          hintStyle: const TextStyle(color: C.muted, fontSize: 13),
+          hintStyle: AppTypography.caption,
           counterText: '',
           filled: true, fillColor: C.white,
           border: OutlineInputBorder(
@@ -1812,7 +1810,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         maxLength: 300, // ✅ [FIX ME-11]
         decoration: InputDecoration(
           hintText:  tr('hint_notes_to_tech'),
-          hintStyle: const TextStyle(color: C.muted, fontSize: 13),
+          hintStyle: AppTypography.caption,
           counterText: '',
           filled: true, fillColor: C.white,
           border: OutlineInputBorder(
@@ -1862,7 +1860,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             ),
             const SizedBox(width: 10),
             Expanded(child: Text(tr('syncing_pricing_note'),
-                style: const TextStyle(fontSize: 12, color: C.muted))),
+                style: AppTypography.caption)),
           ]),
         ),
         const SizedBox(height: 14),
@@ -1926,7 +1924,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             const SizedBox(width: AppSpacing.sm),
             Expanded(child: Text(
               tr('refill_price_notice'),
-              style: const TextStyle(fontSize: 11, color: C.noteWarningText),
+              style: AppTypography.caption.copyWith(color: C.noteWarningText),
             )),
           ]),
         ),
@@ -1999,13 +1997,13 @@ class _AcCartTile extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${acTypeLabel(item.type)} · ${btuLabel(item.btuSize)}',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.textPrimary)),
+              style: AppTypography.label.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
           Text(
             item.type == AcServiceType.refill
                 ? '${AppPricing.fmt(unit)} ${tr("kip_currency")}/${tr("unit_device")} (${tr("estimate_label")})'
                 : '${AppPricing.fmt(unit)} ${tr("kip_currency")}/${tr("unit_device")}',
-            style: const TextStyle(fontSize: 11, color: C.muted),
+            style: AppTypography.caption,
           ),
           const SizedBox(height: 6),
           _QtyRow(qty: item.qty, minQty: 1, maxQty: 20, label: tr('unit_device'),
@@ -2419,14 +2417,12 @@ class _ReviewRow extends StatelessWidget {
       Expanded(child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w600, color: C.muted)),
+          Text(label, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 2),
-          Text(value, style: const TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w700, color: C.textPrimary)),
+          Text(value, style: AppTypography.label.copyWith(fontWeight: FontWeight.w700)),
           if (sub != null) ...[
             const SizedBox(height: 2),
-            Text(sub!, style: const TextStyle(fontSize: 11, color: C.muted)),
+            Text(sub!, style: AppTypography.caption),
           ],
         ],
       )),
@@ -2596,7 +2592,7 @@ class _PaymentCard extends StatelessWidget {
               Text(title, style: TextStyle(
                   fontSize: 14, fontWeight: FontWeight.w800,
                   color: selected ? C.primary : C.textPrimary)),
-              Text(sub, style: const TextStyle(fontSize: 12, color: C.muted)),
+              Text(sub, style: AppTypography.caption),
             ],
           )),
           Icon(selected ? Icons.radio_button_checked : Icons.radio_button_off,
@@ -2688,9 +2684,9 @@ class _BcelQrBox extends ConsumerWidget {
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(tr('bcel_qr_scan_hint'),
-            style: const TextStyle(fontSize: 12, color: C.muted)),
+            style: AppTypography.caption),
         Text(tr('bcel_qr_generate_note'),
-            style: const TextStyle(fontSize: 11, color: C.muted)),
+            style: AppTypography.caption),
         const SizedBox(height: AppSpacing.md),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -2727,7 +2723,7 @@ class _BcelAccountRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: C.muted)),
+          Text(label, style: AppTypography.caption),
           Flexible(child: InkWell(
             onTap: !copyable ? null : () {
               Clipboard.setData(ClipboardData(text: value));
@@ -2989,12 +2985,10 @@ class _AcTypeCard extends StatelessWidget {
             Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(tr(d['title'] as String), style: TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w800,
-                    color: selected ? C.primary : C.textPrimary)),
+                Text(tr(d['title'] as String), style: AppTypography.label.copyWith(fontWeight: FontWeight.w800, color: selected ? C.primary : C.textPrimary)),
                 const SizedBox(height: 3),
                 Text(tr(d['desc'] as String),
-                    style: const TextStyle(fontSize: 11, color: C.muted)),
+                    style: AppTypography.caption),
                 const SizedBox(height: 5),
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -3163,11 +3157,9 @@ class _ModeCard extends StatelessWidget {
               color: selected ? C.primary : C.border, width: selected ? 2 : 1),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w800,
-              color: selected ? C.primary : C.textPrimary)),
+          Text(title, style: AppTypography.label.copyWith(fontWeight: FontWeight.w800, color: selected ? C.primary : C.textPrimary)),
           const SizedBox(height: AppSpacing.xs),
-          Text(sub, style: const TextStyle(fontSize: 11, color: C.muted)),
+          Text(sub, style: AppTypography.caption),
         ]),
       ),
     ),
@@ -3209,7 +3201,7 @@ class _RoomTile extends StatelessWidget {
             Text(title, style: TextStyle(
                 fontSize: 14, fontWeight: FontWeight.w700,
                 color: selected ? C.primary : C.textPrimary)),
-            Text(sub, style: const TextStyle(fontSize: 11, color: C.muted)),
+            Text(sub, style: AppTypography.caption),
           ])),
           Text('${AppPricing.fmt(minP)}–${AppPricing.fmt(maxP)} ${tr("kip_currency")}',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
@@ -3334,8 +3326,7 @@ class _AddonCheckRow extends StatelessWidget {
           const SizedBox(width: 10),
           Icon(data['icon'] as IconData, color: C.textPrimary, size: 18),
           const SizedBox(width: 10),
-          Expanded(child: Text(tr(data['name'] as String), style: const TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w700, color: C.textPrimary))),
+          Expanded(child: Text(tr(data['name'] as String), style: AppTypography.label.copyWith(fontWeight: FontWeight.w700))),
           Text('+${AppPricing.fmt(data['price'] as int)} ${tr("kip_currency")}', style: TextStyle(
               fontSize: 12, fontWeight: FontWeight.w700,
               color: checked ? C.primary : C.muted)),
@@ -3371,12 +3362,11 @@ class _SpecialistRow extends StatelessWidget {
         Icon(data['icon'] as IconData, color: C.textPrimary, size: 20),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(tr(data['name'] as String), style: const TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w700, color: C.textPrimary)),
+          Text(tr(data['name'] as String), style: AppTypography.label.copyWith(fontWeight: FontWeight.w700)),
           Text(
             '${AppPricing.fmt(data['min'] as int)}–'
                 '${AppPricing.fmt(data['max'] as int)} ${tr("kip_currency")} / ${tr(data['unit'] as String)}',
-            style: const TextStyle(fontSize: 11, color: C.muted),
+            style: AppTypography.caption,
           ),
           if (data['sub'] != null) ...[
             const SizedBox(height: 2),
@@ -3413,15 +3403,14 @@ class _PestRow extends StatelessWidget {
         const Text('🧴', style: TextStyle(fontSize: 20)),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(tr('specialist_pest_name'), style: const TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w700, color: C.textPrimary)),
+          Text(tr('specialist_pest_name'), style: AppTypography.label.copyWith(fontWeight: FontWeight.w700)),
           Text(
             selected
                 ? '${sqm.toStringAsFixed(0)} ${tr("unit_sqm")} / ${AppPricing.fmt(AppPricing.pestSqmMin)}–'
                   '${AppPricing.fmt(AppPricing.pestSqmMax)} ${tr("kip_currency")}'
                 : '${AppPricing.fmt(AppPricing.pestSqmMin)}–'
                   '${AppPricing.fmt(AppPricing.pestSqmMax)} ${tr("kip_currency")} / ${tr("unit_sqm")}',
-            style: const TextStyle(fontSize: 11, color: C.muted),
+            style: AppTypography.caption,
           ),
         ])),
         Row(mainAxisSize: MainAxisSize.min, children: [
@@ -3481,7 +3470,7 @@ class _QtyRow extends StatelessWidget {
           onTap: qty < maxQty ? () => onChanged(qty + 1) : null),
       if (!compact) ...[
         const SizedBox(width: AppSpacing.sm),
-        Text(label, style: const TextStyle(fontSize: 13, color: C.muted)),
+        Text(label, style: AppTypography.caption),
       ],
     ]),
   );
@@ -3823,7 +3812,7 @@ class _RefillInfoCard extends StatelessWidget {
           const SizedBox(width: 6),
           Expanded(child: Text(
             tr('refill_confirm_note'),
-            style: const TextStyle(fontSize: 11, color: C.noteWarningText),
+            style: AppTypography.caption.copyWith(color: C.noteWarningText),
           )),
         ]),
       ),
@@ -3903,7 +3892,7 @@ class _Label extends StatelessWidget {
       Text(text, style: const TextStyle(
           fontSize: 15, fontWeight: FontWeight.w800, color: C.textPrimary)),
       if (sub != null)
-        Text(sub!, style: const TextStyle(fontSize: 12, color: C.muted)),
+        Text(sub!, style: AppTypography.caption),
     ],
   );
 }
