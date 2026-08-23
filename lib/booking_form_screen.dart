@@ -34,6 +34,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'app_colors.dart';
+import 'theme/app_theme.dart' show AppRadius;
 import 'app_locale.dart';
 import 'app_navigation_state.dart';
 import 'booking_provider.dart';
@@ -380,6 +381,16 @@ String acTypeEmoji(AcServiceType t) => switch (t) {
   AcServiceType.deepFull => '🔧',
   AcServiceType.refill   => '🧪',
   AcServiceType.relocate => '🚚',
+};
+
+// 🔒 [PHASE1] acTypeEmoji() ຍັງຄົງໄວ້ (ບໍ່ໄດ້ໃຊ້ render ອີກຕໍ່ໄປ — ຄົງໄວ້ເຜື່ອ
+// ບ່ອນອື່ນອ້າງອີງ) — cart-item tile ດຽວນີ້ໃຊ້ acTypeIcon() ແທນ, ຄືກັນກັບ
+// _AcTypeCard/_QuickBookCard ຂ້າງເທິງທີ່ migrate ໄປແລ້ວ
+IconData acTypeIcon(AcServiceType t) => switch (t) {
+  AcServiceType.standard => Icons.ac_unit_rounded,
+  AcServiceType.deepFull => Icons.auto_awesome_outlined,
+  AcServiceType.refill   => Icons.science_outlined,
+  AcServiceType.relocate => Icons.local_shipping_outlined,
 };
 
 String acTypeLabel(AcServiceType t) => switch (t) {
@@ -1912,7 +1923,8 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             border: Border.all(color: C.orange.withValues(alpha: 0.3)),
           ),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('⚠️', style: TextStyle(fontSize: 14)),
+            // 🔒 [PHASE1] emoji → Icon
+            const Icon(Icons.warning_amber_rounded, size: 16, color: C.orange),
             const SizedBox(width: 8),
             Expanded(child: Text(
               tr('refill_price_notice'),
@@ -1984,7 +1996,8 @@ class _AcCartTile extends StatelessWidget {
         border: Border.all(color: C.border),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(acTypeEmoji(item.type), style: const TextStyle(fontSize: 20)),
+        // 🔒 [PHASE1] emoji → Icon
+        Icon(acTypeIcon(item.type), size: 20, color: C.primary),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${acTypeLabel(item.type)} · ${btuLabel(item.btuSize)}',
@@ -3616,20 +3629,22 @@ class _TravelFeeBox extends StatelessWidget {
     final hasFee = order.hasTravelFee;
     final dist   = order.distanceKm;
 
-    Color  bg, border;
-    String icon, text;
+    Color    bg, border;
+    IconData icon;
+    String   text;
 
     if (!hasGps) {
       bg     = C.primary.withValues(alpha: 0.05);
       border = C.primary.withValues(alpha: 0.2);
-      icon   = 'ℹ️';
+      // 🔒 [PHASE1] emoji → Icon
+      icon   = Icons.info_outline_rounded;
       text   = '${tr("travel_fee_unknown_note")} '
           '(${tr("travel_fee_free_note")} ≤${AppPricing.travelFreeKm.toInt()} ${tr("km_unit")}, '
           '+${AppPricing.fmt(AppPricing.travelFee)} ${tr("kip_currency")} ${tr("travel_fee_if_farther")})';
     } else if (hasFee) {
       bg     = C.orange.withValues(alpha: 0.08);
       border = C.orange.withValues(alpha: 0.3);
-      icon   = '🚗';
+      icon   = Icons.directions_car_outlined;
       text   = '${tr("distance_label")} ~${dist.toStringAsFixed(1)} ${tr("km_unit")} '
           '(${tr("travel_fee_exceeds_note")} ${AppPricing.travelFreeKm.toInt()} ${tr("km_unit")})\n'
           '+ ${tr("travel_fee_label")} ${AppPricing.fmt(AppPricing.travelFee)} ${tr("kip_currency")}';
@@ -3669,7 +3684,7 @@ class _TravelFeeBox extends StatelessWidget {
         border: Border.all(color: border),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(icon, style: const TextStyle(fontSize: 20)),
+        Icon(icon, size: 20, color: hasFee && hasGps ? C.orange : C.primary),
         const SizedBox(width: 10),
         Expanded(child: Text(text, style: TextStyle(
           fontSize: 12,
@@ -3965,9 +3980,24 @@ class _BottomBar extends StatelessWidget {
             Text(tr('bottom_bar_estimated_total'),
                 style: const TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
             const SizedBox(width: 4),
-            GestureDetector(
-              onTap: () => _showPriceDisclaimer(context),
-              child: const Icon(Icons.info_outline, size: 15, color: C.muted),
+            // 🔒 [PHASE1] ເຄີຍ GestureDetector ດິບ (ບໍ່ມີ ripple/Semantics,
+            // hit area ~15px) — ຝ່າຝືນ house rule "InkWell + Material ทุก tap
+            // target" ຂອງໄຟລ໌ນີ້ເອງ. ຫຸ້ມ Material+InkWell ພ້ອມ padding ໃຫ້ hit
+            // area ໃກ້ 44dp ໂດຍບໍ່ຂະຫຍາຍ icon ທີ່ເຫັນ
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.chip),
+                onTap: () => _showPriceDisclaimer(context),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Semantics(
+                    button: true,
+                    label: tr('price_disclaimer_title'),
+                    child: const Icon(Icons.info_outline, size: 15, color: C.muted),
+                  ),
+                ),
+              ),
             ),
             const Spacer(),
             Text('${AppPricing.fmt(estimatedTotal!)} ${tr("kip_currency")}',
@@ -3980,13 +4010,17 @@ class _BottomBar extends StatelessWidget {
         width: double.infinity, height: 52,
         child: ElevatedButton(
           onPressed: canNext && !isLoading ? onNext : null,
+          // 🔒 [PHASE1] elevation:4/shadowColor ຝ່າຝືນ convention ຂອງທັງແອັບ
+          // (ElevatedButtonTheme.elevation: 0 — flat) ທີ່ທຸກປຸ່ມອື່ນໃນໜ້ານີ້ເອງ
+          // (Add-to-list, coupon Apply, pest-sqm OK) ຄົງໄວ້. ບໍ່ປ່ຽນເປັນ
+          // AppButton ບ່ອນນີ້ໂດຍເຈດຕະນາ — _ButtonSkeleton (loading state) ເປັນ
+          // pattern ທີ່ດີກວ່າ CircularProgressIndicator ຂອງ AppButton ຢູ່ແລ້ວ,
+          // ພຽງແຕ່ລຶບ elevation override ອອກໃຫ້ກົງກັບ theme flat convention
           style: ElevatedButton.styleFrom(
             backgroundColor: C.primary,
             foregroundColor: Colors.white,
             disabledBackgroundColor: C.border,
             disabledForegroundColor: C.muted,
-            elevation: 4,
-            shadowColor: C.primary.withValues(alpha: 0.4),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14)),
           ),
