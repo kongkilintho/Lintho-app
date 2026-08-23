@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' show NumberFormat;
 import 'Booking.dart' show serviceIconForCategory;
 import 'app_colors.dart';
+import 'theme/app_theme.dart' show AppRadius;
 import 'app_locale.dart';
 import 'booking_display_helpers.dart';
 import 'booking_repository.dart';
@@ -44,7 +45,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
+            borderRadius: BorderRadius.circular(AppRadius.card)),
         title: Text(tr('cancel_booking_title'), style: const TextStyle(
             fontWeight: FontWeight.w800, color: C.text)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -58,7 +59,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
             decoration: InputDecoration(
               hintText: tr('cancel_reason_hint'),
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(AppRadius.chip)),
             ),
           ),
         ]),
@@ -172,7 +173,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                         horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: style.bg,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(AppRadius.sheet),
                     ),
                     child: Text(bookingStatusLabel(status), style: TextStyle(
                         fontSize: 12, fontWeight: FontWeight.bold,
@@ -191,7 +192,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                     width: 52, height: 52,
                     decoration: BoxDecoration(
                       color: C.bg,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(AppRadius.card),
                     ),
                     // ✅ [FIX H11] Icon ຈາກ category ແທນ raw emoji ທີ່ເກັບໄວ້ໃນ doc
                     child: Center(child: Icon(
@@ -240,7 +241,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                   Expanded(child: Material(
                     color: Colors.transparent,
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(AppRadius.card),
                       onTap: () => Navigator.push(context, MaterialPageRoute(
                           builder: (_) => ProviderDetailsScreen(
                               providerId: b['providerId'] as String))),
@@ -249,7 +250,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                           width: 48, height: 48,
                           decoration: BoxDecoration(
                             color: C.gold.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(AppRadius.card),
                             border: Border.all(color: C.gold.withValues(alpha: 0.3)),
                           ),
                           child: Center(child: Text(
@@ -381,7 +382,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                       side: const BorderSide(color: C.red),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(AppRadius.card)),
                     ),
                   ),
                 ),

@@ -21,6 +21,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'app_colors.dart';
+import 'theme/app_theme.dart' show AppRadius;
 import 'app_locale.dart';
 import 'provider_model.dart';
 import 'review_screen.dart';
@@ -425,7 +426,7 @@ class _TrackingScreenState extends State<TrackingScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sheet)),
         title: Text(tr('cancel_booking_question')),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Text(tr('cancel_confirm_short')),
@@ -444,7 +445,7 @@ class _TrackingScreenState extends State<TrackingScreen>
               hintText: tr('cancel_reason_hint'),
               filled:   true,
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
                   borderSide: BorderSide.none),
             ),
           ),
@@ -458,7 +459,7 @@ class _TrackingScreenState extends State<TrackingScreen>
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: C.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.chip)),
             ),
             child: Text(tr('cancel'), style: const TextStyle(color: Colors.white)),
           ),
@@ -558,12 +559,12 @@ class _TrackingScreenState extends State<TrackingScreen>
               color: Colors.transparent,
               child: InkWell(
                 onTap:        _centerMap,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppRadius.card),
                 child: Container(
                   width: 44, height: 44,
                   decoration: BoxDecoration(
                     color:        Colors.white,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(AppRadius.card),
                     boxShadow: [BoxShadow(
                       color:      Colors.black.withValues(alpha: 0.12),
                       blurRadius: 8,
@@ -589,7 +590,7 @@ class _TrackingScreenState extends State<TrackingScreen>
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color:        Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         // ✅ [Brand color audit 2026-07-27 v2] ຄ່າໃຊ້ຈ່າຍເພີ່ມ = Warning ໂດຍ
         // ຄວາມໝາຍ, ໃຊ້ C.orange (Warning token) ແທນ hex ດິບ
         border:       Border.all(color: C.orange, width: 1.5),
@@ -671,7 +672,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                     horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color:        C.primary,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(AppRadius.chip),
                   boxShadow: [BoxShadow(
                     color:      C.primary.withValues(alpha: 0.4),
                     blurRadius: 6,
@@ -726,7 +727,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                   horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color:        C.green,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadius.chip),
               ),
               child: Text(
                 tr('you_marker'),
@@ -802,7 +803,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                 horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color:        Colors.white,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.card),
               boxShadow: [BoxShadow(
                 color:      Colors.black.withValues(alpha: 0.1),
                 blurRadius: 8,
@@ -882,8 +883,7 @@ class _TrackingScreenState extends State<TrackingScreen>
   Widget _buildBottomSheet() => Container(
     decoration: BoxDecoration(
       color:        Colors.white,
-      borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(24)),
+      borderRadius: AppRadius.sheetTop,
       boxShadow: [BoxShadow(
         color:      Colors.black.withValues(alpha: 0.1),
         blurRadius: 20,
@@ -899,7 +899,7 @@ class _TrackingScreenState extends State<TrackingScreen>
           width: 40, height: 4,
           decoration: BoxDecoration(
             color:        C.border,
-            borderRadius: BorderRadius.circular(2),
+            borderRadius: BorderRadius.circular(AppRadius.chip),
           ),
         )),
         const SizedBox(height: 16),
@@ -934,7 +934,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: C.gold.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(AppRadius.card),
                     border: Border.all(color: C.gold.withValues(alpha: 0.3)),
                   ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -949,7 +949,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                       style: ElevatedButton.styleFrom(
                         backgroundColor: C.gold, elevation: 0,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                            borderRadius: BorderRadius.circular(AppRadius.chip)),
                       ),
                       child: _confirmingPayment
                           ? const SizedBox(width: 16, height: 16,
@@ -978,7 +978,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                     style: ElevatedButton.styleFrom(
                       backgroundColor: C.primary,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                          borderRadius: BorderRadius.circular(AppRadius.card)),
                       padding: const EdgeInsets.symmetric(
                           vertical: 14),
                     ),
@@ -1000,7 +1000,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(color: C.red.withValues(alpha: 0.4)),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                          borderRadius: BorderRadius.circular(AppRadius.card)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     child: Text(tr('cancel_booking_btn'), style: const TextStyle(
@@ -1046,7 +1046,7 @@ class _StatusSteps extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color:        C.bg,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(color: C.border),
       ),
       child: shared.StatusStepper(
@@ -1083,7 +1083,7 @@ class _ProviderInfoRow extends StatelessWidget {
       width: 52, height: 52,
       decoration: BoxDecoration(
         color:        C.gold.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(color: C.gold.withValues(alpha: 0.3)),
       ),
       child: Center(child: Text(
@@ -1148,7 +1148,7 @@ class _AddressRow extends StatelessWidget {
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color:        C.primary.withValues(alpha: 0.05),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       border: Border.all(
           color: C.primary.withValues(alpha: 0.15)),
     ),
@@ -1236,8 +1236,7 @@ class _TrackingSkeletonState extends State<_TrackingSkeleton>
             padding: const EdgeInsets.all(16),
             decoration: const BoxDecoration(
               color:        Colors.white,
-              borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(24)),
+              borderRadius: AppRadius.sheetTop,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1246,7 +1245,7 @@ class _TrackingSkeletonState extends State<_TrackingSkeleton>
                   width: 40, height: 4,
                   decoration: BoxDecoration(
                     color:        C.border,
-                    borderRadius: BorderRadius.circular(2),
+                    borderRadius: BorderRadius.circular(AppRadius.chip),
                   ),
                 )),
                 const SizedBox(height: 16),

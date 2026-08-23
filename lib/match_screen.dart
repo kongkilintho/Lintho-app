@@ -23,6 +23,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'app_colors.dart';
+import 'theme/app_theme.dart' show AppRadius;
 import 'app_locale.dart';
 import 'Booking.dart' show serviceIconForCategory;
 import 'booking_repository.dart';
@@ -645,7 +646,7 @@ class _MatchScreenState extends State<MatchScreen>
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: C.primaryDeepWash,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sheet)),
         title: Text(tr('cancel_booking_question'), style: const TextStyle(
           color: Colors.white, fontWeight: FontWeight.w800,
         )),
@@ -666,7 +667,7 @@ class _MatchScreenState extends State<MatchScreen>
               filled: true,
               fillColor: Colors.white.withValues(alpha: 0.08),
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
                   borderSide: BorderSide.none),
             ),
           ),
@@ -682,7 +683,7 @@ class _MatchScreenState extends State<MatchScreen>
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: C.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.chip)),
             ),
             child: Text(tr('cancel'), style: const TextStyle(color: Colors.white)),
           ),
@@ -926,7 +927,7 @@ class _MatchScreenState extends State<MatchScreen>
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color:        Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppRadius.sheet),
           border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
         ),
         child: Column(
@@ -985,7 +986,7 @@ class _MatchScreenState extends State<MatchScreen>
             foregroundColor: C.dangerRed,
             side: const BorderSide(color: C.dangerRed, width: 1.4),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
+                borderRadius: BorderRadius.circular(AppRadius.card)),
             padding: const EdgeInsets.symmetric(vertical: 14),
           ),
           child: Text(tr('cancel'), style: const TextStyle(
@@ -1015,7 +1016,7 @@ class _MatchScreenState extends State<MatchScreen>
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             decoration: BoxDecoration(
-              color: C.green, borderRadius: BorderRadius.circular(30),
+              color: C.green, borderRadius: BorderRadius.circular(AppRadius.sheet),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.check_circle, color: Colors.white, size: 18),
@@ -1052,7 +1053,7 @@ class _MatchScreenState extends State<MatchScreen>
             style: ElevatedButton.styleFrom(
               backgroundColor: C.green, elevation: 0,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
+                  borderRadius: BorderRadius.circular(AppRadius.card)),
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
             child: Text(tr('confirm_now'), style: const TextStyle(
@@ -1070,7 +1071,7 @@ class _MatchScreenState extends State<MatchScreen>
             style: OutlinedButton.styleFrom(
               side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
+                  borderRadius: BorderRadius.circular(AppRadius.card)),
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
             child: Text(tr('cancel'), style: TextStyle(
@@ -1256,7 +1257,7 @@ class _ConfirmedViewState extends State<_ConfirmedView>
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color:        Colors.white.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(AppRadius.sheet),
             border: Border.all(
                 color: Colors.white.withValues(alpha: 0.15)),
           ),
@@ -1297,7 +1298,7 @@ class _ConfirmedViewState extends State<_ConfirmedView>
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color:        Colors.white.withValues(alpha: 0.07),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.card),
             ),
             child: Row(children: [
               const Icon(Icons.location_on_outlined,
@@ -1323,7 +1324,7 @@ class _ConfirmedViewState extends State<_ConfirmedView>
               side: BorderSide(
                   color: Colors.white.withValues(alpha: 0.4)),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(AppRadius.card)),
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
           )),
@@ -1376,7 +1377,7 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color:        C.yellow.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.sheet),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         const Icon(Icons.access_time, color: C.yellow, size: 14),
@@ -1546,7 +1547,7 @@ class _Top3ProviderRow extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:        Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(
             color: Colors.white.withValues(alpha: 0.1)),
       ),
@@ -1572,7 +1573,7 @@ class _Top3ProviderRow extends StatelessWidget {
           width: 38, height: 38,
           decoration: BoxDecoration(
             color: C.yellow.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.chip),
           ),
           child: Center(child: Text(
             provider.avatarLetter,
@@ -1669,7 +1670,7 @@ class _ProviderCard extends StatelessWidget {
     padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
       color:        Colors.white.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(AppRadius.sheet),
       border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
     ),
     child: Column(children: [
@@ -1678,7 +1679,7 @@ class _ProviderCard extends StatelessWidget {
           width: 70, height: 70,
           decoration: BoxDecoration(
             color:        C.yellow,
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(AppRadius.sheet),
             border: Border.all(color: Colors.white, width: 3),
           ),
           child: Center(child: Text(
@@ -1714,7 +1715,7 @@ class _ProviderCard extends StatelessWidget {
                     horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color:        C.green.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(AppRadius.sheet),
                 ),
                 child: Row(
                     mainAxisSize: MainAxisSize.min, children: [
@@ -1746,7 +1747,7 @@ class _ProviderCard extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color:        Colors.white.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.card),
           ),
           child: Row(children: [
             const Icon(Icons.location_on_outlined,
@@ -1849,7 +1850,7 @@ class _StatusStep extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
           color:        C.green.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadius.chip),
         ),
         child: Text(tr('live_badge'), style: const TextStyle(
           color: C.green, fontSize: 10, fontWeight: FontWeight.w800,
@@ -1869,7 +1870,7 @@ class _GlassStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(16),
+    borderRadius: BorderRadius.circular(AppRadius.card),
     child: BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
       child: Container(
@@ -1882,7 +1883,7 @@ class _GlassStat extends StatelessWidget {
               Colors.white.withValues(alpha: 0.06),
             ],
           ),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
           boxShadow: [BoxShadow(
             color:      Colors.black.withValues(alpha: 0.12),
@@ -1918,7 +1919,7 @@ class _SoftCancelButton extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
     width: double.infinity,
     child: ClipRRect(
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(AppRadius.sheet),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
         child: Material(
@@ -1927,7 +1928,7 @@ class _SoftCancelButton extends StatelessWidget {
             onTap: onPressed,
             child: Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: BorderRadius.circular(AppRadius.sheet),
                 border: Border.all(color: C.dangerRed.withValues(alpha: 0.35)),
               ),
               padding: const EdgeInsets.symmetric(vertical: 14),

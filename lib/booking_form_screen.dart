@@ -965,15 +965,14 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   Future<void> _pickJobPhoto(BookingOrder o) async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
       builder: (ctx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const SizedBox(height: 8),
           Container(
             width: 40, height: 4,
             decoration: BoxDecoration(
-                color: C.border, borderRadius: BorderRadius.circular(4)),
+                color: C.border, borderRadius: BorderRadius.circular(AppRadius.chip)),
           ),
           ListTile(
             leading: const Icon(Icons.photo_camera_outlined, color: C.primary),
@@ -1246,7 +1245,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
               elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(AppRadius.card)),
             ),
             icon: const Icon(Icons.add_circle_outline),
             label: Text(tr('add_to_list'),
@@ -1386,13 +1385,13 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
               counterText: '',
               filled: true, fillColor: C.white,
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
                   borderSide: const BorderSide(color: C.border)),
               enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
                   borderSide: const BorderSide(color: C.border)),
               focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
                   borderSide: const BorderSide(color: C.primary, width: 1.5)),
             ),
           ),
@@ -1475,8 +1474,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
     final result = await showModalBottomSheet<double>(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
           final parsed  = double.tryParse(ctrl.text.trim());
@@ -1490,7 +1488,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
                 width: 40, height: 4,
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                    color: C.border, borderRadius: BorderRadius.circular(4)),
+                    color: C.border, borderRadius: BorderRadius.circular(AppRadius.chip)),
               )),
               Text(tr('pest_spray_title'),
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: C.textPrimary)),
@@ -1511,11 +1509,11 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
                   suffixText: tr('unit_sqm'),
                   errorText: hasError ? tr('pest_sqm_error_positive') : null,
                   filled: true, fillColor: C.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.card),
                       borderSide: const BorderSide(color: C.border)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.card),
                       borderSide: const BorderSide(color: C.border)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.card),
                       borderSide: const BorderSide(color: C.primary, width: 1.5)),
                 ),
               ),
@@ -1528,7 +1526,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
                     backgroundColor: C.primary,
                     foregroundColor: Colors.white,
                     disabledBackgroundColor: C.border,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
                   ),
                   child: Text(tr('ok'), style: const TextStyle(fontWeight: FontWeight.w800)),
                 ),
@@ -1570,7 +1568,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: C.primary.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(color: C.primary.withValues(alpha: 0.18)),
           ),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1590,7 +1588,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             onTap: () async {
               final date = await showDatePicker(
                 context: context,
@@ -1633,7 +1631,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppRadius.card),
                 border: Border.all(
                     color: o.scheduledAt != null ? C.primary : C.border),
               ),
@@ -1687,7 +1685,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: C.primary.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(color: C.primary.withValues(alpha: 0.25)),
           ),
           child: Row(children: [
@@ -1696,7 +1694,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
               width: 52, height: 52,
               decoration: BoxDecoration(
                 color: C.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.chip),
               ),
               child: const Icon(Icons.map_outlined, color: C.primary, size: 24),
             ),
@@ -1725,12 +1723,12 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           color: Colors.transparent,
           child: InkWell(
             onTap: _useGps,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             child: Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: C.primary.withValues(alpha: 0.07),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppRadius.card),
                 border: Border.all(color: C.primary.withValues(alpha: 0.3)),
               ),
               child: Row(children: [
@@ -1755,13 +1753,13 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           counterText: '',
           filled: true, fillColor: C.white,
           border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.card),
               borderSide: const BorderSide(color: C.border)),
           enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.card),
               borderSide: const BorderSide(color: C.border)),
           focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.card),
               borderSide: const BorderSide(color: C.primary, width: 1.5)),
         ),
       ),
@@ -1789,13 +1787,13 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           counterText: '',
           filled: true, fillColor: C.white,
           border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.card),
               borderSide: const BorderSide(color: C.border)),
           enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.card),
               borderSide: const BorderSide(color: C.border)),
           focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.card),
               borderSide: const BorderSide(color: C.primary, width: 1.5)),
         ),
       ),
@@ -1818,13 +1816,13 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           counterText: '',
           filled: true, fillColor: C.white,
           border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.card),
               borderSide: const BorderSide(color: C.border)),
           enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.card),
               borderSide: const BorderSide(color: C.border)),
           focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.card),
               borderSide: const BorderSide(color: C.primary, width: 1.5)),
         ),
       ),
@@ -1855,7 +1853,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: C.muted.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.card),
           ),
           child: Row(children: [
             const SizedBox(
@@ -1919,7 +1917,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: C.orange.withValues(alpha: 0.07),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(color: C.orange.withValues(alpha: 0.3)),
           ),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1939,7 +1937,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: C.primary.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(color: C.primary.withValues(alpha: 0.15)),
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1956,7 +1954,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: C.muted.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppRadius.card),
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Icon(Icons.policy_outlined, color: C.muted, size: 14),
@@ -1992,7 +1990,7 @@ class _AcCartTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(color: C.border),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2019,7 +2017,7 @@ class _AcCartTile extends StatelessWidget {
             color: Colors.transparent,
             child: InkWell(
               onTap: onRemove,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppRadius.chip),
               child: const Icon(Icons.close_rounded, size: 18, color: C.muted),
             ),
           ),
@@ -2129,7 +2127,7 @@ class _BillCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: [BoxShadow(
           color: Colors.black.withValues(alpha: 0.05),
           blurRadius: 8, offset: const Offset(0, 3),
@@ -2287,7 +2285,7 @@ class _CouponBoxState extends State<_CouponBox> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: C.green.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(color: C.green.withValues(alpha: 0.4)),
         ),
         child: Row(children: [
@@ -2316,13 +2314,13 @@ class _CouponBoxState extends State<_CouponBox> {
             errorText: _error,
             filled: true, fillColor: C.white,
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppRadius.card),
                 borderSide: const BorderSide(color: C.border)),
             enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppRadius.card),
                 borderSide: const BorderSide(color: C.border)),
             focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppRadius.card),
                 borderSide: const BorderSide(color: C.primary, width: 1.5)),
           ),
         ),
@@ -2375,7 +2373,7 @@ class _BookingReviewCard extends StatelessWidget {
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       boxShadow: [BoxShadow(
         color: Colors.black.withValues(alpha: 0.05),
         blurRadius: 8, offset: const Offset(0, 3),
@@ -2437,7 +2435,7 @@ class _ReviewRow extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: onEdit,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AppRadius.chip),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: Text(tr('edit'), style: const TextStyle(
@@ -2470,7 +2468,7 @@ class _JobPhotoPicker extends StatelessWidget {
         height: 110,
         decoration: BoxDecoration(
           color: C.primary.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(color: C.primary.withValues(alpha: 0.2)),
         ),
         child: const Center(child: SizedBox(
@@ -2482,7 +2480,7 @@ class _JobPhotoPicker extends StatelessWidget {
 
     if (photoUrl.isNotEmpty) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         child: Stack(children: [
           // 🔒 [AUDIT PERF-5 / 2026-08-02 — Medium, fresh re-audit] cacheHeight
           // ຈຳກັດ decode ຢູ່ຂະໜາດສະແດງຈິງ (job_workflow_Screen.dart ໃຊ້ pattern
@@ -2514,12 +2512,12 @@ class _JobPhotoPicker extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onPick,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 18),
           decoration: BoxDecoration(
             color: C.primary.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(
                 color: C.primary.withValues(alpha: 0.25),
                 style: BorderStyle.solid),
@@ -2575,13 +2573,13 @@ class _PaymentCard extends StatelessWidget {
     color: Colors.transparent,
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: selected ? C.primary.withValues(alpha: 0.07) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
               color: selected ? C.primary : C.border,
               width: selected ? 2 : 1),
@@ -2624,7 +2622,7 @@ class _BcelQrBox extends ConsumerWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: C.categoryAcBg,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(
             color: C.categoryAcAccent.withValues(alpha: 0.3)),
       ),
@@ -2637,12 +2635,12 @@ class _BcelQrBox extends ConsumerWidget {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(
                 color: C.categoryAcAccent.withValues(alpha: 0.2)),
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(AppRadius.chip),
             child: cfg.qrImageUrl != null
                 ? Image.network(
                     cfg.qrImageUrl!,
@@ -2698,7 +2696,7 @@ class _BcelQrBox extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.chip),
             border: Border.all(
                 color: C.categoryAcAccent.withValues(alpha: 0.2)),
           ),
@@ -2781,12 +2779,12 @@ class _QuickBookCard extends StatelessWidget {
       child: Stack(clipBehavior: Clip.none, children: [
         InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           child: Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: color,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppRadius.card),
               border: Border.all(color: accent.withValues(alpha: 0.25)),
               boxShadow: [
                 BoxShadow(
@@ -2819,7 +2817,7 @@ class _QuickBookCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: C.red,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadius.sheet),
                 boxShadow: [BoxShadow(
                   color: C.red.withValues(alpha: 0.35),
                   blurRadius: 6, offset: const Offset(0, 2),
@@ -2856,13 +2854,13 @@ class _BigCatCard extends StatelessWidget {
     color: Colors.transparent,
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: selected ? C.green.withValues(alpha: 0.04) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
               color: selected ? C.green : Colors.transparent,
               width: 2),
@@ -2967,13 +2965,13 @@ class _AcTypeCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: selected ? C.primary.withValues(alpha: 0.06) : Colors.white,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(
                 color: selected ? C.primary : C.border,
                 width: selected ? 2 : 1),
@@ -3059,13 +3057,13 @@ class _BtuSelector extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: () => onChanged(item.$1),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
               decoration: BoxDecoration(
                 color: sel ? C.primary.withValues(alpha: 0.07) : Colors.white,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppRadius.card),
                 border: Border.all(
                     color: sel ? C.primary : C.border, width: sel ? 2 : 1),
               ),
@@ -3111,13 +3109,13 @@ class _SmallTypeCard extends StatelessWidget {
     color: Colors.transparent,
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
         decoration: BoxDecoration(
           color: selected ? C.primary.withValues(alpha: 0.07) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
               color: selected ? C.primary : C.border, width: selected ? 2 : 1),
         ),
@@ -3154,13 +3152,13 @@ class _ModeCard extends StatelessWidget {
     color: Colors.transparent,
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: selected ? C.primary.withValues(alpha: 0.1) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
               color: selected ? C.primary : C.border, width: selected ? 2 : 1),
         ),
@@ -3192,14 +3190,14 @@ class _RoomTile extends StatelessWidget {
     color: Colors.transparent,
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: selected ? C.primary.withValues(alpha: 0.07) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
               color: selected ? C.primary : C.border, width: selected ? 2 : 1),
         ),
@@ -3253,11 +3251,11 @@ class _SqmInput extends StatelessWidget {
           suffixText: tr('sqm_input_suffix'),
           suffixStyle: const TextStyle(color: C.muted, fontWeight: FontWeight.w600),
           filled: true, fillColor: C.white,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.card),
               borderSide: BorderSide(color: _hasError ? errColor : C.border)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.card),
               borderSide: BorderSide(color: _hasError ? errColor : C.border)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.card),
               borderSide: BorderSide(color: _hasError ? errColor : C.primary, width: 1.5)),
         ),
       ),
@@ -3278,7 +3276,7 @@ class _SqmInput extends StatelessWidget {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(AppRadius.sheet),
               onTap: () {
                 controller.text = p.toStringAsFixed(0);
                 onChanged(p);
@@ -3287,7 +3285,7 @@ class _SqmInput extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   color: selected ? C.primary : C.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(AppRadius.sheet),
                   border: Border.all(
                       color: selected ? C.primary : C.primary.withValues(alpha: 0.2)),
                 ),
@@ -3318,13 +3316,13 @@ class _AddonCheckRow extends StatelessWidget {
     color: Colors.transparent,
     child: InkWell(
       onTap: () => onChanged(!checked),
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: checked ? C.primary.withValues(alpha: 0.05) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
               color: checked ? C.primary : C.border, width: checked ? 2 : 1),
         ),
@@ -3365,7 +3363,7 @@ class _SpecialistRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: checked ? C.primary.withValues(alpha: 0.05) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(
             color: checked ? C.primary : C.border, width: checked ? 2 : 1),
       ),
@@ -3407,7 +3405,7 @@ class _PestRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: selected ? C.primary.withValues(alpha: 0.05) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(
             color: selected ? C.primary : C.border, width: selected ? 2 : 1),
       ),
@@ -3465,7 +3463,7 @@ class _QtyRow extends StatelessWidget {
         : const EdgeInsets.all(14),
     decoration: compact ? null : BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       border: Border.all(color: C.border),
     ),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -3505,7 +3503,7 @@ class _CBtn extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.chip),
         // ✅ [FIX LO-3] ຂະໜາດ tap target ເພີ່ມຈາກ 32 -> 36dp — ຍັງບໍ່ຮອດ 44dp
         // ຄາດຫວັງເຕັມທີ່ (ຈະຕ້ອງແກ້ layout compact row ອ້ອມຂ້າງນຳ) ແຕ່ດີກວ່າເກົ່າ
         child: AnimatedContainer(
@@ -3515,7 +3513,7 @@ class _CBtn extends StatelessWidget {
             color: onTap != null
                 ? C.primary.withValues(alpha: 0.08)
                 : C.border.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AppRadius.chip),
           ),
           child: Icon(icon, size: 16,
               color: onTap != null ? C.primary : C.muted),
@@ -3542,13 +3540,13 @@ class _TimeToggle extends StatelessWidget {
     color: Colors.transparent,
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
           color: selected ? C.primary : Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
               color: selected ? C.primary : C.border,
               width: selected ? 2 : 1),
@@ -3598,13 +3596,13 @@ class _TimeSlots extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: () => onSelected(dt),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.chip),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
                 color: sel ? C.primary : Colors.white,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.chip),
                 border: Border.all(
                     color: sel ? C.primary : C.border, width: sel ? 2 : 1),
               ),
@@ -3654,7 +3652,7 @@ class _TravelFeeBox extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: C.mint,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(color: C.green.withValues(alpha: 0.25)),
         ),
         child: Row(children: [
@@ -3680,7 +3678,7 @@ class _TravelFeeBox extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(color: border),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -3705,7 +3703,7 @@ class _RelocateExtrasInfo extends StatelessWidget {
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
       color: C.categoryAddonBg,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       border: Border.all(
           color: C.categoryAddonBorder.withValues(alpha: 0.3)),
     ),
@@ -3748,7 +3746,7 @@ class _RelocateExtrasInfo extends StatelessWidget {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: C.categoryAddonBorder.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadius.chip),
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Icon(Icons.info_outline, size: 14, color: C.categoryAddonValueText),
@@ -3794,7 +3792,7 @@ class _RefillInfoCard extends StatelessWidget {
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
       color: C.noteWarningBg,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       border: Border.all(color: C.orange.withValues(alpha: 0.4)),
     ),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -3818,7 +3816,7 @@ class _RefillInfoCard extends StatelessWidget {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: C.orange.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadius.chip),
         ),
         child: Row(children: [
           const Icon(Icons.info_outline, size: 14, color: C.noteWarningText),
@@ -3861,7 +3859,7 @@ class _PriceInfoBox extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-        color: color, borderRadius: BorderRadius.circular(14)),
+        color: color, borderRadius: BorderRadius.circular(AppRadius.card)),
     child: Column(
       children: lines.expand((l) => [l, const SizedBox(height: 6)]).toList()
         ..removeLast(),
@@ -3931,7 +3929,7 @@ class _BottomBar extends StatelessWidget {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
         title: Row(children: [
           const Icon(Icons.info_outline, color: C.primary, size: 20),
           const SizedBox(width: 8),
@@ -3956,7 +3954,7 @@ class _BottomBar extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      borderRadius: AppRadius.sheetTop,
       boxShadow: [BoxShadow(
         color: Colors.black.withValues(alpha: 0.1),
         blurRadius: 16, offset: const Offset(0, -4),
@@ -4022,7 +4020,7 @@ class _BottomBar extends StatelessWidget {
             disabledBackgroundColor: C.border,
             disabledForegroundColor: C.muted,
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14)),
+                borderRadius: BorderRadius.circular(AppRadius.card)),
           ),
           child: isLoading
               ? const _ButtonSkeleton()
@@ -4080,7 +4078,7 @@ class _ButtonSkeletonState extends State<_ButtonSkeleton>
           width: 80, height: 14,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: _anim.value * 0.7),
-            borderRadius: BorderRadius.circular(7),
+            borderRadius: BorderRadius.circular(AppRadius.chip),
           ),
         ),
       ],

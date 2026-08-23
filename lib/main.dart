@@ -1125,15 +1125,14 @@ class _LocationSelectorState extends State<_LocationSelector> {
   void _showPicker() {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
       builder: (_) => SafeArea(child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 40, height: 4,
             decoration: BoxDecoration(
-                color: C.border, borderRadius: BorderRadius.circular(2)),
+                color: C.border, borderRadius: BorderRadius.circular(AppRadius.chip)),
           ),
           const SizedBox(height: 16),
           Text(tr('city_picker_title'), style: const TextStyle(
@@ -1165,13 +1164,13 @@ class _LocationSelectorState extends State<_LocationSelector> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.sheet),
         onTap: _showPicker,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(AppRadius.sheet),
             border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1366,12 +1365,12 @@ class _PromoBannerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(AppRadius.sheet),
       child: InkWell(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(AppRadius.sheet),
         onTap: () => banner.onTap(context),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(AppRadius.sheet),
           child: Stack(fit: StackFit.expand, children: [
             CachedNetworkImage(
               imageUrl: banner.imageUrl,
@@ -1434,9 +1433,9 @@ class _PromoBannerCard extends StatelessWidget {
                       const SizedBox(height: 10),
                       Material(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(AppRadius.chip),
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(AppRadius.chip),
                           onTap: () => banner.onTap(context),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
@@ -1481,9 +1480,9 @@ class _HomeSearchBar extends StatelessWidget {
       label: tr('search_placeholder'),
       child: Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         onTap: () => Navigator.push(context,
             MaterialPageRoute(builder: (_) => const SearchScreen())),
         child: Container(
@@ -1491,7 +1490,7 @@ class _HomeSearchBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             boxShadow: [BoxShadow(
               color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 10, offset: const Offset(0, 3),
@@ -1668,7 +1667,7 @@ class _SearchScreenState extends State<SearchScreen> {
           margin: const EdgeInsets.only(right: 12),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             boxShadow: [BoxShadow(
               color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 10, offset: const Offset(0, 3),
@@ -1731,7 +1730,7 @@ class _TrustSection extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
       decoration: BoxDecoration(
         color: C.mint,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(color: C.primary.withValues(alpha: 0.12)),
       ),
       child: Row(
@@ -1832,8 +1831,8 @@ class HomeScreen extends StatelessWidget {
                     colors: [C.primary, Color(0xFF00C9A7)],
                   ),
                   borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(28),
-                      bottomRight: Radius.circular(28)),
+                      bottomLeft: Radius.circular(AppRadius.sheet),
+                      bottomRight: Radius.circular(AppRadius.sheet)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1861,9 +1860,9 @@ class HomeScreen extends StatelessWidget {
                           width: 44, height: 44,
                           child: Center(child: Material(
                             color: Colors.white.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(AppRadius.card),
                             child: InkWell(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(AppRadius.card),
                               onTap: () => Navigator.push(context, MaterialPageRoute(
                                   builder: (_) => const NotificationScreen())),
                               child: const Padding(
@@ -1899,7 +1898,7 @@ class HomeScreen extends StatelessWidget {
                     Material(
                       color: Colors.transparent,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(AppRadius.card),
                         onTap: () => Navigator.push(context, MaterialPageRoute(
                             builder: (_) => const QuickBookingFlow())),
                         child: Container(
@@ -1910,7 +1909,7 @@ class HomeScreen extends StatelessWidget {
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
                             ),
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(AppRadius.card),
                             boxShadow: [BoxShadow(
                               color: C.quickBookGradientStart.withValues(alpha: 0.35),
                               blurRadius: 16, offset: const Offset(0, 6),
@@ -1983,7 +1982,7 @@ class HomeScreen extends StatelessWidget {
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(AppRadius.sheet),
                           onTap: () => Navigator.push(context,
                               MaterialPageRoute(
                                   builder: (_) => BookingFormScreen(
@@ -2005,7 +2004,7 @@ class HomeScreen extends StatelessWidget {
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(AppRadius.sheet),
                               border: Border.all(
                                   color: (cat['accent'] as Color)
                                       .withValues(alpha: 0.08)),
@@ -2085,7 +2084,7 @@ class _PopularCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         onTap: () => Navigator.push(context, MaterialPageRoute(
             builder: (_) => BookingFormScreen(
               initialOrder: HomeScreen._quickOrderFor(
@@ -2097,7 +2096,7 @@ class _PopularCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             boxShadow: [BoxShadow(
               color: (s['accent'] as Color).withValues(alpha: 0.08),
               blurRadius: 18, offset: const Offset(0, 8),
@@ -2108,7 +2107,7 @@ class _PopularCard extends StatelessWidget {
               width: 56, height: 56,
               decoration: BoxDecoration(
                 color: s['color'] as Color,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(AppRadius.card),
               ),
               child: Center(child: Icon(s['icon'] as IconData, size: 26,
                   color: s['accent'] as Color)),
@@ -2209,7 +2208,7 @@ class _ActiveBookingCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(color: style.fg.withValues(alpha: 0.3), width: 1.4),
         boxShadow: [BoxShadow(
           color: style.fg.withValues(alpha: 0.10),
@@ -2225,7 +2224,7 @@ class _ActiveBookingCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-                color: style.bg, borderRadius: BorderRadius.circular(20)),
+                color: style.bg, borderRadius: BorderRadius.circular(AppRadius.sheet)),
             child: Text(bookingStatusLabel(status), style: TextStyle(
                 fontSize: 11, fontWeight: FontWeight.bold, color: style.fg)),
           ),
@@ -2235,7 +2234,7 @@ class _ActiveBookingCard extends StatelessWidget {
           Container(
             width: 48, height: 48,
             decoration: BoxDecoration(
-                color: C.bg, borderRadius: BorderRadius.circular(14)),
+                color: C.bg, borderRadius: BorderRadius.circular(AppRadius.card)),
             child: Center(child: Icon(
                 serviceIconForCategory(booking['category'] as String? ?? ''),
                 size: 22, color: C.navy)),
@@ -2268,7 +2267,7 @@ class _ActiveBookingCard extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: C.primary,
             padding: const EdgeInsets.symmetric(vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
           ),
           child: Text(tr('view_details_link'), style: const TextStyle(
               color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),

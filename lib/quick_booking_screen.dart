@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'Booking.dart' show serviceIconForCategory;
 import 'app_colors.dart';
+import 'theme/app_theme.dart' show AppRadius;
 import 'app_locale.dart';
 import 'app_navigation_state.dart';
 import 'map_picker_screen.dart';
@@ -102,7 +103,7 @@ class _StepService extends ConsumerWidget {
         return Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             onTap: () => ref.read(quickBookingProvider.notifier).selectService(
                 type: pkgName,
                 emoji: pkg['emoji'] as String,
@@ -113,7 +114,7 @@ class _StepService extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(AppRadius.card),
                 boxShadow: [
                   BoxShadow(
                       color: Colors.black.withValues(alpha: 0.04),
@@ -367,7 +368,7 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(AppRadius.card)),
                 child: Row(children: [
                   const Icon(Icons.location_on, color: C.sky, size: 18),
                   const SizedBox(width: 8),
@@ -397,13 +398,13 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 10),
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(AppRadius.chip),
                           borderSide: const BorderSide(color: C.border)),
                       enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(AppRadius.chip),
                           borderSide: const BorderSide(color: C.border)),
                       focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(AppRadius.chip),
                           borderSide:
                               const BorderSide(color: C.sky, width: 1.5)),
                     ),
@@ -549,7 +550,7 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
                 filled: true,
                 fillColor: C.white,
                 border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
               ),
             ),
             const SizedBox(height: 16),
@@ -560,7 +561,7 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: C.green.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
                   border: Border.all(color: C.green),
                 ),
                 child: Row(children: [
@@ -594,7 +595,7 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
                       filled: true,
                       fillColor: C.white,
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(AppRadius.card)),
                     ),
                   ),
                 ),
@@ -662,7 +663,7 @@ class _SummaryCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: [
           BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
