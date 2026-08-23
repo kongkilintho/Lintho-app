@@ -1134,10 +1134,10 @@ class _LocationSelectorState extends State<_LocationSelector> {
             decoration: BoxDecoration(
                 color: C.border, borderRadius: BorderRadius.circular(AppRadius.chip)),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
           Text(tr('city_picker_title'), style: const TextStyle(
               fontSize: 16, fontWeight: FontWeight.w800, color: C.text)),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           ..._cities.map((c) => ListTile(
             title: Text(c, style: const TextStyle(
                 color: C.text, fontWeight: FontWeight.w600)),
@@ -1175,7 +1175,7 @@ class _LocationSelectorState extends State<_LocationSelector> {
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.location_on_rounded, color: Colors.white, size: 14),
-            const SizedBox(width: 4),
+            const SizedBox(width: AppSpacing.xs),
             Text(city, style: const TextStyle(
                 color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
             const SizedBox(width: 2),
@@ -1423,7 +1423,7 @@ class _PromoBannerCard extends StatelessWidget {
                           height: 1.15,
                           letterSpacing: -0.2,
                           fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpacing.xs),
                       Text(banner.subtitle,
                           maxLines: 2, overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -1439,7 +1439,7 @@ class _PromoBannerCard extends StatelessWidget {
                           onTap: () => banner.onTap(context),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 7),
+                                horizontal: AppSpacing.md, vertical: 7),
                             child: Row(mainAxisSize: MainAxisSize.min, children: [
                               Text(banner.ctaLabel, style: TextStyle(
                                   color: banner.overlayColor, fontSize: 11.5,
@@ -1498,7 +1498,7 @@ class _HomeSearchBar extends StatelessWidget {
           ),
           child: Row(children: [
             const Icon(Icons.search_rounded, color: C.muted, size: 20),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.sm),
             Expanded(child: _RotatingSearchHint(hints: [
               tr('search_hint_1'),
               tr('search_hint_2'),
@@ -1694,7 +1694,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   : null,
               border: InputBorder.none,
               isDense: true,
-              contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+              contentPadding: const EdgeInsets.symmetric(vertical: AppSpacing.md, horizontal: AppSpacing.xs),
             ),
           ),
         ),
@@ -1707,7 +1707,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   color: C.muted, fontSize: 14, fontWeight: FontWeight.w600)),
             ]))
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               children: results.map((s) => _PopularCard(service: s)).toList(),
             ),
     );
@@ -1727,7 +1727,7 @@ class _TrustSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: AppSpacing.sm),
       decoration: BoxDecoration(
         color: C.mint,
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -1866,7 +1866,7 @@ class HomeScreen extends StatelessWidget {
                               onTap: () => Navigator.push(context, MaterialPageRoute(
                                   builder: (_) => const NotificationScreen())),
                               child: const Padding(
-                                padding: EdgeInsets.all(8),
+                                padding: EdgeInsets.all(AppSpacing.sm),
                                 child: Icon(Icons.notifications_rounded,
                                     color: Colors.white, size: 20),
                               ),
@@ -1885,7 +1885,7 @@ class HomeScreen extends StatelessWidget {
                         fontSize: 12.5, fontWeight: FontWeight.w500)),
                     const SizedBox(height: 10),
                     const _LocationSelector(),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpacing.md),
                     const _HomeSearchBar(),
                   ],
                 ),
@@ -1902,7 +1902,7 @@ class HomeScreen extends StatelessWidget {
                         onTap: () => Navigator.push(context, MaterialPageRoute(
                             builder: (_) => const QuickBookingFlow())),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 14),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [C.quickBookGradientStart, C.quickBookGradientEnd],
@@ -1940,13 +1940,13 @@ class HomeScreen extends StatelessWidget {
                                         color: Colors.white.withValues(alpha: 0.92))),
                               ],
                             )),
-                            const SizedBox(width: 4),
+                            const SizedBox(width: AppSpacing.xs),
                             const Icon(Icons.chevron_right, color: Colors.white),
                           ]),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: AppSpacing.xxl),
                     const _PromoCarousel(),
                     const SizedBox(height: 20),
                     const _TrustSection(),
@@ -1992,7 +1992,7 @@ class HomeScreen extends StatelessWidget {
                                   ))),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                                vertical: 22, horizontal: 12),
+                                vertical: 22, horizontal: AppSpacing.md),
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [
@@ -2021,7 +2021,7 @@ class HomeScreen extends StatelessWidget {
                                 children: [
                                   Icon(cat['icon'] as IconData, size: 44,
                                       color: cat['accent'] as Color),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: AppSpacing.md),
                                   // 🔒 [PHASE1] C.sky → C.text — card title ນີ້
                                   // ເປັນ blue ຄົນດຽວ ໃນຂະນະທີ່ card title ອື່ນ
                                   // ທົ່ວໜ້ານີ້ (_PopularCard, _ActiveBookingCard)
@@ -2035,7 +2035,7 @@ class HomeScreen extends StatelessWidget {
                                   Text(cat['sub'] as String, textAlign: TextAlign.center,
                                       style: const TextStyle(
                                       fontSize: 11, color: C.muted)),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(height: AppSpacing.xs),
                                   _PriceLine(
                                       category: cat['category'] as ServiceCategory,
                                       compact: true),
@@ -2093,7 +2093,7 @@ class _PopularCard extends StatelessWidget {
             ))),
         child: Container(
           margin: const EdgeInsets.only(bottom: 14),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(AppRadius.card),
@@ -2119,7 +2119,7 @@ class _PopularCard extends StatelessWidget {
                 Text(s['name'] as String, style: const TextStyle(
                     fontSize: 15, fontWeight: FontWeight.w900,
                     color: C.text)),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 Row(children: [
                   const Icon(Icons.access_time, color: C.muted, size: 13),
                   const SizedBox(width: 3),
@@ -2131,7 +2131,7 @@ class _PopularCard extends StatelessWidget {
                 _PriceLine(category: s['category'] as ServiceCategory),
               ],
             )),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.sm),
             const Icon(Icons.chevron_right, color: C.muted, size: 22),
           ]),
         ),
@@ -2205,7 +2205,7 @@ class _ActiveBookingCard extends StatelessWidget {
     final providerName = booking['providerName'] as String?;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -2222,14 +2222,14 @@ class _ActiveBookingCard extends StatelessWidget {
               letterSpacing: 0.3)),
           const Spacer(),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: AppSpacing.xs),
             decoration: BoxDecoration(
                 color: style.bg, borderRadius: BorderRadius.circular(AppRadius.sheet)),
             child: Text(bookingStatusLabel(status), style: TextStyle(
                 fontSize: 11, fontWeight: FontWeight.bold, color: style.fg)),
           ),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         Row(children: [
           Container(
             width: 48, height: 48,
@@ -2239,7 +2239,7 @@ class _ActiveBookingCard extends StatelessWidget {
                 serviceIconForCategory(booking['category'] as String? ?? ''),
                 size: 22, color: C.navy)),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.md),
           Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2260,13 +2260,13 @@ class _ActiveBookingCard extends StatelessWidget {
             ],
           )),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         SizedBox(width: double.infinity, child: ElevatedButton(
           onPressed: () => Navigator.push(context, MaterialPageRoute(
               builder: (_) => BookingDetailScreen(bookingId: bookingId))),
           style: ElevatedButton.styleFrom(
             backgroundColor: C.primary,
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
           ),
           child: Text(tr('view_details_link'), style: const TextStyle(

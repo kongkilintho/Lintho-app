@@ -21,7 +21,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'app_colors.dart';
-import 'theme/app_theme.dart' show AppRadius;
+import 'theme/app_theme.dart' show AppRadius, AppSpacing;
 import 'app_locale.dart';
 import 'provider_model.dart';
 import 'review_screen.dart';
@@ -431,12 +431,12 @@ class _TrackingScreenState extends State<TrackingScreen>
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Text(tr('cancel_confirm_short')),
           if (showFeeWarning) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Text(tr('cancel_fee_warning'), style: const TextStyle(
               color: C.red, fontSize: 12, fontWeight: FontWeight.w600,
             )),
           ],
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           TextField(
             controller: reasonCtrl,
             maxLength:  200,
@@ -669,7 +669,7 @@ class _TrackingScreenState extends State<TrackingScreen>
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
+                    horizontal: AppSpacing.sm, vertical: 3),
                 decoration: BoxDecoration(
                   color:        C.primary,
                   borderRadius: BorderRadius.circular(AppRadius.chip),
@@ -724,7 +724,7 @@ class _TrackingScreenState extends State<TrackingScreen>
           children: [
             Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 3),
+                  horizontal: AppSpacing.sm, vertical: 3),
               decoration: BoxDecoration(
                 color:        C.green,
                 borderRadius: BorderRadius.circular(AppRadius.chip),
@@ -781,7 +781,7 @@ class _TrackingScreenState extends State<TrackingScreen>
   // ════════════════════════════════════════════════════════
 
   Widget _buildTopBar() => Padding(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.all(AppSpacing.lg),
     child: Row(children: [
       // back button
       // 🔒 [AUDIT H12] 40×40 ຕ່ຳກວ່າ 44dp tap target ຂັ້ນຕ່ຳ ແລະ ບໍ່ມີ
@@ -792,7 +792,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         label: tr('back_semantic'),
         onTap: () => Navigator.pop(context),
       ),
-      const SizedBox(width: 12),
+      const SizedBox(width: AppSpacing.md),
 
       // status badge
       Expanded(
@@ -812,7 +812,7 @@ class _TrackingScreenState extends State<TrackingScreen>
             ),
             child: Row(children: [
               Icon(_status.icon, size: 18, color: C.primary),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -838,7 +838,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                   shape:  BoxShape.circle,
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: AppSpacing.xs),
               Text(
                 _status == BookingStatus.done ? 'Done' : 'Live',
                 style: TextStyle(
@@ -852,7 +852,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         ),
       ),
 
-      const SizedBox(width: 12),
+      const SizedBox(width: AppSpacing.md),
 
       // chat button — ສະເພາະຕອນ booking ຍັງ active (ບໍ່ done/cancelled)
       if (_status != BookingStatus.done &&
@@ -863,7 +863,7 @@ class _TrackingScreenState extends State<TrackingScreen>
           label: tr('chat_semantic'),
           onTap: _openChat,
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: AppSpacing.md),
       ],
 
       // call button
@@ -902,10 +902,10 @@ class _TrackingScreenState extends State<TrackingScreen>
             borderRadius: BorderRadius.circular(AppRadius.chip),
           ),
         )),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
 
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -917,11 +917,11 @@ class _TrackingScreenState extends State<TrackingScreen>
                 serviceName:  widget.serviceName,
                 onCall:       _callProvider,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
 
               // ── Status Steps ──────────────────────────
               _StatusSteps(currentStatus: _status),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
 
               // ── Confirm BCEL payment sent (FOLLOWUP-K) ─
               if (_paymentMethod != 'cash' &&
@@ -940,7 +940,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const Text('ໂອນເງິນຜ່ານ BCEL ແລ້ວບໍ?', style: TextStyle(
                         fontWeight: FontWeight.w800, color: C.textPrimary, fontSize: 13)),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSpacing.xs),
                     const Text('ກົດຢືນຢັນເມື່ອທ່ານໂອນເງິນຄ່າບໍລິການໃຫ້ຊ່າງແລ້ວ',
                         style: TextStyle(color: C.muted, fontSize: 12)),
                     const SizedBox(height: 10),
@@ -960,13 +960,13 @@ class _TrackingScreenState extends State<TrackingScreen>
                     )),
                   ]),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
               ],
 
               // ── Address ───────────────────────────────
               if (widget.address.isNotEmpty) ...[
                 _AddressRow(address: widget.address),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
               ],
 
               // ── Done button ───────────────────────────
@@ -991,7 +991,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
               ] else if (_canCancel) ...[
                 SizedBox(
                   width: double.infinity,
@@ -1008,9 +1008,9 @@ class _TrackingScreenState extends State<TrackingScreen>
                     )),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
               ] else ...[
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
               ],
             ],
           ),
@@ -1094,7 +1094,7 @@ class _ProviderInfoRow extends StatelessWidget {
         ),
       )),
     ),
-    const SizedBox(width: 12),
+    const SizedBox(width: AppSpacing.md),
 
     Expanded(child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1145,7 +1145,7 @@ class _AddressRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(12),
+    padding: const EdgeInsets.all(AppSpacing.md),
     decoration: BoxDecoration(
       color:        C.primary.withValues(alpha: 0.05),
       borderRadius: BorderRadius.circular(AppRadius.card),
@@ -1155,7 +1155,7 @@ class _AddressRow extends StatelessWidget {
     child: Row(children: [
       const Icon(Icons.location_on_outlined,
           color: C.primary, size: 18),
-      const SizedBox(width: 8),
+      const SizedBox(width: AppSpacing.sm),
       Expanded(child: Text(
         address,
         style: const TextStyle(
@@ -1219,12 +1219,12 @@ class _TrackingSkeletonState extends State<_TrackingSkeleton>
 
         // top bar skeleton
         SafeArea(child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: Row(children: [
             _box(44, 44, r: 12),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Expanded(child: _box(double.infinity, 56, r: 14)),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             _box(44, 44, r: 12),
           ]),
         )),
@@ -1233,7 +1233,7 @@ class _TrackingSkeletonState extends State<_TrackingSkeleton>
         Positioned(
           left: 0, right: 0, bottom: 0,
           child: Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             decoration: const BoxDecoration(
               color:        Colors.white,
               borderRadius: AppRadius.sheetTop,
@@ -1248,10 +1248,10 @@ class _TrackingSkeletonState extends State<_TrackingSkeleton>
                     borderRadius: BorderRadius.circular(AppRadius.chip),
                   ),
                 )),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
                 Row(children: [
                   _box(52, 52, r: 16),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpacing.md),
                   Expanded(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1262,11 +1262,11 @@ class _TrackingSkeletonState extends State<_TrackingSkeleton>
                   )),
                   _box(44, 44, r: 12),
                 ]),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
                 _box(double.infinity, 180, r: 16),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
                 _box(double.infinity, 44, r: 14),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
               ],
             ),
           ),

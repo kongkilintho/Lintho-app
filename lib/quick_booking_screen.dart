@@ -7,7 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'Booking.dart' show serviceIconForCategory;
 import 'app_colors.dart';
-import 'theme/app_theme.dart' show AppRadius;
+import 'theme/app_theme.dart' show AppRadius, AppSpacing;
 import 'app_locale.dart';
 import 'app_navigation_state.dart';
 import 'map_picker_screen.dart';
@@ -89,7 +89,7 @@ class _StepService extends ConsumerWidget {
     final packages =
         ref.watch(quickBookingPackagesProvider).valueOrNull ?? defaultQuickPackages;
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       itemCount: packages.length,
       itemBuilder: (context, i) {
         final pkg = packages[i];
@@ -111,7 +111,7 @@ class _StepService extends ConsumerWidget {
                 category: pkg['category'] as String),
             child: Container(
               margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(AppRadius.card),
@@ -304,11 +304,11 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
     return Column(children: [
       Expanded(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _SectionLabel(tr('datetime_label')),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             OutlinedButton.icon(
               onPressed: _pickDateTime,
               icon: const Icon(Icons.event_outlined),
@@ -322,7 +322,7 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
             ),
             const SizedBox(height: 20),
             _SectionLabel(tr('address')),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             if (savedAddresses.isNotEmpty) ...[
               Wrap(
                   spacing: 8,
@@ -347,7 +347,7 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
                     foregroundColor: C.text,
                     side: const BorderSide(color: C.border)),
               )),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.sm),
               // 🔒 [PHASE1] icon-only button ນີ້ບໍ່ມີ Semantics/tooltip ມາກ່ອນ —
               // ຂະໜາດ 48dp ຜ່ານຢູ່ແລ້ວ ແຕ່ບໍ່ມີ label ໃຫ້ screen reader
               Tooltip(
@@ -365,13 +365,13 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
             if (_address != null) ...[
               const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(AppRadius.card)),
                 child: Row(children: [
                   const Icon(Icons.location_on, color: C.sky, size: 18),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: AppSpacing.sm),
                   Expanded(
                       child: Text(_address!,
                           style: const TextStyle(fontSize: 13, color: C.text))),
@@ -396,7 +396,7 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
                       filled: true,
                       fillColor: C.white,
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
+                          horizontal: AppSpacing.md, vertical: 10),
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppRadius.chip),
                           borderSide: const BorderSide(color: C.border)),
@@ -528,7 +528,7 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
     return Column(children: [
       Expanded(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _SummaryCard(
@@ -540,9 +540,9 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
               scheduledAt: draft.scheduledAt,
               address: draft.address ?? '-',
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             _SectionLabel(tr('contact_info')),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             TextField(
               controller: _nameCtrl,
               decoration: InputDecoration(
@@ -553,12 +553,12 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
                     OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             _SectionLabel(tr('discount_code_label')),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             if (draft.couponCode != null)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 10),
                 decoration: BoxDecoration(
                   color: C.green.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(AppRadius.card),
@@ -566,7 +566,7 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
                 ),
                 child: Row(children: [
                   const Icon(Icons.local_offer, color: C.green, size: 16),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: AppSpacing.sm),
                   Expanded(
                       child: Text(
                           '${draft.couponCode} · -${formatKip(draft.couponDiscount ?? 0)}',
@@ -599,7 +599,7 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.sm),
                 SizedBox(
                   height: 48,
                   // 🔒 [PHASE1] navy → AppButton.primary — ຄືກັນກັບ CTA ອື່ນໆ
@@ -660,7 +660,7 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -688,7 +688,7 @@ class _SummaryCard extends StatelessWidget {
             scheduledAt == null
                 ? '-'
                 : '${scheduledAt!.day}/${scheduledAt!.month}/${scheduledAt!.year} ${scheduledAt!.hour}:${scheduledAt!.minute.toString().padLeft(2, '0')}'),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sm),
         _Row(Icons.location_on_outlined, address),
         const Divider(height: 24),
         if (discount != null && discount! > 0) ...[
@@ -700,14 +700,14 @@ class _SummaryCard extends StatelessWidget {
                     fontSize: 13, color: C.muted,
                     decoration: TextDecoration.lineThrough)),
           ]),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xs),
           Row(children: [
             Text(tr('discount_label'), style: const TextStyle(fontSize: 13, color: C.green)),
             const Spacer(),
             Text('-${formatKip(discount!)}',
                 style: const TextStyle(fontSize: 13, color: C.green)),
           ]),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xs),
         ],
         Row(children: [
           Text(tr('total_price_label'), style: const TextStyle(fontSize: 14, color: C.muted)),
@@ -728,7 +728,7 @@ class _Row extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(children: [
         Icon(icon, size: 16, color: C.muted),
-        const SizedBox(width: 8),
+        const SizedBox(width: AppSpacing.sm),
         Expanded(
             child: Text(text,
                 style: const TextStyle(fontSize: 13, color: C.text))),

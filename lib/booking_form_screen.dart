@@ -34,7 +34,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'app_colors.dart';
-import 'theme/app_theme.dart' show AppRadius;
+import 'theme/app_theme.dart' show AppRadius, AppSpacing;
 import 'app_locale.dart';
 import 'app_navigation_state.dart';
 import 'booking_provider.dart';
@@ -968,7 +968,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
       builder: (ctx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Container(
             width: 40, height: 4,
             decoration: BoxDecoration(
@@ -984,7 +984,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             title: Text(tr('choose_from_gallery')),
             onTap: () => Navigator.pop(ctx, ImageSource.gallery),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
         ]),
       ),
     );
@@ -1104,7 +1104,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   Widget _buildStep0() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _Label(tr('label_popular_packages'), sub: tr('sub_popular_packages')),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.md),
       Row(children: [
         Expanded(child: _QuickBookCard(
           icon: Icons.ac_unit_outlined, title: tr('quickbook_ac_title'), sub: '${tr("quickbook_ac_sub")} ${AppPricing.fmt(AppPricing.acStdPrice[AcBtuSize.small]!)} ${tr("kip_currency")}',
@@ -1112,14 +1112,14 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           badge: tr('quickbook_ac_badge'),
           onTap: _quickBookAc,
         )),
-        const SizedBox(width: 12),
+        const SizedBox(width: AppSpacing.md),
         Expanded(child: _QuickBookCard(
           icon: Icons.cleaning_services_outlined, title: tr('svc_house_clean'), sub: '${tr("quickbook_cleaning_sub")} ${AppPricing.fmt(AppPricing.calcCleanHourly(2))} ${tr("kip_currency")}',
           color: C.categoryCleanBg, accent: C.categoryCleanAccent,
           onTap: _quickBookCleaning,
         )),
       ]),
-      const SizedBox(height: 24),
+      const SizedBox(height: AppSpacing.xl),
       _Label(tr('label_or_choose_category'), sub: tr('sub_other_needs')),
       const SizedBox(height: 20),
       _BigCatCard(
@@ -1133,7 +1133,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           _step = 1;
         }),
       ),
-      const SizedBox(height: 16),
+      const SizedBox(height: AppSpacing.lg),
       _BigCatCard(
         icon: Icons.cleaning_services_outlined, title: tr('svc_house_clean'), sub: tr('cat_house_sub'),
         note: tr('bigcat_house_note'),
@@ -1230,7 +1230,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           _RefillInfoCard(btuSize: o.acDraftBtu),
         ],
 
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
         SizedBox(
           width: double.infinity,
           // ✅ [FIX ME-8] revert ກັບ tinted-fill ElevatedButton ເດີມ — ຮູບແບບ
@@ -1243,7 +1243,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
               backgroundColor: C.primary.withValues(alpha: 0.1),
               foregroundColor: C.primary,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppRadius.card)),
             ),
@@ -1255,7 +1255,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       ],
 
       if (o.acCart.isNotEmpty) ...[
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.xl),
         _Label(tr('label_selected_items'), sub: tr('sub_adjust_qty_remove')),
         const SizedBox(height: 10),
         ...o.acCart.map((item) => _AcCartTile(
@@ -1302,12 +1302,12 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           }),
         )),
       ]),
-      const SizedBox(height: 24),
+      const SizedBox(height: AppSpacing.xl),
 
       // ── General ─────────────────────────────────────────
       if (o.cleanType == HomeCleaningType.general) ...[
         _Label(tr('label_pricing_mode'), sub: tr('sub_choose_format')),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         Row(children: [
           Expanded(child: _ModeCard(
             title: tr('mode_hourly_title'), sub: tr('mode_hourly_sub'),
@@ -1407,7 +1407,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       // ── Deep ─────────────────────────────────────────────
       if (o.cleanType == HomeCleaningType.deep) ...[
         _Label(tr('label_deep_clean_type')),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         Row(children: [
           Expanded(child: _ModeCard(
             title: tr('mode_movein_title'), sub: tr('mode_movein_sub'),
@@ -1439,7 +1439,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       // ── Specialist ───────────────────────────────────────
       if (o.cleanType == HomeCleaningType.specialist) ...[
         _Label(tr('label_choose_item'), sub: tr('sub_press_add_qty')),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         ...AppPricing.specialistItems.entries
             .where((e) => e.key != 'pest')
             .map((e) => _SpecialistRow(
@@ -1450,7 +1450,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             else o.specialistQty[e.key] = v;
           }),
         )),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sm),
         _PestRow(
           sqm: o.pestSqm,
           onTap: () => _showPestSqmDialog(o),
@@ -1492,13 +1492,13 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
               )),
               Text(tr('pest_spray_title'),
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: C.textPrimary)),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 '${tr("pest_sqm_dialog_hint")} '
                 '${AppPricing.fmt(AppPricing.pestSqmMin)}–${AppPricing.fmt(AppPricing.pestSqmMax)} ${tr("kip_currency")}/${tr("unit_sqm")}',
                 style: const TextStyle(fontSize: 12, color: C.muted),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextField(
                 controller: ctrl,
                 autofocus: true,
@@ -1517,7 +1517,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
                       borderSide: const BorderSide(color: C.primary, width: 1.5)),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               SizedBox(
                 width: double.infinity, height: 48,
                 child: ElevatedButton(
@@ -1547,14 +1547,14 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
     final o = _order!;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _Label(tr('label_choose_time')),
-      const SizedBox(height: 16),
+      const SizedBox(height: AppSpacing.lg),
       Row(children: [
         Expanded(child: _TimeToggle(
           icon: Icons.bolt_rounded, title: tr('now_option_title'), sub: '30–60 ${tr('minutes_unit')}',
           selected: o.isNow,
           onTap: () => setState(() { o.isNow = true; o.scheduledAt = null; }),
         )),
-        const SizedBox(width: 12),
+        const SizedBox(width: AppSpacing.md),
         Expanded(child: _TimeToggle(
           icon: Icons.event_outlined, title: tr('scheduled_option_title'), sub: tr('select_datetime'),
           selected: !o.isNow,
@@ -1628,7 +1628,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
               setState(() => o.scheduledAt = picked);
             },
             child: Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(AppRadius.card),
@@ -1639,7 +1639,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
                 Icon(Icons.calendar_today,
                     color: o.scheduledAt != null ? C.primary : C.muted,
                     size: 20),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.md),
                 Text(
                   o.scheduledAt != null
                       ? '${o.scheduledAt!.day.toString().padLeft(2, '0')}/'
@@ -1658,7 +1658,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
         _Label(tr('label_or_choose_timeslot'), sub: tr('sub_any_day')),
         const SizedBox(height: 10),
         // ✅ [FIX-4] ສ່ງ base date ເຂົ້າ widget — ບໍ່ let it recompute on each build
@@ -1679,10 +1679,10 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
     final o = _order!;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _Label(tr('label_service_address')),
-      const SizedBox(height: 16),
+      const SizedBox(height: AppSpacing.lg),
       if (o.isGpsAddress)
         Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
             color: C.primary.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(AppRadius.card),
@@ -1698,7 +1698,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
               ),
               child: const Icon(Icons.map_outlined, color: C.primary, size: 24),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1763,15 +1763,15 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
               borderSide: const BorderSide(color: C.primary, width: 1.5)),
         ),
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.md),
       Row(children: [
         const Expanded(child: Divider()),
         Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
             child: Text(tr('or_continue_with'), style: const TextStyle(color: C.muted))),
         const Expanded(child: Divider()),
       ]),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.md),
       TextField(
         controller: _addressCtrl,
         onChanged: (v) => setState(() {
@@ -1850,7 +1850,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       // syncing) ແທນທີ່ຈະງຽບໆ disable ໂດຍບໍ່ອະທິບາຍ
       if (!_pricingLoaded) ...[
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 10),
           decoration: BoxDecoration(
             color: C.muted.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(AppRadius.card),
@@ -1868,7 +1868,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         const SizedBox(height: 14),
       ],
       _Label(tr('label_review_booking'), sub: tr('sub_check_before_confirm')),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.md),
       _BookingReviewCard(
         order: o,
         onEditService:  () => setState(() => _step = 1),
@@ -1878,9 +1878,9 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       const SizedBox(height: 20),
 
       _Label(tr('label_cost_summary')),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.md),
       _BillCard(order: o),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.md),
       _CouponBox(
         order: o,
         onChanged: () => setState(() {}),
@@ -1888,7 +1888,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       const SizedBox(height: 20),
 
       _Label(tr('label_payment_method')),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.md),
       _PaymentCard(
         // ✅ [FIX ME-7] icon override (ຄືກັນກັບ bcel ຂ້າງລຸ່ມ) — ບໍ່ດັ່ງນັ້ນ
         // build() ຈະ fallback ໄປໃຊ້ emoji ຕໍ່
@@ -1906,7 +1906,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       ),
 
       if (o.paymentMethod == 'bcel') ...[
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
         _BcelQrBox(order: o),
       ],
 
@@ -1914,7 +1914,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
 
       if (o.category == ServiceCategory.acCleaning && o.acHasRefill) ...[
         Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
             color: C.orange.withValues(alpha: 0.07),
             borderRadius: BorderRadius.circular(AppRadius.card),
@@ -1923,18 +1923,18 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             // 🔒 [PHASE1] emoji → Icon
             const Icon(Icons.warning_amber_rounded, size: 16, color: C.orange),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.sm),
             Expanded(child: Text(
               tr('refill_price_notice'),
               style: const TextStyle(fontSize: 11, color: C.noteWarningText),
             )),
           ]),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
       ],
 
       Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: C.primary.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(AppRadius.card),
@@ -1942,7 +1942,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Icon(Icons.info_outline, color: C.primary, size: 16),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(child: Text(
             tr('dispatch_notice'),
             style: const TextStyle(fontSize: 12, color: C.primary),
@@ -1951,14 +1951,14 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       ),
       const SizedBox(height: 10),
       Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: C.muted.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(AppRadius.card),
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Icon(Icons.policy_outlined, color: C.muted, size: 14),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(child: Text(
             tr('cancellation_policy_notice'),
             style: const TextStyle(fontSize: 10, color: C.mutedLight),
@@ -1987,7 +1987,7 @@ class _AcCartTile extends StatelessWidget {
     final lineTotal = unit * item.qty;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: AppSpacing.md),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -2011,7 +2011,7 @@ class _AcCartTile extends StatelessWidget {
           _QtyRow(qty: item.qty, minQty: 1, maxQty: 20, label: tr('unit_device'),
               onChanged: onQtyChanged, compact: true),
         ])),
-        const SizedBox(width: 8),
+        const SizedBox(width: AppSpacing.sm),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Material(
             color: Colors.transparent,
@@ -2021,7 +2021,7 @@ class _AcCartTile extends StatelessWidget {
               child: const Icon(Icons.close_rounded, size: 18, color: C.muted),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Text('${AppPricing.fmt(lineTotal)} ${tr("kip_currency")}', style: const TextStyle(
               fontSize: 12, fontWeight: FontWeight.w800, color: C.primary)),
         ]),
@@ -2124,7 +2124,7 @@ class _BillCard extends StatelessWidget {
     // self-heal ຢູ່ແລ້ວ) ບໍ່ໄດ້ຫັກສ່ວນຫຼຸດນັ້ນອອກອີກຕໍ່ໄປ.
     order._invalidateStaleCoupon();
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -2282,7 +2282,7 @@ class _CouponBoxState extends State<_CouponBox> {
     order._invalidateStaleCoupon();
     if (order.couponCode != null) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: AppSpacing.md),
         decoration: BoxDecoration(
           color: C.green.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(AppRadius.card),
@@ -2290,7 +2290,7 @@ class _CouponBoxState extends State<_CouponBox> {
         ),
         child: Row(children: [
           const Icon(Icons.local_offer, color: C.green, size: 16),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
               child: Text(
                   '${order.couponCode} · -${AppPricing.fmt((order.couponDiscount ?? 0).round())} ${tr("kip_currency")}',
@@ -2325,7 +2325,7 @@ class _CouponBoxState extends State<_CouponBox> {
           ),
         ),
       ),
-      const SizedBox(width: 8),
+      const SizedBox(width: AppSpacing.sm),
       SizedBox(
         height: 48,
         child: ElevatedButton(
@@ -2370,7 +2370,7 @@ class _BookingReviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.all(AppSpacing.lg),
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(AppRadius.card),
@@ -2437,7 +2437,7 @@ class _ReviewRow extends StatelessWidget {
             onTap: onEdit,
             borderRadius: BorderRadius.circular(AppRadius.chip),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: AppSpacing.xs),
               child: Text(tr('edit'), style: const TextStyle(
                   fontSize: 12, fontWeight: FontWeight.w700, color: C.primary)),
             ),
@@ -2576,7 +2576,7 @@ class _PaymentCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadius.card),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
           color: selected ? C.primary.withValues(alpha: 0.07) : Colors.white,
           borderRadius: BorderRadius.circular(AppRadius.card),
@@ -2630,9 +2630,9 @@ class _BcelQrBox extends ConsumerWidget {
         Text(tr('bcel_qr_title'), style: const TextStyle(
             fontSize: 14, fontWeight: FontWeight.w800,
             color: C.categoryAcAccent)),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(AppRadius.card),
@@ -2686,12 +2686,12 @@ class _BcelQrBox extends ConsumerWidget {
               fontSize: 13, fontWeight: FontWeight.w700,
               color: C.categoryAcAccent),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpacing.xs),
         Text(tr('bcel_qr_scan_hint'),
             style: const TextStyle(fontSize: 12, color: C.muted)),
         Text(tr('bcel_qr_generate_note'),
             style: const TextStyle(fontSize: 11, color: C.muted)),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
@@ -2742,7 +2742,7 @@ class _BcelAccountRow extends StatelessWidget {
                       fontSize: 13, fontWeight: FontWeight.w800,
                       color: C.categoryAcAccent))),
               if (copyable) ...[
-                const SizedBox(width: 4),
+                const SizedBox(width: AppSpacing.xs),
                 const Icon(Icons.copy_rounded, size: 13, color: C.categoryAcAccent),
               ],
             ]),
@@ -2800,7 +2800,7 @@ class _QuickBookCard extends StatelessWidget {
                 const Spacer(),
                 Icon(Icons.arrow_forward_rounded, size: 18, color: accent),
               ]),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               Text(title, style: TextStyle(
                   fontWeight: FontWeight.w800, fontSize: 14, color: accent)),
               const SizedBox(height: 2),
@@ -2814,7 +2814,7 @@ class _QuickBookCard extends StatelessWidget {
           Positioned(
             top: -8, right: -6,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
               decoration: BoxDecoration(
                 color: C.red,
                 borderRadius: BorderRadius.circular(AppRadius.sheet),
@@ -2882,7 +2882,7 @@ class _BigCatCard extends StatelessWidget {
                   ),
                   child: Center(child: Icon(icon, size: 32, color: accent)),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(title, style: const TextStyle(
                       fontSize: 17, fontWeight: FontWeight.w800, color: C.textPrimary)),
@@ -2895,13 +2895,13 @@ class _BigCatCard extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Icon(Icons.check_circle_rounded, size: 16, color: C.green.withValues(alpha: 0.85)),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: AppSpacing.sm),
                   Expanded(child: Text(b, style: const TextStyle(
                       fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.4,
                       color: C.textSecondary))),
                 ]),
               )),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.xs),
               Text(note, style: const TextStyle(
                   fontSize: 16, fontWeight: FontWeight.w600, color: C.green)),
             ],
@@ -2985,7 +2985,7 @@ class _AcTypeCard extends StatelessWidget {
               ),
               child: Icon(d['icon'] as IconData, size: 22, color: C.primary),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -3006,14 +3006,14 @@ class _AcTypeCard extends StatelessWidget {
                         style: TextStyle(
                             fontSize: 14, fontWeight: FontWeight.w800,
                             color: selected ? C.primary : C.categoryAcAccent))),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: AppSpacing.xs),
                     Text(tr(d['priceNote'] as String), style: const TextStyle(
                         fontSize: 10, fontWeight: FontWeight.w400, color: C.muted)),
                   ],
                 ),
               ],
             )),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.sm),
             Icon(selected ? Icons.radio_button_checked : Icons.radio_button_off,
                 size: 22,
                 color: selected ? C.primary : C.border),
@@ -3060,7 +3060,7 @@ class _BtuSelector extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppRadius.card),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: AppSpacing.sm),
               decoration: BoxDecoration(
                 color: sel ? C.primary.withValues(alpha: 0.07) : Colors.white,
                 borderRadius: BorderRadius.circular(AppRadius.card),
@@ -3082,7 +3082,7 @@ class _BtuSelector extends StatelessWidget {
                     style: TextStyle(
                     fontSize: 11, fontWeight: FontWeight.w700,
                     color: sel ? C.primary : C.textPrimary)),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 Text(item.$4, textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 10, color: C.muted)),
               ]),
@@ -3112,7 +3112,7 @@ class _SmallTypeCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadius.card),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: AppSpacing.sm),
         decoration: BoxDecoration(
           color: selected ? C.primary.withValues(alpha: 0.07) : Colors.white,
           borderRadius: BorderRadius.circular(AppRadius.card),
@@ -3128,7 +3128,7 @@ class _SmallTypeCard extends StatelessWidget {
             ),
             child: Icon(icon, size: 20, color: C.primary),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Text(title, textAlign: TextAlign.center, style: TextStyle(
               fontSize: 11, fontWeight: FontWeight.w700,
               color: selected ? C.primary : C.textPrimary)),
@@ -3166,7 +3166,7 @@ class _ModeCard extends StatelessWidget {
           Text(title, style: TextStyle(
               fontSize: 13, fontWeight: FontWeight.w800,
               color: selected ? C.primary : C.textPrimary)),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xs),
           Text(sub, style: const TextStyle(fontSize: 11, color: C.muted)),
         ]),
       ),
@@ -3194,7 +3194,7 @@ class _RoomTile extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 14),
         decoration: BoxDecoration(
           color: selected ? C.primary.withValues(alpha: 0.07) : Colors.white,
           borderRadius: BorderRadius.circular(AppRadius.card),
@@ -3204,7 +3204,7 @@ class _RoomTile extends StatelessWidget {
         child: Row(children: [
           Icon(selected ? Icons.radio_button_checked : Icons.radio_button_off,
               color: selected ? C.primary : C.muted, size: 20),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.md),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title, style: TextStyle(
                 fontSize: 14, fontWeight: FontWeight.w700,
@@ -3282,7 +3282,7 @@ class _SqmInput extends StatelessWidget {
                 onChanged(p);
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: AppSpacing.sm),
                 decoration: BoxDecoration(
                   color: selected ? C.primary : C.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(AppRadius.sheet),
@@ -3319,7 +3319,7 @@ class _AddonCheckRow extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadius.card),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: AppSpacing.md),
         decoration: BoxDecoration(
           color: checked ? C.primary.withValues(alpha: 0.05) : Colors.white,
           borderRadius: BorderRadius.circular(AppRadius.card),
@@ -3360,7 +3360,7 @@ class _SpecialistRow extends StatelessWidget {
     final checked = qty > 0;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: AppSpacing.md),
       decoration: BoxDecoration(
         color: checked ? C.primary.withValues(alpha: 0.05) : Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -3402,7 +3402,7 @@ class _PestRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final selected = sqm > 0;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: AppSpacing.md),
       decoration: BoxDecoration(
         color: selected ? C.primary.withValues(alpha: 0.05) : Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -3459,7 +3459,7 @@ class _QtyRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: compact
-        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
+        ? const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 6)
         : const EdgeInsets.all(14),
     decoration: compact ? null : BoxDecoration(
       color: Colors.white,
@@ -3480,7 +3480,7 @@ class _QtyRow extends StatelessWidget {
           semanticLabel: tr('qty_increase_semantic'),
           onTap: qty < maxQty ? () => onChanged(qty + 1) : null),
       if (!compact) ...[
-        const SizedBox(width: 8),
+        const SizedBox(width: AppSpacing.sm),
         Text(label, style: const TextStyle(fontSize: 13, color: C.muted)),
       ],
     ]),
@@ -3599,7 +3599,7 @@ class _TimeSlots extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppRadius.chip),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 10),
               decoration: BoxDecoration(
                 color: sel ? C.primary : Colors.white,
                 borderRadius: BorderRadius.circular(AppRadius.chip),
@@ -3649,7 +3649,7 @@ class _TravelFeeBox extends StatelessWidget {
     } else {
       // ✅ ບໍ່ມີຄ່າເດີນທາງ — ສະແດງເປັນ badge ສິດທິພິເສດ ບໍ່ແມ່ນ checkbox
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: AppSpacing.md),
         decoration: BoxDecoration(
           color: C.mint,
           borderRadius: BorderRadius.circular(AppRadius.card),
@@ -3789,7 +3789,7 @@ class _RefillInfoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final range = AppPricing.acRefillPrice[btuSize]!;
     return Container(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.all(AppSpacing.lg),
     decoration: BoxDecoration(
       color: C.noteWarningBg,
       borderRadius: BorderRadius.circular(AppRadius.card),
@@ -3798,12 +3798,12 @@ class _RefillInfoCard extends StatelessWidget {
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         const Text('🧪', style: TextStyle(fontSize: 20)),
-        const SizedBox(width: 8),
+        const SizedBox(width: AppSpacing.sm),
         Text(tr('refill_price_header'), style: const TextStyle(
             fontSize: 14, fontWeight: FontWeight.w800,
             color: C.noteWarningText)),
       ]),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.md),
       _RefillLine(tr('refill_minor_leak_label'), tr('free_check_label')),
       const SizedBox(height: 6),
       _RefillLine('${tr("refill_major_leak_prefix")} (${btuLabel(btuSize)})',
@@ -3811,7 +3811,7 @@ class _RefillInfoCard extends StatelessWidget {
               '${AppPricing.fmt(range.$2)} ${tr("kip_currency")}'),
       const SizedBox(height: 6),
       _RefillLine(tr('refill_per_psi_label'), '20,000–30,000 ${tr("kip_currency")}'),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.md),
       Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
@@ -3842,7 +3842,7 @@ class _RefillLine extends StatelessWidget {
     children: [
       Expanded(child: Text(label, style: const TextStyle(
           fontSize: 12, color: C.noteWarningTextDark))),
-      const SizedBox(width: 8),
+      const SizedBox(width: AppSpacing.sm),
       Text(value, style: const TextStyle(
           fontSize: 12, fontWeight: FontWeight.w700,
           color: C.noteWarningText)),
@@ -3932,7 +3932,7 @@ class _BottomBar extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
         title: Row(children: [
           const Icon(Icons.info_outline, color: C.primary, size: 20),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpacing.sm),
           Text(tr('price_disclaimer_title'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
         ]),
         content: Text(
@@ -3977,7 +3977,7 @@ class _BottomBar extends StatelessWidget {
           child: Row(children: [
             Text(tr('bottom_bar_estimated_total'),
                 style: const TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
-            const SizedBox(width: 4),
+            const SizedBox(width: AppSpacing.xs),
             // 🔒 [PHASE1] ເຄີຍ GestureDetector ດິບ (ບໍ່ມີ ripple/Semantics,
             // hit area ~15px) — ຝ່າຝືນ house rule "InkWell + Material ทุก tap
             // target" ຂອງໄຟລ໌ນີ້ເອງ. ຫຸ້ມ Material+InkWell ພ້ອມ padding ໃຫ້ hit
@@ -3988,7 +3988,7 @@ class _BottomBar extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppRadius.chip),
                 onTap: () => _showPriceDisclaimer(context),
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(AppSpacing.md),
                   child: Semantics(
                     button: true,
                     label: tr('price_disclaimer_title'),

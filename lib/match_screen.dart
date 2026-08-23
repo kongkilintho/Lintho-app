@@ -23,7 +23,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'app_colors.dart';
-import 'theme/app_theme.dart' show AppRadius;
+import 'theme/app_theme.dart' show AppRadius, AppSpacing;
 import 'app_locale.dart';
 import 'Booking.dart' show serviceIconForCategory;
 import 'booking_repository.dart';
@@ -654,7 +654,7 @@ class _MatchScreenState extends State<MatchScreen>
           Text(tr('cancel_confirm_short'), style: TextStyle(
             color: Colors.white.withValues(alpha: 0.7),
           )),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           TextField(
             controller: reasonCtrl,
             maxLength: 200,
@@ -791,7 +791,7 @@ class _MatchScreenState extends State<MatchScreen>
 
   Widget _buildSkeleton() => Padding(
     key: const ValueKey('skeleton'),
-    padding: const EdgeInsets.all(24),
+    padding: const EdgeInsets.all(AppSpacing.xl),
     child: Column(children: [
       const SizedBox(height: 20),
       _Shimmer(width: double.infinity, height: 40, radius: 12),
@@ -799,14 +799,14 @@ class _MatchScreenState extends State<MatchScreen>
       const Center(child: _Shimmer(width: 170, height: 170, radius: 85)),
       const SizedBox(height: 40),
       const _Shimmer(width: 200, height: 28, radius: 8),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.md),
       const _Shimmer(width: 140, height: 18, radius: 6),
-      const SizedBox(height: 48),
+      const SizedBox(height: AppSpacing.xxxl),
       Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
         _Shimmer(width: 90, height: 32, radius: 20),
-        SizedBox(width: 12),
+        SizedBox(width: AppSpacing.md),
         _Shimmer(width: 90, height: 32, radius: 20),
-        SizedBox(width: 12),
+        SizedBox(width: AppSpacing.md),
         _Shimmer(width: 90, height: 32, radius: 20),
       ]),
     ]),
@@ -867,17 +867,17 @@ class _MatchScreenState extends State<MatchScreen>
     // ຄົງທີ່ ເພາະ Expanded/flexible-spacer ໃຊ້ໃນ
     // Column ພາຍໃນ scroll view ບໍ່ໄດ້ (unbounded height constraint).
     child: SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(children: [
         const SizedBox(height: 20),
         _TopBar(onCancel: _cancelBooking, searchSecs: _searchSecs),
-        const SizedBox(height: 48),
+        const SizedBox(height: AppSpacing.xxxl),
         _RadarPulse(icon: _serviceIcon),
         const SizedBox(height: 40),
         Text(tr('searching_title'), style: const TextStyle(
           color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900,
         )),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         // ✅ ສະແດງຊື່ບໍລິການແທ້ຈິງທີ່ລູກຄ້າເລືອກ (fallback ລະຫວ່າງລໍຖ້າໂຫຼດ)
         Text(_displayServiceName, textAlign: TextAlign.center, style: TextStyle(
           color: Colors.white.withValues(alpha: 0.7),
@@ -885,7 +885,7 @@ class _MatchScreenState extends State<MatchScreen>
         )),
         const SizedBox(height: 40),
         const _SearchingDots(),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
         // ✅ Countdown ໃຫ້ລູກຄ້າຮູ້ວ່າລະບົບກຳລັງພະຍາຍາມຄົ້ນຫາຢູ່ — ບໍ່ຮູ້ສຶກວ່າແອັບຄ້າງ
         Text('${tr('searching_continue_prefix')} $_searchSecsLeft ${tr('sec')}', style: TextStyle(
           color: Colors.white.withValues(alpha: 0.5),
@@ -900,9 +900,9 @@ class _MatchScreenState extends State<MatchScreen>
           Expanded(child: _GlassStat(Icons.bolt_outlined,   tr('info_chip_fast_eta'))),
         ]),
         const SizedBox(height: 40),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         _SoftCancelButton(onPressed: _cancelBooking, label: tr('cancel_search')),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
       ]),
     ),
   );
@@ -916,15 +916,15 @@ class _MatchScreenState extends State<MatchScreen>
   // ຄົງທີ່ (ເບິ່ງເຫດຜົນເຕັມຢູ່ _buildSearching()).
   Widget _buildWaiting() => SingleChildScrollView(
     key: const ValueKey('waiting'),
-    padding: const EdgeInsets.all(24),
+    padding: const EdgeInsets.all(AppSpacing.xl),
     child: Column(children: [
       const SizedBox(height: 20),
       _TopBar(onCancel: _cancelBooking, searchSecs: _searchSecs),
-      const SizedBox(height: 32),
+      const SizedBox(height: AppSpacing.xxl),
 
       // Top 3 cards
       Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
           color:        Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(AppRadius.sheet),
@@ -935,7 +935,7 @@ class _MatchScreenState extends State<MatchScreen>
           children: [
             Row(children: [
               const Icon(Icons.wifi_tethering, color: C.yellow, size: 18),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.sm),
               Text(
                 '${tr('sent_request_prefix')} ${_top3.length} ${tr('provider')}',
                 style: const TextStyle(
@@ -944,7 +944,7 @@ class _MatchScreenState extends State<MatchScreen>
                 ),
               ),
             ]),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               tr('first_come_first_served'),
               style: TextStyle(
@@ -952,7 +952,7 @@ class _MatchScreenState extends State<MatchScreen>
                 fontSize: 12,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             ..._top3.asMap().entries.map((e) =>
                 _Top3ProviderRow(
                   rank:     e.key + 1,
@@ -964,20 +964,20 @@ class _MatchScreenState extends State<MatchScreen>
           ],
         ),
       ),
-      const SizedBox(height: 32),
+      const SizedBox(height: AppSpacing.xxl),
 
       ScaleTransition(
         scale: _pulseAnim,
         child: _PulseCircle(icon: _serviceIcon, size: 100),
       ),
-      const SizedBox(height: 24),
+      const SizedBox(height: AppSpacing.xl),
       Text(tr('waiting_provider_title'), style: const TextStyle(
         color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800,
       )),
-      const SizedBox(height: 8),
+      const SizedBox(height: AppSpacing.sm),
       const _SearchingDots(),
       const SizedBox(height: 40),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.md),
       SizedBox(
         width: double.infinity,
         child: OutlinedButton(
@@ -994,7 +994,7 @@ class _MatchScreenState extends State<MatchScreen>
           )),
         ),
       ),
-      const SizedBox(height: 16),
+      const SizedBox(height: AppSpacing.lg),
     ]),
   );
 
@@ -1006,9 +1006,9 @@ class _MatchScreenState extends State<MatchScreen>
     final p = _matchedProv!;
     return SingleChildScrollView(
       key: const ValueKey('matched'),
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(children: [
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
 
         // badge
         ScaleTransition(
@@ -1020,7 +1020,7 @@ class _MatchScreenState extends State<MatchScreen>
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.check_circle, color: Colors.white, size: 18),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.sm),
               Text(tr('matched'), style: const TextStyle(
                 color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800,
               )),
@@ -1054,14 +1054,14 @@ class _MatchScreenState extends State<MatchScreen>
               backgroundColor: C.green, elevation: 0,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppRadius.card)),
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
             ),
             child: Text(tr('confirm_now'), style: const TextStyle(
               color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800,
             )),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         SizedBox(
           width: double.infinity,
           child: OutlinedButton(
@@ -1106,17 +1106,17 @@ class _MatchScreenState extends State<MatchScreen>
 
   Widget _buildNoProvider() => Padding(
     key: const ValueKey('noprovider'),
-    padding: const EdgeInsets.all(24),
+    padding: const EdgeInsets.all(AppSpacing.xl),
     child: Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Icon(Icons.sentiment_dissatisfied_outlined,
             size: 80, color: Colors.white.withValues(alpha: 0.7)),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.xl),
         Text(tr('no_provider'), style: const TextStyle(
           color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800,
         )),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         Text(
           tr('no_provider_desc'),
           textAlign: TextAlign.center,
@@ -1125,7 +1125,7 @@ class _MatchScreenState extends State<MatchScreen>
             fontSize: 15, height: 1.6,
           ),
         ),
-        const SizedBox(height: 48),
+        const SizedBox(height: AppSpacing.xxxl),
         // 🔒 [PHASE1] yellow → AppButton.primary — ທຸກ primary CTA ອື່ນຢູ່ໜ້ານີ້
         // (ລວມທັງ "Confirm Now" ຢູ່ _buildMatched) ໃຊ້ green ຢູ່ແລ້ວ, ມີແຕ່ອັນນີ້
         // ທີ່ແຕກຕ່າງໂດຍບໍ່ມີເຫດຜົນ
@@ -1133,7 +1133,7 @@ class _MatchScreenState extends State<MatchScreen>
           label: tr('retry'),
           onPressed: _retry,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         TextButton(
           // 🔒 [FOLLOWUP-D] `_buildNoProvider()` ສະແດງໄດ້ພຽງ 2 ທາງ: (1) timer
           // ໝົດເວລາ — ຕອນນີ້ _cancelSilently() ຖືກເອີ້ນກ່ອນເຂົ້າ state ນີ້ (ເບິ່ງ
@@ -1219,9 +1219,9 @@ class _ConfirmedViewState extends State<_ConfirmedView>
   Widget build(BuildContext context) {
     final p = widget.provider;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(children: [
-        const SizedBox(height: 32),
+        const SizedBox(height: AppSpacing.xxl),
 
         // success icon
         ScaleTransition(scale: _anim, child: Container(
@@ -1237,19 +1237,19 @@ class _ConfirmedViewState extends State<_ConfirmedView>
           child: const Icon(Icons.check_rounded,
               color: Colors.white, size: 64),
         )),
-        const SizedBox(height: 32),
+        const SizedBox(height: AppSpacing.xxl),
 
         Text(tr('confirmed'), style: const TextStyle(
           color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900,
         )),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         Text(
           '${p.displayName} ${tr('provider_coming_suffix')}',
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.8), fontSize: 16,
           ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: AppSpacing.xxl),
 
         // ETA card
         Container(
@@ -1265,7 +1265,7 @@ class _ConfirmedViewState extends State<_ConfirmedView>
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               const Icon(Icons.directions_car_filled_outlined,
                   color: C.yellow, size: 20),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.sm),
               // 🔒 [PHASE0 P1] ເຄີຍສະແດງ "ຄາດວ່າຈະຮອດ ≈ 20 ນາທີ" ຄົງທີ່ —
               // ບໍ່ແມ່ນຄ່າຄິດໄລ່ແທ້ (ບໍ່ມີແຫຼ່ງຂໍ້ມູນໄລຍະທາງ/ຄວາມໄວແທ້ໆ). ໃຊ້
               // ຂໍ້ຄວາມທີ່ບໍ່ອ້າງຕົວເລກແທນ.
@@ -1292,7 +1292,7 @@ class _ConfirmedViewState extends State<_ConfirmedView>
         ),
 
         if (widget.address.isNotEmpty) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
@@ -1303,14 +1303,14 @@ class _ConfirmedViewState extends State<_ConfirmedView>
             child: Row(children: [
               const Icon(Icons.location_on_outlined,
                   color: C.yellow, size: 18),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(child: Text(widget.address, style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.8), fontSize: 13,
               ))),
             ]),
           ),
         ],
-        const SizedBox(height: 32),
+        const SizedBox(height: AppSpacing.xxl),
 
         Row(children: [
           Expanded(child: OutlinedButton.icon(
@@ -1328,7 +1328,7 @@ class _ConfirmedViewState extends State<_ConfirmedView>
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
           )),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.md),
           // 🔒 [PHASE1] translucent yellow → AppButton.primary — ຄືກັນກັບ
           // Retry button ຂ້າງເທິງ
           Expanded(child: AppButton.primary(
@@ -1374,14 +1374,14 @@ class _TopBar extends StatelessWidget {
     ),
     const Spacer(),
     Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
       decoration: BoxDecoration(
         color:        C.yellow.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(AppRadius.sheet),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         const Icon(Icons.access_time, color: C.yellow, size: 14),
-        const SizedBox(width: 4),
+        const SizedBox(width: AppSpacing.xs),
         Text(_timeLabel, style: const TextStyle(
           color: C.yellow, fontSize: 12, fontWeight: FontWeight.w700,
         )),
@@ -1544,7 +1544,7 @@ class _Top3ProviderRow extends StatelessWidget {
     final dist = provider.distanceTo(custLat, custLng);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color:        Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -1689,17 +1689,17 @@ class _ProviderCard extends StatelessWidget {
             ),
           )),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: AppSpacing.lg),
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(provider.displayName, style: const TextStyle(
               color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800,
             )),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.xs),
             Row(children: [
               const Icon(Icons.star_rounded, color: C.yellow, size: 16),
-              const SizedBox(width: 4),
+              const SizedBox(width: AppSpacing.xs),
               Text(provider.ratingLabel, style: const TextStyle(
                 color: C.yellow, fontSize: 14, fontWeight: FontWeight.w700,
               )),
@@ -1712,7 +1712,7 @@ class _ProviderCard extends StatelessWidget {
             if (provider.isVerified)
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
+                    horizontal: 10, vertical: AppSpacing.xs),
                 decoration: BoxDecoration(
                   color:        C.green.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(AppRadius.sheet),
@@ -1721,7 +1721,7 @@ class _ProviderCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min, children: [
                   const Icon(Icons.verified_outlined,
                       color: C.green, size: 13),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: AppSpacing.xs),
                   Text(tr('verified_badge'), style: const TextStyle(
                     color: C.green, fontSize: 11, fontWeight: FontWeight.w700,
                   )),
@@ -1730,9 +1730,9 @@ class _ProviderCard extends StatelessWidget {
           ],
         )),
       ]),
-      const SizedBox(height: 16),
+      const SizedBox(height: AppSpacing.lg),
       const Divider(color: Colors.white24),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpacing.md),
       Row(children: [
         _StatCol(serviceIcon, serviceName, tr('services')),
         // 🔒 [PHASE0 P1] ເຄີຍ "~20 ນາທີ" ຄົງທີ່ — ບໍ່ແມ່ນຄ່າຄິດໄລ່ແທ້, ນຳໃຊ້
@@ -1742,9 +1742,9 @@ class _ProviderCard extends StatelessWidget {
         _StatCol(Icons.near_me_outlined, tr('near_you'), tr('distance_label')),
       ]),
       if (address.isNotEmpty) ...[
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
         Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
             color:        Colors.white.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(AppRadius.card),
@@ -1752,7 +1752,7 @@ class _ProviderCard extends StatelessWidget {
           child: Row(children: [
             const Icon(Icons.location_on_outlined,
                 color: C.yellow, size: 18),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.sm),
             Expanded(child: Text(address, style: TextStyle(
               color: Colors.white.withValues(alpha: 0.8), fontSize: 13,
             ))),
@@ -1771,7 +1771,7 @@ class _StatCol extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Expanded(child: Column(children: [
     Icon(icon, color: Colors.white, size: 22),
-    const SizedBox(height: 4),
+    const SizedBox(height: AppSpacing.xs),
     Text(value, style: const TextStyle(
       color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700,
     ), textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
@@ -1792,7 +1792,7 @@ class _CountdownRing extends StatelessWidget {
     Text(tr('auto_confirm_in'), style: TextStyle(
       color: Colors.white.withValues(alpha: 0.6), fontSize: 13,
     )),
-    const SizedBox(height: 8),
+    const SizedBox(height: AppSpacing.sm),
     Stack(alignment: Alignment.center, children: [
       SizedBox(
         width: 90, height: 90,
@@ -1837,7 +1837,7 @@ class _StatusStep extends StatelessWidget {
       ),
       child: Center(child: Icon(icon, color: Colors.white, size: 14)),
     ),
-    const SizedBox(width: 12),
+    const SizedBox(width: AppSpacing.md),
     Expanded(child: Text(label, style: TextStyle(
       color: isActive
           ? Colors.white
@@ -1847,7 +1847,7 @@ class _StatusStep extends StatelessWidget {
     ))),
     if (isActive)
       Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 3),
         decoration: BoxDecoration(
           color:        C.green.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(AppRadius.chip),
@@ -1874,7 +1874,7 @@ class _GlassStat extends StatelessWidget {
     child: BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: AppSpacing.md),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft, end: Alignment.bottomRight,

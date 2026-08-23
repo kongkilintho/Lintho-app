@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' show NumberFormat;
 import 'Booking.dart' show serviceIconForCategory;
 import 'app_colors.dart';
-import 'theme/app_theme.dart' show AppRadius;
+import 'theme/app_theme.dart' show AppRadius, AppSpacing;
 import 'app_locale.dart';
 import 'booking_display_helpers.dart';
 import 'booking_repository.dart';
@@ -51,7 +51,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Text(tr('cancel_booking_confirm_msg'),
               style: const TextStyle(color: C.muted)),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           TextField(
             controller: reasonCtrl,
             maxLength: 200,
@@ -133,10 +133,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(Icons.wifi_off_outlined, size: 48, color: C.muted),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.md),
                 Text(tr('load_failed'),
                     style: const TextStyle(color: C.muted, fontSize: 15)),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
                 // 🔒 [PHASE1] navy foreground/border ຄືກັນເປ໊ະກັບ
                 // OutlinedButtonTheme default ຢູ່ແລ້ວ — override ນີ້ບໍ່ຈຳເປັນ
                 AppButton.outline(
@@ -160,7 +160,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           final hasProvider = (b['providerId'] as String? ?? '').isNotEmpty;
 
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             children: [
               _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -170,7 +170,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                       color: C.muted, letterSpacing: 0.3))),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
+                        horizontal: AppSpacing.md, vertical: 6),
                     decoration: BoxDecoration(
                       color: style.bg,
                       borderRadius: BorderRadius.circular(AppRadius.sheet),
@@ -180,11 +180,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                         color: style.fg)),
                   ),
                 ]),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 Text('${tr('booking_id_label')}: ${doc.id}', style: const TextStyle(
                     fontSize: 11, color: C.muted)),
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
                   child: Divider(height: 1, color: C.border),
                 ),
                 Row(children: [
@@ -199,7 +199,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                         serviceIconForCategory(b['category'] as String? ?? ''),
                         size: 26, color: C.navy)),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpacing.md),
                   Expanded(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -221,7 +221,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                       fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
                 ]),
                 if ((b['address'] as String? ?? '').isNotEmpty) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.sm),
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const Icon(Icons.location_on_outlined,
                         size: 15, color: C.muted),
@@ -232,7 +232,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                 ],
               ])),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
 
               // ✅ [FIX H14] ກົດຊື່/ຮູບຊ່າງ → ໄປໜ້າໂປຣໄຟລ໌ຊ່າງ (ProviderDetailsScreen,
               // ຫາກ່ອນນີ້ບໍ່ເຄີຍຖືກ navigate ໄປຫາຈາກຈຸດໃດເລີຍ)
@@ -261,7 +261,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                                   fontSize: 20, fontWeight: FontWeight.w900,
                                   color: C.gold))),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: AppSpacing.md),
                         Expanded(child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -280,7 +280,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                     ),
                   )),
                   if (bookingIsTrackable(status)) ...[
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpacing.sm),
                     // 🔒 [PHASE1] navy → AppButton.primary (brand green) —
                     // ຄືກັນກັບ CTA color drift ທີ່ພົບຢູ່ Quick Booking
                     AppButton.primary(
@@ -301,7 +301,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                   ],
                 ])),
 
-              if (hasProvider) const SizedBox(height: 12),
+              if (hasProvider) const SizedBox(height: AppSpacing.md),
 
               _card(child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -315,12 +315,12 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
 
               if (status == 'cancelled' &&
                   (b['cancelReason'] as String? ?? '').isNotEmpty) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.md),
                 _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const Icon(Icons.info_outline_rounded, size: 16, color: C.red),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpacing.sm),
                     Expanded(child: Text(b['cancelReason'] as String,
                         style: const TextStyle(fontSize: 13, color: C.muted))),
                   ]),
@@ -330,9 +330,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                   // rendered anywhere — the customer had no way to see
                   // whether/how much a cancellation fee was assessed.
                   if ((b['cancelFeeAmount'] as num? ?? 0) > 0) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.sm),
                     Row(children: [
-                      const SizedBox(width: 24),
+                      const SizedBox(width: AppSpacing.xl),
                       Expanded(child: Text(
                           '${tr("cancel_fee_label")}: ₭ ${NumberFormat('#,###').format(b['cancelFeeAmount'])}',
                           style: const TextStyle(fontSize: 13, color: C.red,
