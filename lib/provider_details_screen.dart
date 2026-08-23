@@ -752,18 +752,27 @@ class _BottomActions extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         // Book Now
+        // 🔒 [PHASE0 P1] ເຄີຍ tap ໄດ້ສະເໝີບໍ່ວ່າ provider.isOnline ຈະເປັນແນວໃດ —
+        // ລູກຄ້າສາມາດເລີ່ມ booking form ໃຫ້ຊ່າງ offline ໂດຍບໍ່ມີການເຕືອນຈົນຮອດ
+        // ຂັ້ນຕອນສຸດທ້າຍ. ດຽວນີ້ປິດປຸ່ມ + ປ່ຽນ label ທັນທີຖ້າ offline (final
+        // guard ຢູ່ booking_form_screen.dart's _submit() ຍັງຄົງໄວ້ເປັນ
+        // defense-in-depth ຖ້າສະຖານະປ່ຽນລະຫວ່າງທາງ).
         Expanded(
           flex: 2,
           child: ElevatedButton.icon(
-            onPressed: () => Navigator.push(context,
+            onPressed: !provider.isOnline ? null : () => Navigator.push(context,
               MaterialPageRoute(builder: (_) =>
                   BookingFormScreen(providerId: provider.uid)),
             ),
-            icon:  const Icon(Icons.calendar_today, size: 18),
-            label: Text(tr('book_now')),
+            icon:  Icon(provider.isOnline
+                ? Icons.calendar_today : Icons.schedule_outlined, size: 18),
+            label: Text(provider.isOnline
+                ? tr('book_now') : tr('provider_currently_offline')),
             style: ElevatedButton.styleFrom(
               backgroundColor: C.primary,
               foregroundColor: Colors.white,
+              disabledBackgroundColor: C.border,
+              disabledForegroundColor: C.muted,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape:   RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),

@@ -39,6 +39,7 @@ import 'app_navigation_state.dart';
 import 'booking_provider.dart';
 import 'cloudinary_service.dart';
 import 'coupon_repository.dart';
+import 'firestore_service.dart';
 import 'match_screen.dart';
 import 'payment_config_provider.dart';
 import 'phone_verification.dart';
@@ -811,6 +812,23 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(tr('phone_verification_required_title'))));
       return;
+    }
+
+    // 🔒 [PHASE0 P1] ກ່ອນໜ້ານີ້ໜ້ານີ້ບໍ່ເຄີຍກວດ provider.isOnline ເລີຍ — ລູກຄ້າ
+    // ສາມາດ submit booking ໃຫ້ຊ່າງທີ່ offline ໄດ້ໂດຍບໍ່ມີການເຕືອນ. ກວດສົດຈາກ
+    // Firestore ຢູ່ນີ້ (ບໍ່ອີງໃສ່ຄ່າ isOnline ຕອນເປີດໜ້າ, ອາດຫຼ້າສະໄໝແລ້ວ) —
+    // ໃຊ້ພຽງແຕ່ເມື່ອເປັນການຈອງ provider ສະເພາະ (providerId != null); ການຈອງ
+    // ແບບ "ຊອກຊ່າງອັດຕະໂນມັດ" (providerId == null → match_screen.dart) ບໍ່ກ່ຽວ.
+    if (widget.providerId != null) {
+      final provider = await FirestoreService().getProvider(widget.providerId!);
+      if (!mounted) return;
+      if (provider != null && !provider.isOnline) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr('provider_offline_choose_another')),
+          backgroundColor: C.orange,
+        ));
+        return;
+      }
     }
 
     setState(() => _loading = true);
