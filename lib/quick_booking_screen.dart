@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'Booking.dart' show serviceIconForCategory;
 import 'app_colors.dart';
 import 'app_locale.dart';
 import 'app_navigation_state.dart';
@@ -13,6 +14,7 @@ import 'match_screen.dart';
 import 'phone_verification.dart';
 import 'quick_booking_provider.dart';
 import 'saved_address.dart';
+import 'widgets/app_button.dart';
 
 class QuickBookingFlow extends ConsumerWidget {
   const QuickBookingFlow({super.key});
@@ -120,8 +122,12 @@ class _StepService extends ConsumerWidget {
                 ],
               ),
               child: Row(children: [
-                Text(pkg['emoji'] as String,
-                    style: const TextStyle(fontSize: 28)),
+                // 🔒 [PHASE1] emoji → Icon derived from category, ຄືກັນກັບ
+                // ຮູບແບບທີ່ Booking.serviceIconForCategory() ໃຊ້ຢູ່ 5+ ໜ້າຈໍ
+                // ອື່ນແລ້ວ (booking_detail_screen.dart/match_screen.dart/
+                // profile_tab.dart/main.dart)
+                Icon(serviceIconForCategory(pkg['category'] as String),
+                    size: 28, color: C.primary),
                 const SizedBox(width: 14),
                 Expanded(
                     child: Column(
@@ -341,13 +347,18 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
                     side: const BorderSide(color: C.border)),
               )),
               const SizedBox(width: 8),
-              OutlinedButton(
-                onPressed: _useCurrentLocation,
-                style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(48, 48),
-                    foregroundColor: C.text,
-                    side: const BorderSide(color: C.border)),
-                child: const Icon(Icons.my_location),
+              // 🔒 [PHASE1] icon-only button ນີ້ບໍ່ມີ Semantics/tooltip ມາກ່ອນ —
+              // ຂະໜາດ 48dp ຜ່ານຢູ່ແລ້ວ ແຕ່ບໍ່ມີ label ໃຫ້ screen reader
+              Tooltip(
+                message: tr('use_current_location'),
+                child: OutlinedButton(
+                  onPressed: _useCurrentLocation,
+                  style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                      foregroundColor: C.text,
+                      side: const BorderSide(color: C.border)),
+                  child: const Icon(Icons.my_location),
+                ),
               ),
             ]),
             if (_address != null) ...[
@@ -405,28 +416,21 @@ class _StepScheduleState extends ConsumerState<_StepSchedule> {
       ),
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: canContinue
-                ? () {
-                    ref.read(quickBookingProvider.notifier).setSchedule(
-                        scheduledAt: _dateTime!,
-                        location: _location!,
-                        address: _address!,
-                        saveAsDefault: _saveDefault,
-                        label: _labelCtrl.text.trim());
-                  }
-                : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: C.navy,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-            child: Text(tr('next_btn')),
-          ),
+        // 🔒 [PHASE1] navy → AppButton.primary (brand green) — ແກ້ CTA color
+        // drift ທີ່ Re-Audit ລະບຸ (Quick Booking ເປັນ 1 ໃນ 3 ໜ້າທີ່ override
+        // ເປັນ navy ໃນຂະນະທີ່ Booking Form/Tracking/Match ໃຊ້ green ຢູ່ແລ້ວ)
+        child: AppButton.primary(
+          label: tr('next_btn'),
+          onPressed: canContinue
+              ? () {
+                  ref.read(quickBookingProvider.notifier).setSchedule(
+                      scheduledAt: _dateTime!,
+                      location: _location!,
+                      address: _address!,
+                      saveAsDefault: _saveDefault,
+                      label: _labelCtrl.text.trim());
+                }
+              : null,
         ),
       ),
     ]);
@@ -527,7 +531,8 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _SummaryCard(
-              emoji: draft.serviceEmoji ?? '🏠',
+              // 🔒 [PHASE1] emoji → Icon derived from category
+              icon: serviceIconForCategory(draft.category ?? ''),
               serviceType: draft.serviceType ?? '-',
               price: draft.packagePrice ?? 0,
               discount: draft.couponDiscount?.toDouble(),
@@ -568,8 +573,10 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                               color: C.green))),
+                  // 🔒 [PHASE1] ບໍ່ມີ tooltip ມາກ່ອນ
                   IconButton(
                     icon: const Icon(Icons.close, size: 16, color: C.green),
+                    tooltip: tr('cancel'),
                     onPressed: () =>
                         ref.read(quickBookingProvider.notifier).clearCoupon(),
                   ),
@@ -594,20 +601,15 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
                 const SizedBox(width: 8),
                 SizedBox(
                   height: 48,
-                  child: ElevatedButton(
-                    onPressed: draft.checkingCoupon
-                        ? null
-                        : () => ref
-                            .read(quickBookingProvider.notifier)
-                            .applyCoupon(_couponCtrl.text),
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: C.navy, foregroundColor: Colors.white),
-                    child: draft.checkingCoupon
-                        ? const SizedBox(
-                            width: 16, height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : Text(tr('checking')),
+                  // 🔒 [PHASE1] navy → AppButton.primary — ຄືກັນກັບ CTA ອື່ນໆ
+                  // ໃນໜ້ານີ້
+                  child: AppButton.primary(
+                    label: tr('checking'),
+                    fullWidth: false,
+                    loading: draft.checkingCoupon,
+                    onPressed: () => ref
+                        .read(quickBookingProvider.notifier)
+                        .applyCoupon(_couponCtrl.text),
                   ),
                 ),
               ]),
@@ -624,32 +626,12 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
               child: Text(draft.error!,
                   style: const TextStyle(color: C.red, fontSize: 12)),
             ),
-          ElevatedButton(
-            onPressed: (_submitting || user == null) ? null : _confirm,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: C.navy,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-            child: _submitting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.check_circle, color: Colors.white, size: 18),
-                      const SizedBox(width: 8),
-                      Text(tr('confirm_book'),
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w800, fontSize: 15)),
-                    ],
-                  ),
+          // 🔒 [PHASE1] navy → AppButton.primary — ຄືກັນກັບ CTA ອື່ນໆໃນໜ້ານີ້
+          AppButton.primary(
+            label: tr('confirm_book'),
+            icon: Icons.check_circle,
+            loading: _submitting,
+            onPressed: user == null ? null : _confirm,
           ),
         ]),
       ),
@@ -658,7 +640,7 @@ class _StepCheckoutState extends ConsumerState<_StepCheckout> {
 }
 
 class _SummaryCard extends StatelessWidget {
-  final String emoji;
+  final IconData icon;
   final String serviceType;
   final double price;
   final double? discount;
@@ -666,7 +648,7 @@ class _SummaryCard extends StatelessWidget {
   final String address;
 
   const _SummaryCard({
-    required this.emoji,
+    required this.icon,
     required this.serviceType,
     required this.price,
     this.discount,
@@ -690,7 +672,7 @@ class _SummaryCard extends StatelessWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Text(emoji, style: const TextStyle(fontSize: 24)),
+          Icon(icon, size: 24, color: C.primary),
           const SizedBox(width: 10),
           Expanded(
               child: Text(serviceType,
