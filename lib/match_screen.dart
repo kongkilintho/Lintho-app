@@ -29,6 +29,8 @@ import 'booking_repository.dart';
 import 'geohash_util.dart';
 import 'provider_model.dart';
 import 'tracking_screen.dart';
+import 'widgets/app_button.dart';
+import 'widgets/app_icon_button.dart';
 import 'widgets/pulsing_fade.dart';
 
 // ════════════════════════════════════════════════════════════
@@ -1123,20 +1125,12 @@ class _MatchScreenState extends State<MatchScreen>
           ),
         ),
         const SizedBox(height: 48),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _retry,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: C.yellow, elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
-            child: Text(tr('retry'), style: const TextStyle(
-              color: C.navy, fontSize: 16, fontWeight: FontWeight.w800,
-            )),
-          ),
+        // 🔒 [PHASE1] yellow → AppButton.primary — ທຸກ primary CTA ອື່ນຢູ່ໜ້ານີ້
+        // (ລວມທັງ "Confirm Now" ຢູ່ _buildMatched) ໃຊ້ green ຢູ່ແລ້ວ, ມີແຕ່ອັນນີ້
+        // ທີ່ແຕກຕ່າງໂດຍບໍ່ມີເຫດຜົນ
+        AppButton.primary(
+          label: tr('retry'),
+          onPressed: _retry,
         ),
         const SizedBox(height: 12),
         TextButton(
@@ -1334,20 +1328,12 @@ class _ConfirmedViewState extends State<_ConfirmedView>
             ),
           )),
           const SizedBox(width: 12),
-          Expanded(child: ElevatedButton.icon(
+          // 🔒 [PHASE1] translucent yellow → AppButton.primary — ຄືກັນກັບ
+          // Retry button ຂ້າງເທິງ
+          Expanded(child: AppButton.primary(
+            label: tr('track_btn'),
+            icon: Icons.track_changes_outlined,
             onPressed: widget.onTracking,
-            icon: const Icon(Icons.track_changes_outlined,
-                color: Colors.white, size: 18),
-            label: Text(tr('track_btn'), style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w800,
-            )),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: C.yellow.withValues(alpha: 0.25),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
           )),
         ]),
         const SizedBox(height: 20),
@@ -1375,20 +1361,15 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(children: [
-    Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap:        onCancel,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: 40, height: 40,
-          decoration: BoxDecoration(
-            color:        Colors.white.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Icons.close, color: Colors.white, size: 20),
-        ),
-      ),
+    // 🔒 [PHASE1] ເຄີຍ 40×40 (ຕ່ຳກວ່າ 44dp ຂັ້ນຕ່ຳ) ບໍ່ມີ Semantics/tooltip —
+    // ນີ້ຄືທາງດຽວທີ່ຍົກເລີກ/ອອກໄດ້ຕອນກຳລັງຊອກຊ່າງ. AppIconButton ບັງຄັບ 44dp
+    // + label ໂດຍອັດຕະໂນມັດ, ໃຫ້ color:white ເພື່ອຮັກສາໜ້າຕາ translucent-white
+    // ເທິງພື້ນ gradient ເຂັ້ມໄວ້ຄືເກົ່າ
+    AppIconButton(
+      icon:  Icons.close,
+      color: Colors.white,
+      label: tr('cancel_search'),
+      onTap: onCancel,
     ),
     const Spacer(),
     Container(

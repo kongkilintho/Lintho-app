@@ -549,24 +549,30 @@ class _TrackingScreenState extends State<TrackingScreen>
         Positioned(
           right: 16,
           bottom: _bottomSheetHeight + 16,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap:        _centerMap,
-              borderRadius: BorderRadius.circular(14),
-              child: Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(
-                  color:        Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [BoxShadow(
-                    color:      Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 8,
-                    offset:     const Offset(0, 3),
-                  )],
+          // 🔒 [PHASE1] ຮັກສາ custom shadowed-white style ໄວ້ (floating control
+          // ເທິງແຜນທີ່ — AppIconButton's tinted-bg style ບໍ່ເໝາະ) — ພຽງແຕ່ເພີ່ມ
+          // Tooltip/Semantics ທີ່ບໍ່ເຄີຍມີມາກ່ອນ
+          child: Tooltip(
+            message: tr('use_current_location'),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap:        _centerMap,
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    color:        Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [BoxShadow(
+                      color:      Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 8,
+                      offset:     const Offset(0, 3),
+                    )],
+                  ),
+                  child: const Icon(Icons.my_location,
+                      color: C.primary, size: 22),
                 ),
-                child: const Icon(Icons.my_location,
-                    color: C.primary, size: 22),
               ),
             ),
           ),
@@ -1118,24 +1124,13 @@ class _ProviderInfoRow extends StatelessWidget {
       ],
     )),
 
-    // call button
-    Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap:        onCall,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: 44, height: 44,
-          decoration: BoxDecoration(
-            color:        C.green.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-                color: C.green.withValues(alpha: 0.3)),
-          ),
-          child: const Icon(Icons.phone_rounded,
-              color: C.green, size: 20),
-        ),
-      ),
+    // 🔒 [PHASE1] ຄືກັນເປັ໊ະກັບ pattern ທີ່ AppIconButton ໃຊ້ຢູ່ແລ້ວໃນ top bar
+    // ຂອງໜ້ານີ້ (44dp, tinted bg 10%) — migrate ໃຫ້ໄດ້ Semantics/Tooltip ນຳ
+    AppIconButton(
+      icon:  Icons.phone_rounded,
+      color: C.green,
+      label: tr('call_semantic'),
+      onTap: onCall,
     ),
   ]);
 }
