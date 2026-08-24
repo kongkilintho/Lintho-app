@@ -108,8 +108,8 @@ class _ReferralScreenState extends ConsumerState<ReferralScreen> {
   Future<void> _redeem() async {
     setState(() => _redeeming = true);
     final error = await redeemReferralCode(_codeCtrl.text);
-    setState(() => _redeeming = false);
     if (!mounted) return;
+    setState(() => _redeeming = false);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(error ?? tr('referral_redeem_success')),
       backgroundColor: error != null ? C.red : C.success,

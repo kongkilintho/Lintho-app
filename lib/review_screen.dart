@@ -3,8 +3,9 @@
 // Fixes:
 //   ✅ [FIX-1] Constructor: ຮັບ ProviderModel ແທນ providerId/Name
 //              — ກົງກັບ match_screen + tracking_screen
-//   ✅ [FIX-2] tr() ທຸກຈຸດ → hardcoded Lao strings
-//              — ປອດໄພກວ່າ: ບໍ່ຂຶ້ນກັບ app_locale.dart
+//   ✅ [FIX-2 / Batch F REG-1] hardcoded Lao strings → tr() ທຸກຈຸດ
+//              — ຮອງຮັບຫຼາຍພາສາ, ບໍ່ຄ້າງຢູ່ Lao ດຽວ (ຄໍາເຫັນເກົ່າຢູ່ນີ້ບອກກົງກັນ
+//              ຂ້າມ — ໄດ້ຖືກແກ້ໃຫ້ກົງກັບ code ຈິງແລ້ວ)
 //   ✅ [FIX-3] totalReviews → totalJobs (ກົງກັບ Firestore)
 //   ── Rules (kept) ───────────────────────────────────────────
 //   ✅ dispose() ທຸກ controller

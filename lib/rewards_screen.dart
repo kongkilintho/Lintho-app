@@ -120,8 +120,8 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
   Future<void> _redeem(int points) async {
     setState(() => _redeeming = true);
     final result = await redeemPointsForCoupon(points);
-    setState(() => _redeeming = false);
     if (!mounted) return;
+    setState(() => _redeeming = false);
 
     if (result.error != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

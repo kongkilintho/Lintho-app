@@ -352,6 +352,17 @@ class _RoleRouterState extends State<RoleRouter> {
                   body: _RoleRouterSkeleton(),
                 );
               }
+              // 🔒 [FIX LC-1 / Batch F] a transient stream error here previously
+              // fell through to kycStatus == null, misrouting an already-verified
+              // provider to PendingApprovalScreen — same failure mode the
+              // users/{uid} stream above was hardened against (AUDIT PERF-7b).
+              if (provSnapshot.hasError) {
+                return Scaffold(
+                  backgroundColor: C.background,
+                  body: ErrorStateView(
+                      onRetry: () => setState(() => _retryTick++)),
+                );
+              }
               final kycStatus = (provSnapshot.data?.data()
                   as Map<String, dynamic>?)?['kycStatus'] as String?;
               // 🔒 [FIX E-01/E-02] delegate to the shared decision function —
@@ -589,6 +600,20 @@ class _LoginPageState extends State<LoginPage>
           await FirebaseAuth.instance.signInWithCredential(credential);
 
       final user = userCred.user;
+      // 🔒 [FIX AUTH-2 / Batch F] admin@sabee.la must never fall through to the
+      // role/kycStatus resolution below — that path would write a permanent
+      // role:'customer' users/{uid} doc (role is immutable per firestore.rules)
+      // and briefly show MainShell. Same check as resolvePostAuthDestination()/
+      // RoleRouter above, applied here too since this path builds its own
+      // destination instead of delegating to resolvePostAuthDestination().
+      if (user?.email == 'admin@sabee.la') {
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const _AdminRedirectScreen()),
+          (route) => false,
+        );
+        return;
+      }
       String role = 'customer';
       // 🔒 [AUDIT ADM-2 / 2026-08-02] users/{uid}.status ບໍ່ກົງກັບສິ່ງທີ່ admin
       // approve/reject/suspend ຂຽນຈິງ (providers/{uid}.kycStatus) — ເບິ່ງ

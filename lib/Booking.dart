@@ -412,16 +412,22 @@ class ProviderTransaction {
     required this.description, required this.createdAt,
   });
 
+  // 🔒 [FIX LC-2 / Batch F] non-null-safe casts here (unlike the sibling
+  // Booking/Wallet/ProviderProfile/Review factories above) meant one
+  // malformed doc threw inside Stream.map(), poisoning the whole
+  // transactions/earnings stream for that provider. Same defaulting
+  // pattern as ProviderProfile.kycStatus below (byName with a fallback
+  // literal) and Wallet/Review's `as X? ?? default` fields.
   factory ProviderTransaction.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return ProviderTransaction(
       id:          doc.id,
-      providerId:  d['providerId']  as String,
-      type:        TxType.values.byName(d['type'] as String),
-      amount:     (d['amount']      as num).toDouble(),
+      providerId:  d['providerId']  as String? ?? '',
+      type:        TxType.values.byName(d['type'] as String? ?? 'adjustment'),
+      amount:     (d['amount']      as num?)?.toDouble() ?? 0,
       bookingId:   d['bookingId']   as String?,
-      description: d['description'] as String,
-      createdAt:  (d['createdAt']   as Timestamp).toDate(),
+      description: d['description'] as String? ?? '',
+      createdAt:  (d['createdAt']   as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 

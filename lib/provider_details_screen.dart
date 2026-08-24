@@ -271,6 +271,7 @@ class _ProviderDetailsBody extends ConsumerWidget {
         ),
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios, color: Colors.white),
+          tooltip:   tr('back_semantic'),
           onPressed: () => Navigator.pop(context),
         ),
       ),

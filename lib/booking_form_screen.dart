@@ -1034,6 +1034,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: C.primary, size: 20),
+          tooltip: tr('back_semantic'),
           onPressed: () {
             if (_step > 0) setState(() => _step--);
             else Navigator.pop(context);
@@ -2304,6 +2305,7 @@ class _CouponBoxState extends State<_CouponBox> {
                       fontWeight: FontWeight.w700, color: C.green))),
           IconButton(
             icon: const Icon(Icons.close, size: 16, color: C.green),
+            tooltip: tr('cancel'),
             onPressed: _clear,
           ),
         ]),

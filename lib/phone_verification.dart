@@ -56,6 +56,7 @@ class PhoneRequiredGate extends StatelessWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: C.primary, size: 20),
+          tooltip: tr('back_semantic'),
           onPressed: () => Navigator.pop(context),
         ),
       ),
