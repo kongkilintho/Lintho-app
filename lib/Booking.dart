@@ -4,6 +4,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart' show IconData, Icons;
+import 'app_locale.dart';
 
 // 🔒 [AUDIT H11] serviceEmoji ຖືກເກັບເປັນ emoji character ຢູ່ໃນ Firestore doc
 // ເອງ (ບໍ່ແມ່ນ derive ຈາກ category ຝັ່ງ client) — render ຄືເກົ່າທຸກຄັ້ງທີ່ booking
@@ -25,15 +26,33 @@ enum JobStatus {
 }
 
 extension JobStatusX on JobStatus {
+  // ✅ [Phase 2 / Batch B] previously hardcoded Lao-only strings, bypassing
+  // tr() entirely — non-Lao users saw Lao status text wherever this getter
+  // was rendered (confirmed live at home_tab.dart:536 — StatusBadge, used by
+  // JobCard for every job status including pending — and
+  // tracking_screen.dart:819; filtering/comparison logic was already
+  // switched to compare the enum directly rather than this display string,
+  // per 🔒 AUDIT PROV-5 / 2026-08-02 in booking_provider.dart — so this
+  // getter is safely display-only).
+  // ⚠️ Deliberately NOT reusing booking_display_helpers.dart's
+  // bookingStatusLabel()/its tr() keys: that function's wording was written
+  // for a different context (customer-facing tracking copy, e.g. "ຊ່າງຮັບງານ
+  // ແລ້ວ"/"technician accepted") and differs from this getter's original text
+  // for 5 of 8 statuses (e.g. pending was "ໃໝ່"/"new", not "ລໍຖ້າ"/"waiting").
+  // Reusing those keys would have silently changed the Lao text existing
+  // users already see on the provider job list — this getter gets its own
+  // dedicated keys instead, so the *only* change is that EN/TH/ZH now show
+  // translated text instead of leftover Lao; the Lao wording is byte-for-byte
+  // unchanged from before this fix.
   String get label => switch (this) {
-    JobStatus.pending    => 'ໃໝ່',
-    JobStatus.accepted   => 'ຮັບແລ້ວ',
-    JobStatus.onTheWay   => 'ກຳລັງໄປ',
-    JobStatus.arrived    => 'ຮອດແລ້ວ',
-    JobStatus.inProgress => 'ກຳລັງເຮັດ',
-    JobStatus.completed  => 'ສຳເລັດ',
-    JobStatus.cancelled  => 'ຍົກເລີກ',
-    JobStatus.rejected   => 'ປະຕິເສດ',
+    JobStatus.pending    => tr('job_status_label_pending'),
+    JobStatus.accepted   => tr('job_status_label_accepted'),
+    JobStatus.onTheWay   => tr('job_status_label_on_the_way'),
+    JobStatus.arrived    => tr('job_status_label_arrived'),
+    JobStatus.inProgress => tr('job_status_label_in_progress'),
+    JobStatus.completed  => tr('job_status_label_completed'),
+    JobStatus.cancelled  => tr('job_status_label_cancelled'),
+    JobStatus.rejected   => tr('job_status_label_rejected'),
   };
   bool get isActive => [
     JobStatus.accepted, JobStatus.onTheWay,
@@ -47,13 +66,19 @@ extension JobStatusX on JobStatus {
 enum TxType { earning, withdrawal, bonus, refund, topup, adjustment }
 
 extension TxTypeX on TxType {
+  // ✅ [Phase 2 / Batch B] same hardcoded-string issue as JobStatusX.label
+  // above. Confirmed via full-codebase grep this getter currently has zero
+  // live call sites (earnings_tab.dart's transaction UI uses `TxType` only
+  // for icon lookup and `.isCredit`, not `.label`) — fixed for correctness
+  // and to remove the dead-string trap for whoever wires up a transaction-
+  // type display later, not because a visible bug exists today.
   String get label => switch (this) {
-    TxType.earning    => 'ລາຍຮັບ',
-    TxType.withdrawal => 'ຖອນເງິນ',
-    TxType.bonus      => 'ໂບນັດ',
-    TxType.refund     => 'ຄືນເງິນ',
-    TxType.topup      => 'ຕື່ມເງິນ',
-    TxType.adjustment => 'ຍອດປັບປຸງ',
+    TxType.earning    => tr('tx_type_earning'),
+    TxType.withdrawal => tr('tx_type_withdrawal'),
+    TxType.bonus      => tr('tx_type_bonus'),
+    TxType.refund     => tr('tx_type_refund'),
+    TxType.topup      => tr('tx_type_topup'),
+    TxType.adjustment => tr('tx_type_adjustment'),
   };
   // 🔒 [Admin wallet adjustment] adjustment ຄົງທີ່ false ຢູ່ນີ້ໂດຍຕັ້ງໃຈ — ນີ້
   // ຄືຄ່າທີ່ _WeeklyChart (booking_provider.dart) ໃຊ້ກອງ "ລາຍຮັບຈິງ" ເທົ່ານັ້ນ

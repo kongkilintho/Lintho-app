@@ -58,6 +58,7 @@ import 'lao_phone.dart';
 import 'widgets/pulsing_fade.dart';
 import 'widgets/error_state_view.dart';
 import 'widgets/empty_state_view.dart';
+import 'widgets/app_button.dart';
 import 'widgets/app_section.dart';
 import 'theme/app_theme.dart';
 import 'app_navigation_state.dart';
@@ -2269,17 +2270,13 @@ class _ActiveBookingCard extends StatelessWidget {
           )),
         ]),
         const SizedBox(height: AppSpacing.md),
-        SizedBox(width: double.infinity, child: ElevatedButton(
+        // ✅ [Phase 2 / Batch B] was a raw ElevatedButton (already correctly
+        // green) — now the shared AppButton.primary component.
+        AppButton.primary(
+          label: tr('view_details_link'),
           onPressed: () => Navigator.push(context, MaterialPageRoute(
               builder: (_) => BookingDetailScreen(bookingId: bookingId))),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: C.primary,
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.card)),
-          ),
-          child: Text(tr('view_details_link'), style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-        )),
+        ),
       ]),
     );
   }
@@ -2302,7 +2299,11 @@ class _BookingScreenState extends State<BookingScreen> {
   Map<BookingTab, String> get _tabLabels => {
     BookingTab.ongoing:   tr('tab_ongoing'),
     BookingTab.completed: tr('tab_completed_done'),
-    BookingTab.cancelled: tr('cancel'),
+    // ✅ [Phase 2 / Batch B] was tr('cancel') — the imperative verb
+    // ("Cancel") on a tab that lists already-cancelled bookings; EN/TH/ZH
+    // all distinguish the verb from the status adjective. 'cancelled' is
+    // the exact key bookingStatusLabel() already uses for this status.
+    BookingTab.cancelled: tr('cancelled'),
   };
 
   @override
@@ -2347,25 +2348,10 @@ class _BookingScreenState extends State<BookingScreen> {
               }
               // ✅ [FIX] ກ່ອນໜ້ານີ້ error ບໍ່ຖືກເຊັກ — Firestore ຜິດພາດຈະຕົກລົງ
               // ເປັນ list ຫວ່າງງຽບໆ, ເຮັດໃຫ້ຄືກັບບໍ່ມີການຈອງທັງໆທີ່ແທ້ຈິງໂຫລດບໍ່ໄດ້.
+              // ✅ [Phase 2 / Batch B] ad hoc error UI → shared ErrorStateView
+              // (this file already uses it correctly elsewhere, e.g. Home).
               if (snapshot.hasError) {
-                return Center(child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.wifi_off_outlined, size: 48, color: C.muted),
-                    const SizedBox(height: 12),
-                    Text(tr('load_failed'), style: const TextStyle(
-                        fontSize: 15, color: C.muted, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 16),
-                    OutlinedButton.icon(
-                      onPressed: () => setState(() {}),
-                      icon: const Icon(Icons.refresh),
-                      label: Text(tr('retry')),
-                      style: OutlinedButton.styleFrom(
-                          foregroundColor: C.navy,
-                          side: const BorderSide(color: C.navy)),
-                    ),
-                  ],
-                ));
+                return ErrorStateView(onRetry: () => setState(() {}));
               }
               final allDocs = snapshot.data?.docs ?? [];
               final docs = allDocs.where((d) {
@@ -2375,42 +2361,24 @@ class _BookingScreenState extends State<BookingScreen> {
               }).toList();
 
               if (docs.isEmpty) {
-                return Center(child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 80, height: 80,
-                      decoration: BoxDecoration(
-                        color: C.sky.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.assignment_outlined, color: C.sky, size: 36),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(tr('no_booking_in_category'),
-                        style: const TextStyle(
-                            fontSize: 16, color: C.muted,
-                            fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 20),
-                    Consumer(builder: (context, ref, _) => ElevatedButton(
-                      onPressed: () {
-                        ref.read(mainShellTabIndexProvider.notifier).state = 0;
-                        if (Navigator.canPop(context)) Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: C.primary,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: Text(tr('booking_empty_cta'), style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w700)),
-                    )),
-                  ],
-                ));
+                // ✅ [Phase 2 / Batch B] ad hoc empty UI → shared EmptyStateView,
+                // CTA → AppButton (was a raw ElevatedButton, already correctly
+                // green — now the shared component, not full-width by default
+                // since this action sits inside a centered empty state, not a
+                // bottom action bar).
+                return EmptyStateView(
+                  icon:    Icons.assignment_outlined,
+                  accent:  C.sky,
+                  title:   tr('no_booking_in_category'),
+                  action:  Consumer(builder: (context, ref, _) => AppButton.primary(
+                    fullWidth: false,
+                    label: tr('booking_empty_cta'),
+                    onPressed: () {
+                      ref.read(mainShellTabIndexProvider.notifier).state = 0;
+                      if (Navigator.canPop(context)) Navigator.pop(context);
+                    },
+                  )),
+                );
               }
 
               return ListView.builder(
@@ -2428,7 +2396,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(AppRadius.card),
                       boxShadow: [BoxShadow(
                         color: Colors.black.withValues(alpha: 0.04),
                         blurRadius: 8, offset: const Offset(0, 3),
@@ -2459,7 +2427,7 @@ class _BookingScreenState extends State<BookingScreen> {
                           width: 52, height: 52,
                           decoration: BoxDecoration(
                             color: C.bg,
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(AppRadius.card),
                           ),
                           // ✅ [FIX H11] Icon ຈາກ category ແທນ raw emoji
                           child: Center(child: Icon(
@@ -2495,7 +2463,7 @@ class _BookingScreenState extends State<BookingScreen> {
                                 horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               color: style.bg,
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(AppRadius.sheet),
                             ),
                             child: Text(bookingStatusLabel(status),
                                 style: TextStyle(
@@ -2507,29 +2475,23 @@ class _BookingScreenState extends State<BookingScreen> {
                       if (status == 'completed' &&
                           (b['reviewed'] as bool? ?? false) == false) ...[
                         const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () => Navigator.push(context,
-                                MaterialPageRoute(builder: (_) => ReviewScreen(
-                                  bookingId:    doc.id,
-                                  provider:     providerFromBooking(b),
-                                  serviceName:  b['serviceName']  as String? ??
-                                      b['serviceType']  as String? ??
-                                      tr('service_generic'),
-                                  serviceIcon:  serviceIconForCategory(
-                                      b['category'] as String? ?? ''),
-                                ))),
-                            icon: const Icon(Icons.star_rounded,
-                                color: C.yellow, size: 16),
-                            label: Text(tr('rate'), style: const TextStyle(
-                                color: C.navy, fontWeight: FontWeight.w700)),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: C.navy),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
-                            ),
-                          ),
+                        // ✅ [Phase 2 / Batch B] was a raw OutlinedButton.icon
+                        // — now AppButton.outline. Rating is a secondary
+                        // action on this card (the card itself opens detail),
+                        // matching outline's semantic role.
+                        AppButton.outline(
+                          label: tr('rate'),
+                          icon:  Icons.star_rounded,
+                          onPressed: () => Navigator.push(context,
+                              MaterialPageRoute(builder: (_) => ReviewScreen(
+                                bookingId:    doc.id,
+                                provider:     providerFromBooking(b),
+                                serviceName:  b['serviceName']  as String? ??
+                                    b['serviceType']  as String? ??
+                                    tr('service_generic'),
+                                serviceIcon:  serviceIconForCategory(
+                                    b['category'] as String? ?? ''),
+                              ))),
                         ),
                       ],
                       const Padding(
@@ -2556,7 +2518,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   return Material(
                     color: Colors.transparent,
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(AppRadius.card),
                       onTap: () => Navigator.push(context,
                           MaterialPageRoute(builder: (_) =>
                               BookingDetailScreen(bookingId: doc.id))),
@@ -2583,14 +2545,14 @@ class _BookingScreenState extends State<BookingScreen> {
             child: Padding(
               padding: const EdgeInsets.only(right: 8),
               child: InkWell(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.card),
                 onTap: () => setState(() => _tab = t),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: selected ? C.navy : C.bg,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.card),
                   ),
                   child: Text(_tabLabels[t]!, textAlign: TextAlign.center,
                       style: TextStyle(
@@ -2648,14 +2610,14 @@ class _BookingListSkeletonState extends State<_BookingListSkeleton>
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(AppRadius.card),
           ),
           child: Row(children: [
             Container(
               width: 52, height: 52,
               decoration: BoxDecoration(
                 color: C.muted.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppRadius.card),
               ),
             ),
             const SizedBox(width: 12),
@@ -2665,18 +2627,18 @@ class _BookingListSkeletonState extends State<_BookingListSkeleton>
                 Container(width: 120, height: 13,
                     decoration: BoxDecoration(
                         color: C.muted.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6))),
+                        borderRadius: BorderRadius.circular(AppRadius.chip))),
                 const SizedBox(height: 8),
                 Container(width: 80, height: 11,
                     decoration: BoxDecoration(
                         color: C.muted.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(5))),
+                        borderRadius: BorderRadius.circular(AppRadius.chip))),
               ],
             )),
             Container(width: 56, height: 26,
                 decoration: BoxDecoration(
                     color: C.muted.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20))),
+                    borderRadius: BorderRadius.circular(AppRadius.sheet))),
           ]),
         ),
       ),

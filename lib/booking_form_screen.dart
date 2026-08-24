@@ -1039,8 +1039,11 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             else Navigator.pop(context);
           },
         ),
-        title: Text(_stepLabels[_step], style: const TextStyle(
-            color: C.primary, fontWeight: FontWeight.w800, fontSize: 18)),
+        // ✅ [Phase 2 / Batch B] matches AppTypography.appBarTitle's shape
+        // (18/w800) exactly — only the brand-green color is a deliberate
+        // override vs. the app-wide default ink app-bar title.
+        title: Text(_stepLabels[_step],
+            style: AppTypography.appBarTitle.copyWith(color: C.primary)),
         centerTitle: true,
       ),
       body: Column(children: [
@@ -1574,10 +1577,11 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Icon(Icons.bolt_rounded, color: C.primary, size: 20),
             const SizedBox(width: 10),
+            // ✅ [Phase 2 / Batch B] 13/w600 is an exact match for
+            // AppTypography.label; only the color override is bespoke.
             Expanded(child: Text(
               tr('now_eta_note'),
-              style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600, color: C.primary),
+              style: AppTypography.label.copyWith(color: C.primary),
             )),
           ]),
         ),
@@ -1941,9 +1945,10 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Icon(Icons.info_outline, color: C.primary, size: 16),
           const SizedBox(width: AppSpacing.sm),
+          // ✅ [Phase 2 / Batch B] fontSize matches AppTypography.caption.
           Expanded(child: Text(
             tr('dispatch_notice'),
-            style: const TextStyle(fontSize: 12, color: C.primary),
+            style: AppTypography.caption.copyWith(color: C.primary),
           )),
         ]),
       ),
@@ -2020,8 +2025,10 @@ class _AcCartTile extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text('${AppPricing.fmt(lineTotal)} ${tr("kip_currency")}', style: const TextStyle(
-              fontSize: 12, fontWeight: FontWeight.w800, color: C.primary)),
+          // ✅ [Phase 2 / Batch B] fontSize matches AppTypography.caption.
+          Text('${AppPricing.fmt(lineTotal)} ${tr("kip_currency")}',
+              style: AppTypography.caption.copyWith(
+                  fontWeight: FontWeight.w800, color: C.primary)),
         ]),
       ]),
     );
@@ -2289,11 +2296,12 @@ class _CouponBoxState extends State<_CouponBox> {
         child: Row(children: [
           const Icon(Icons.local_offer, color: C.green, size: 16),
           const SizedBox(width: AppSpacing.sm),
+          // ✅ [Phase 2 / Batch B] fontSize matches AppTypography.label.
           Expanded(
               child: Text(
                   '${order.couponCode} · -${AppPricing.fmt((order.couponDiscount ?? 0).round())} ${tr("kip_currency")}',
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700, color: C.green))),
+                  style: AppTypography.label.copyWith(
+                      fontWeight: FontWeight.w700, color: C.green))),
           IconButton(
             icon: const Icon(Icons.close, size: 16, color: C.green),
             onPressed: _clear,
@@ -2434,8 +2442,9 @@ class _ReviewRow extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppRadius.chip),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: AppSpacing.xs),
-              child: Text(tr('edit'), style: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w700, color: C.primary)),
+              // ✅ [Phase 2 / Batch B] fontSize matches AppTypography.caption.
+              child: Text(tr('edit'), style: AppTypography.caption.copyWith(
+                  fontWeight: FontWeight.w700, color: C.primary)),
             ),
           ),
         ),
@@ -3239,7 +3248,10 @@ class _SqmInput extends StatelessWidget {
         onChanged:    (v) => onChanged(double.tryParse(v) ?? 0),
         decoration: InputDecoration(
           hintText:   tr('sqm_input_hint'),
-          hintStyle:  const TextStyle(color: C.muted, fontSize: 14),
+          // ✅ [Phase 2 / Batch B] every other TextField's hintStyle in this
+          // file already uses AppTypography.caption — this one was the lone
+          // outlier at a hardcoded 14/muted.
+          hintStyle:  AppTypography.caption,
           suffixText: tr('sqm_input_suffix'),
           suffixStyle: const TextStyle(color: C.muted, fontWeight: FontWeight.w600),
           filled: true, fillColor: C.white,
@@ -3254,11 +3266,15 @@ class _SqmInput extends StatelessWidget {
       if (_hasMinError) ...[
         const SizedBox(height: 6),
         Text('${tr("sqm_input_error_prefix")} ${minSqm.toStringAsFixed(0)} ${tr("sqm_input_error_suffix")}',
-            style: TextStyle(fontSize: 12, color: C.red.withValues(alpha: 0.85), fontWeight: FontWeight.w600)),
+            // ✅ [Phase 2 / Batch B] fontSize matches AppTypography.caption.
+            style: AppTypography.caption.copyWith(
+                color: C.red.withValues(alpha: 0.85), fontWeight: FontWeight.w600)),
       ] else if (_hasMaxError) ...[
         const SizedBox(height: 6),
         Text('${tr("sqm_input_max_error_prefix")} ${_maxSqm.toStringAsFixed(0)} ${tr("sqm_input_max_error_suffix")}',
-            style: TextStyle(fontSize: 12, color: C.red.withValues(alpha: 0.85), fontWeight: FontWeight.w600)),
+            // ✅ [Phase 2 / Batch B] fontSize matches AppTypography.caption.
+            style: AppTypography.caption.copyWith(
+                color: C.red.withValues(alpha: 0.85), fontWeight: FontWeight.w600)),
       ],
       const SizedBox(height: 10),
       Row(children: _presets.map((p) {
@@ -3889,8 +3905,11 @@ class _Label extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(text, style: const TextStyle(
-          fontSize: 15, fontWeight: FontWeight.w800, color: C.textPrimary)),
+      // ✅ [Phase 2 / Batch B] fontSize matches AppTypography.body exactly —
+      // this widget is used ~30× across the file, so this single fix
+      // converges every step-section header onto the token at once.
+      Text(text, style: AppTypography.body.copyWith(
+          fontWeight: FontWeight.w800, color: C.textPrimary)),
       if (sub != null)
         Text(sub!, style: AppTypography.caption),
     ],
@@ -3964,8 +3983,9 @@ class _BottomBar extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: Row(children: [
+            // ✅ [Phase 2 / Batch B] fontSize+weight matches AppTypography.label.
             Text(tr('bottom_bar_estimated_total'),
-                style: const TextStyle(fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
+                style: AppTypography.label.copyWith(color: C.muted)),
             const SizedBox(width: AppSpacing.xs),
             // 🔒 [PHASE1] ເຄີຍ GestureDetector ດິບ (ບໍ່ມີ ripple/Semantics,
             // hit area ~15px) — ຝ່າຝືນ house rule "InkWell + Material ทุก tap
