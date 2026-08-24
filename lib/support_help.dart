@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
 import 'support_provider.dart';
+import 'theme/app_theme.dart' show AppTypography, AppRadius;
 
 Future<void> callSupport(BuildContext context, String phone) async {
   if (phone.isEmpty) return;
@@ -51,8 +52,9 @@ void showFaqSheet(BuildContext context) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    // ✅ [Phase 2 / Batch C] AppRadius.sheetTop is exactly this shape
+    // (BorderRadius.vertical(top: Radius.circular(sheet))) — was hand-rolled.
+    shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
     builder: (ctx) => DraggableScrollableSheet(
       initialChildSize: 0.7,
       minChildSize: 0.4,
@@ -68,12 +70,12 @@ void showFaqSheet(BuildContext context) {
               Center(child: Container(
                 width: 40, height: 4,
                 decoration: BoxDecoration(
-                  color: C.border, borderRadius: BorderRadius.circular(2),
+                  color: C.border, borderRadius: BorderRadius.circular(AppRadius.chip),
                 ),
               )),
               const SizedBox(height: 16),
-              const Text('FAQ', style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.w800, color: C.text)),
+              // ✅ fontSize+weight match AppTypography.appBarTitle exactly.
+              Text(tr('faq_title'), style: AppTypography.appBarTitle),
               const SizedBox(height: 12),
               ...faqAsync.when(
                 data: (items) {
@@ -81,7 +83,7 @@ void showFaqSheet(BuildContext context) {
                     return [Padding(
                       padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Center(child: Text(tr('faq_empty'),
-                          style: const TextStyle(color: C.muted, fontSize: 13))),
+                          style: AppTypography.label.copyWith(fontWeight: FontWeight.w400, color: C.muted))),
                     )];
                   }
                   return _groupedFaqTiles(items);
@@ -93,7 +95,7 @@ void showFaqSheet(BuildContext context) {
                 error: (_, __) => [Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Center(child: Text(tr('faq_load_error'),
-                      style: const TextStyle(color: C.muted, fontSize: 13))),
+                      style: AppTypography.label.copyWith(fontWeight: FontWeight.w400, color: C.muted))),
                 )],
               ),
             ],
@@ -111,10 +113,10 @@ List<Widget> _groupedFaqTiles(List<FaqItem> items) {
     final category = item.category.isEmpty ? tr('faq_category_general') : item.category;
     if (category != lastCategory) {
       if (lastCategory != null) widgets.add(const SizedBox(height: 8));
+      // ✅ [Phase 2 / Batch C] fontSize matches AppTypography.caption.
       widgets.add(Padding(
         padding: const EdgeInsets.only(top: 8, bottom: 4),
-        child: Text(category, style: const TextStyle(
-            fontSize: 12, fontWeight: FontWeight.w800, color: C.muted)),
+        child: Text(category, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800)),
       ));
       lastCategory = category;
     }
@@ -123,10 +125,11 @@ List<Widget> _groupedFaqTiles(List<FaqItem> items) {
           fontWeight: FontWeight.w700, color: C.text, fontSize: 14)),
       childrenPadding: const EdgeInsets.only(bottom: 12),
       children: [
+        // ✅ [Phase 2 / Batch C] fontSize matches AppTypography.label.
         Align(
           alignment: Alignment.centerLeft,
-          child: Text(item.answer, style: const TextStyle(
-              color: C.muted, fontSize: 13, height: 1.4)),
+          child: Text(item.answer, style: AppTypography.label.copyWith(
+              fontWeight: FontWeight.w400, color: C.muted, height: 1.4)),
         ),
       ],
     ));

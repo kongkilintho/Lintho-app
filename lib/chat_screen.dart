@@ -21,6 +21,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
 import 'fcm_service.dart';
+import 'theme/app_theme.dart' show AppTypography, AppRadius;
 import 'widgets/skeleton_box.dart';
 import 'widgets/error_state_view.dart';
 
@@ -121,8 +122,8 @@ class _ChatListBodyState extends State<ChatListBody> {
             final chatId     = chats[i].id;
             final isCustomer = user?.uid == chat['customerId'];
             final otherName  = isCustomer
-                ? (chat['providerName']  as String? ?? 'ຊ່າງ')
-                : (chat['customerName'] as String? ?? 'ລູກຄ້າ');
+                ? (chat['providerName']  as String? ?? tr('chat_technician_fallback'))
+                : (chat['customerName'] as String? ?? tr('chat_customer_fallback'));
             final lastMsg    = chat['lastMessage']          as String? ?? '';
 
             return _ChatListTile(
@@ -154,9 +155,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
       appBar: AppBar(
         elevation:   0,
         centerTitle: true,
-        title: Text(tr('chat_title'), style: const TextStyle(
-          color: C.primary, fontWeight: FontWeight.w800, fontSize: 18,
-        )),
+        // ✅ [Phase 2 / Batch C] matches AppTypography.appBarTitle exactly.
+        title: Text(tr('chat_title'), style: AppTypography.appBarTitle.copyWith(color: C.primary)),
       ),
       body: const ChatListBody(),
       floatingActionButton: FloatingActionButton(
@@ -198,7 +198,7 @@ class _ChatListTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color:        Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: [BoxShadow(
           color:      Colors.black.withValues(alpha: 0.05),
           blurRadius: 8,
@@ -207,9 +207,9 @@ class _ChatListTile extends StatelessWidget {
       ),
       child: Material(
         color:        Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         child: InkWell(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           onTap: () => Navigator.push(context, MaterialPageRoute(
             builder: (_) => ChatScreen(
               chatId:         chatId,
@@ -226,7 +226,7 @@ class _ChatListTile extends StatelessWidget {
                   gradient: const LinearGradient(
                     colors: [C.primary, C.gold],
                   ),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
                 ),
                 child: Center(child: Text(
                   otherName.isNotEmpty ? otherName[0].toUpperCase() : '?',
@@ -540,7 +540,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(isPermissionDenied
               ? tr('chat_send_permission_denied')
-              : 'ສົ່ງຂໍ້ຄວາມລົ້ມເຫລວ, ກະລຸນາລອງໃໝ່: $e'),
+              : '${tr("chat_send_failed")}: $e'),
           backgroundColor: C.red,
         ));
       }
@@ -558,6 +558,7 @@ class _ChatScreenState extends State<ChatScreen> {
         centerTitle: true,
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios, color: C.primary, size: 20),
+          tooltip:   tr('back_semantic'),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(children: [
@@ -574,12 +575,13 @@ class _ChatScreenState extends State<ChatScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color:        C.green.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.card),
             ),
-            child: const Row(children: [
-              Icon(Icons.circle, color: C.green, size: 8),
-              SizedBox(width: 4),
-              Text('Live', style: TextStyle(
+            child: Row(children: [
+              const Icon(Icons.circle, color: C.green, size: 8),
+              const SizedBox(width: 4),
+              // ✅ [Phase 2 / Batch C] restored tr() — see LINTHO_PHASE2_BATCH_C_AUDIT.md
+              Text(tr('chat_live_badge'), style: const TextStyle(
                 color: C.green, fontSize: 10, fontWeight: FontWeight.w700,
               )),
             ]),
@@ -650,7 +652,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color:        C.cream,
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(AppRadius.sheet),
                     border:       Border.all(color: C.border),
                   ),
                   child: TextField(
@@ -660,9 +662,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     maxLines:        null,
                     textInputAction: TextInputAction.send,
                     onSubmitted:     (_) => _sendMessage(),
-                    decoration: const InputDecoration(
-                      hintText:  'ພິມຂໍ້ຄວາມ...',
-                      hintStyle: TextStyle(color: C.muted, fontSize: 14),
+                    decoration: InputDecoration(
+                      // ✅ [Phase 2 / Batch C] restored tr() — see LINTHO_PHASE2_BATCH_C_AUDIT.md
+                      hintText:  tr('chat_message_hint'),
+                      hintStyle: const TextStyle(color: C.muted, fontSize: 14),
                       border:    InputBorder.none,
                       isDense:   true,
                     ),
@@ -674,9 +677,9 @@ class _ChatScreenState extends State<ChatScreen> {
               // ✅ [FIX-1] ປ່ຽນ CircularProgressIndicator → _SendingSkeleton
               Material(
                 color:        Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppRadius.card),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
                   onTap: _sending ? null : _sendMessage,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
@@ -687,7 +690,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             ? [C.muted, C.muted]
                             : const [C.primary, C.gold],
                       ),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(AppRadius.card),
                       boxShadow: _sending ? [] : [BoxShadow(
                         color:      C.primary.withValues(alpha: 0.3),
                         blurRadius: 8,
@@ -896,6 +899,10 @@ class _ChatIllustration extends StatelessWidget {
   }
 }
 
+// ✅ [Phase 2 / Batch C] not converted to EmptyStateView — _ChatIllustration
+// is a richer, branded gradient illustration already used consistently for
+// both empty states here; EmptyStateView's generic icon-in-circle would be
+// a downgrade. Only the hardcoded strings were restored to tr().
 class _EmptyChatList extends StatelessWidget {
   const _EmptyChatList();
   @override
@@ -905,11 +912,11 @@ class _EmptyChatList extends StatelessWidget {
       children: [
         const _ChatIllustration(),
         const SizedBox(height: 18),
-        const Text('ຍັງບໍ່ມີການສົນທະນາ', style: TextStyle(
+        Text(tr('chat_empty_list_title'), style: const TextStyle(
           fontSize: 16, color: C.text, fontWeight: FontWeight.w800,
         )),
         const SizedBox(height: 4),
-        Text('ການສົນທະນາ​ກັບ​ຊ່າງ ​ຈະ​ປະກົດ​ຢູ່​ນີ້',
+        Text(tr('chat_empty_list_sub'),
             style: TextStyle(
                 fontSize: 12.5, color: C.muted.withValues(alpha: 0.9))),
       ],
@@ -926,8 +933,8 @@ class _EmptyChat extends StatelessWidget {
       children: [
         const _ChatIllustration(size: 84),
         const SizedBox(height: 14),
-        const Text('ເລີ່ມການສົນທະນາ!',
-            style: TextStyle(color: C.text, fontSize: 15,
+        Text(tr('chat_empty_room_title'),
+            style: const TextStyle(color: C.text, fontSize: 15,
                 fontWeight: FontWeight.w700)),
       ],
     ),

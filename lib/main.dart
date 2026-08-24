@@ -2674,12 +2674,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 12),
           ListTile(
             leading: const Icon(Icons.photo_library_outlined, color: C.navy),
-            title: const Text('ເລືອກຈາກຄັງຮູບພາບ'),
+            title: Text(tr('profile_choose_from_gallery')),
             onTap: () => Navigator.pop(context, ImageSource.gallery),
           ),
           ListTile(
             leading: const Icon(Icons.camera_alt_outlined, color: C.navy),
-            title: const Text('ຖ່າຍຮູບໃໝ່'),
+            title: Text(tr('profile_take_new_photo')),
             onTap: () => Navigator.pop(context, ImageSource.camera),
           ),
           const SizedBox(height: 8),
@@ -2701,14 +2701,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (url == null) throw Exception('Upload failed');
       await FirebaseAuth.instance.currentUser?.reload();
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('ປ່ຽນຮູບໂປຣໄຟລ໌ສຳເລັດ'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(tr('profile_photo_updated')),
         backgroundColor: C.success,
       ));
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('ອັບໂຫລດຮູບລົ້ມເຫລວ: $e'),
+        content: Text('${tr("photo_upload_failed")}: $e'),
         backgroundColor: C.red,
       ));
     } finally {
@@ -2852,7 +2852,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ]),
             ),
             const SizedBox(height: 12),
-            Text(user?.displayName ?? 'ຜູ້ໃຊ້ LinTho',
+            Text(user?.displayName ?? tr('default_lintho_user'),
                 style: const TextStyle(
                     color: Colors.black87, fontSize: 18,
                     fontWeight: FontWeight.w800)),
@@ -2969,14 +2969,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: InkWell(
                   borderRadius: BorderRadius.circular(18),
                   onTap: () => _confirmLogout(context),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 18),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 18),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.logout_rounded, color: C.red, size: 20),
-                        SizedBox(width: 8),
-                        Text('ອອກຈາກລະບົບ', style: TextStyle(
+                        const Icon(Icons.logout_rounded, color: C.red, size: 20),
+                        const SizedBox(width: 8),
+                        Text(tr('logout'), style: const TextStyle(
                             fontSize: 15, fontWeight: FontWeight.w800,
                             color: C.red)),
                       ],
@@ -2998,19 +2998,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
-        title: const Text('ອອກຈາກລະບົບ?', style: TextStyle(
+        title: Text(tr('logout_confirm_title'), style: const TextStyle(
             fontWeight: FontWeight.w800, color: C.text)),
-        content: const Text('ທ່ານຕ້ອງການອອກຈາກລະບົບແມ່ນບໍ່?',
-            style: TextStyle(color: C.muted, fontSize: 14)),
+        content: Text(tr('logout_confirm_body'),
+            style: const TextStyle(color: C.muted, fontSize: 14)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('ຍົກເລີກ',
-                style: TextStyle(color: C.muted)),
+            child: Text(tr('cancel'),
+                style: const TextStyle(color: C.muted)),
           ),
-          ElevatedButton(
+          AppButton.destructive(
+            fullWidth: false,
+            label: tr('confirm'),
             onPressed: () async {
               // 🔒 [AUDIT CUST-2 / 2026-08-06] ຄືກັນກັບ "Provider logout
               // stuck-in-app fix" ຢູ່ profile_tab.dart — signOut() ຄົນດຽວ
@@ -3031,13 +3031,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 (route) => false,
               );
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: C.red, elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('ຢືນຢັນ', style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -3055,14 +3048,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (dialogCtx, setS) => AlertDialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
-          title: const Text('ລຶບບັນຊີຜູ້ໃຊ້', style: TextStyle(
+          title: Text(tr('delete_account_confirm_title'), style: const TextStyle(
               fontWeight: FontWeight.w800, color: C.text)),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text(
-                'ທ່ານຕ້ອງການລຶບບັນຊີຂອງທ່ານແມ່ນບໍ່? ການກະທຳນີ້ບໍ່ສາມາດກັບຄືນໄດ້.',
-                style: TextStyle(color: C.muted, fontSize: 14)),
+            Text(tr('delete_account_confirm_body'),
+                style: const TextStyle(color: C.muted, fontSize: 14)),
             if (error != null) ...[
               const SizedBox(height: 10),
               Text(error!, style: const TextStyle(color: C.red, fontSize: 13)),
@@ -3071,10 +3061,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           actions: [
             TextButton(
               onPressed: deleting ? null : () => Navigator.pop(dialogCtx),
-              child: const Text('ຍົກເລີກ',
-                  style: TextStyle(color: C.muted)),
+              child: Text(tr('cancel'),
+                  style: const TextStyle(color: C.muted)),
             ),
-            ElevatedButton(
+            AppButton.destructive(
+              fullWidth: false,
+              loading: deleting,
+              label: tr('confirm'),
               onPressed: deleting ? null : () async {
                 setS(() { deleting = true; error = null; });
                 try {
@@ -3092,21 +3085,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 } catch (e) {
                   setS(() {
                     deleting = false;
-                    error = 'ລຶບບັນຊີລົ້ມເຫລວ, ກະລຸນາລອງໃໝ່: $e';
+                    error = '${tr("delete_account_failed")}: $e';
                   });
                 }
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: C.red, elevation: 0,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-              ),
-              child: deleting
-                  ? const SizedBox(width: 18, height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2.2, color: Colors.white))
-                  : Text(tr('confirm'), style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w700)),
             ),
           ],
         ),
@@ -3229,10 +3211,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     backgroundColor: C.red));
               }
             },
+            // ✅ [Phase 2 / Batch C] was C.navy — this is the primary action
+            // of this focused security sheet, so it renders LinTho green.
             style: ElevatedButton.styleFrom(
-                backgroundColor: C.navy, elevation: 0,
+                backgroundColor: C.primary, elevation: 0,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(AppRadius.card)),
                 padding: const EdgeInsets.symmetric(vertical: 16)),
             child: Text(tr('save'), style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.w800,
@@ -3396,10 +3380,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       backgroundColor: C.red));
                 }
               },
+              // ✅ [Phase 2 / Batch C] was C.navy — primary action of this
+              // OTP-confirm sheet.
               style: ElevatedButton.styleFrom(
-                  backgroundColor: C.navy, elevation: 0,
+                  backgroundColor: C.primary, elevation: 0,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14))),
+                      borderRadius: BorderRadius.circular(AppRadius.card))),
               child: loading
                   ? const SizedBox(width: 22, height: 22,
                       child: CircularProgressIndicator(
@@ -3496,10 +3482,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     backgroundColor: C.red));
               }
             },
+            // ✅ [Phase 2 / Batch C] was C.navy — primary action of this
+            // reset-password sheet.
             style: ElevatedButton.styleFrom(
-                backgroundColor: C.navy, elevation: 0,
+                backgroundColor: C.primary, elevation: 0,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(AppRadius.card)),
                 padding: const EdgeInsets.symmetric(vertical: 16)),
             child: Text(tr('save'), style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.w800,
@@ -3692,10 +3680,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           backgroundColor: C.red));
                     }
                   },
+                  // ✅ [Phase 2 / Batch C] was C.navy — primary action of
+                  // this edit-profile sheet.
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: C.navy, elevation: 0,
+                    backgroundColor: C.primary, elevation: 0,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(AppRadius.card)),
                   ),
                   child: saving
                       ? const SizedBox(
@@ -4299,13 +4289,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 14),
           Consumer(builder: (context, ref, _) {
             final points = ref.watch(rewardPointsProvider).value ?? 0;
-            return Text('${_formatPointsCompact(points)} ແຕ້ມສະສົມ', style: const TextStyle(
+            return Text('${_formatPointsCompact(points)} ${tr("points_unit")}', style: const TextStyle(
                 fontSize: 18, fontWeight: FontWeight.w800, color: C.text));
           }),
           const SizedBox(height: 6),
-          const Text('ສະສົມແຕ້ມຈາກທຸກການຈອງ ເພື່ອແລກສ່ວນຫຼຸດ ແລະ ສິດທິພິເສດ',
+          Text(tr('points_sheet_sub'),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: C.muted)),
+              style: const TextStyle(fontSize: 13, color: C.muted)),
           const SizedBox(height: 18),
           SizedBox(width: double.infinity, child: ElevatedButton(
             onPressed: () {
@@ -4313,12 +4303,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Navigator.push(context, MaterialPageRoute(
                   builder: (_) => const RewardsScreen()));
             },
+            // ✅ [Phase 2 / Batch C] was C.navy — primary action of this
+            // points sheet.
             style: ElevatedButton.styleFrom(
-                backgroundColor: C.navy, elevation: 0,
+                backgroundColor: C.primary, elevation: 0,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(AppRadius.card)),
                 padding: const EdgeInsets.symmetric(vertical: 14)),
-            child: const Text('ເບິ່ງປະຫວັດ ແລະ ແລກແຕ້ມ', style: TextStyle(
+            child: Text(tr('points_history_and_redeem'), style: const TextStyle(
                 color: Colors.white, fontWeight: FontWeight.w800)),
           )),
         ]),

@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'app_locale.dart';
 
 class ReferralInfo {
   final String code;
@@ -73,7 +74,7 @@ Future<String> _ensureReferralCode(String uid) async {
       // collision — loop again with a new random suffix
     }
   }
-  throw Exception('ບໍ່ສາມາດສ້າງລະຫັດແນະນຳໄດ້, ກະລຸນາລອງໃໝ່');
+  throw Exception(tr('referral_code_gen_failed'));
 }
 
 String _randomSuffix() {
@@ -93,21 +94,21 @@ String _randomSuffix() {
 /// ຢູ່ພາຍໃນ transaction ກ່ອນຂຽນ.
 Future<String?> redeemReferralCode(String inputCode) async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return 'ກະລຸນາ login ກ່ອນ';
+  if (uid == null) return tr('referral_login_required');
   final db = FirebaseFirestore.instance;
   final code = inputCode.trim().toUpperCase();
-  if (code.isEmpty) return 'ກະລຸນາໃສ່ໂຄ້ດ';
+  if (code.isEmpty) return tr('referral_enter_code_required');
 
   final lookup = await db.collection('referralCodes').doc(code).get();
-  if (!lookup.exists) return 'Referral code ບໍ່ຖືກຕ້ອງ';
-  if (lookup.data()?['ownerUid'] == uid) return 'ບໍ່ສາມາດໃຊ້ໂຄ້ດຂອງຕົນເອງໄດ້';
+  if (!lookup.exists) return tr('referral_code_invalid');
+  if (lookup.data()?['ownerUid'] == uid) return tr('referral_cannot_use_own_code');
 
   final userRef = db.collection('users').doc(uid);
   String? error;
   await db.runTransaction((tx) async {
     final userDoc = await tx.get(userRef);
     if (userDoc.data()?['referredBy'] != null) {
-      error = 'ທ່ານໃຊ້ໂຄ້ດແນະນຳໄປແລ້ວ';
+      error = tr('referral_already_used');
       return;
     }
     tx.set(userRef, {'referredBy': code}, SetOptions(merge: true));

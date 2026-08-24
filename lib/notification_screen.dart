@@ -18,6 +18,7 @@ import 'chat_screen.dart' show ChatListBody;
 import 'coupon_list_screen.dart' show CouponListBody;
 import 'support_help.dart';
 import 'support_provider.dart';
+import 'theme/app_theme.dart' show AppTypography, AppRadius;
 
 class NotificationScreen extends StatelessWidget {
   const NotificationScreen({super.key});
@@ -31,15 +32,17 @@ class NotificationScreen extends StatelessWidget {
         appBar: AppBar(
           elevation: 0,
           centerTitle: true,
-          title: Text(tr('notifications'), style: const TextStyle(
-              color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),
+          // ✅ [Phase 2 / Batch C] matches AppTypography.appBarTitle exactly.
+          title: Text(tr('notifications'), style: AppTypography.appBarTitle),
           bottom: TabBar(
             labelColor: C.primary,
             unselectedLabelColor: C.muted,
             indicatorColor: C.primary,
             indicatorWeight: 3,
-            labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            // ✅ fontSize matches AppTypography.label; color comes from
+            // labelColor/unselectedLabelColor above, same as before.
+            labelStyle: AppTypography.label.copyWith(fontWeight: FontWeight.w700),
+            unselectedLabelStyle: AppTypography.label,
             tabs: [
               Tab(text: tr('notif_tab_chat')),
               Tab(text: tr('notif_tab_news')),
@@ -73,7 +76,7 @@ class _CustomerServiceTab extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: C.mint,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.card),
             ),
             child: Row(children: [
               const Icon(Icons.schedule_rounded, color: C.primary, size: 16),
@@ -143,14 +146,14 @@ class _ServiceActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             boxShadow: [BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8, offset: const Offset(0, 3),
@@ -161,7 +164,7 @@ class _ServiceActionCard extends StatelessWidget {
               width: 42, height: 42,
               decoration: BoxDecoration(
                 color: iconColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.card),
               ),
               child: Icon(icon, color: iconColor, size: 20),
             ),
@@ -171,10 +174,10 @@ class _ServiceActionCard extends StatelessWidget {
               children: [
                 Text(title, style: const TextStyle(
                     fontSize: 14, fontWeight: FontWeight.w700, color: C.text)),
+                // ✅ [Phase 2 / Batch C] fontSize matches AppTypography.caption.
                 if (subtitle != null) ...[
                   const SizedBox(height: 2),
-                  Text(subtitle!, style: const TextStyle(
-                      fontSize: 12, color: C.muted)),
+                  Text(subtitle!, style: AppTypography.caption),
                 ],
               ],
             )),

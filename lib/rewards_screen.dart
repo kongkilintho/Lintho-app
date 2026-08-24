@@ -10,6 +10,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
 import 'rewards_provider.dart';
+import 'theme/app_theme.dart' show AppTypography, AppRadius;
+import 'widgets/app_button.dart';
 import 'widgets/empty_state_view.dart';
 import 'widgets/error_state_view.dart';
 
@@ -34,8 +36,8 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
       appBar: AppBar(
         elevation: 0,
         centerTitle: true,
-        title: Text(tr('rewards_title'), style: const TextStyle(
-            color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),
+        // ✅ [Phase 2 / Batch C] matches AppTypography.appBarTitle exactly.
+        title: Text(tr('rewards_title'), style: AppTypography.appBarTitle),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -49,8 +51,18 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
             loading: () => const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: Center(child: CircularProgressIndicator())),
-            error: (e, _) => Text('ໂຫລດເງື່ອນໄຂບໍ່ໄດ້: $e',
-                style: const TextStyle(color: C.red, fontSize: 12)),
+            // ✅ [Phase 2 / Batch C] was a raw error string with no retry —
+            // the sibling history section right below already used
+            // ErrorStateView (🔒 AUDIT M-9 / 2026-07-27) but this one was
+            // missed in that pass. Retry genuinely re-fetches via
+            // ref.invalidate, same pattern as the history section.
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: ErrorStateView(
+                compact: true,
+                onRetry: () => ref.invalidate(rewardSettingsProvider),
+              ),
+            ),
             data: (settings) => _RedeemCard(
               balance: pointsAsync.value ?? 0,
               settings: settings,
@@ -124,11 +136,13 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
     if (!mounted) return;
     showDialog(
       context: context,
+      // ✅ [Phase 2 / Batch C] dropped the explicit radius(16) override —
+      // already the theme's dialogTheme default, applied automatically.
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('ແລກສຳເລັດ!', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: Text(tr('reward_redeemed_title'),
+            style: const TextStyle(fontWeight: FontWeight.w800)),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('ນຳໂຄ້ດນີ້ໄປໃຊ້ໃນການຈອງຄັ້ງຕໍ່ໄປ (ສຳເນົາແລ້ວ):'),
+          Text(tr('reward_redeemed_body')),
           const SizedBox(height: 10),
           Container(
             width: double.infinity,
@@ -136,7 +150,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: C.navy.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.chip),
             ),
             child: Text(code, style: const TextStyle(
                 fontSize: 20, fontWeight: FontWeight.w900,
@@ -144,7 +158,7 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
           ),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('ປິດ')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('close'))),
         ],
       ),
     );
@@ -160,23 +174,27 @@ class _BalanceCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
+      // ✅ [Phase 2 / Batch C] navy is correct here — this is the hero/
+      // header card background (brand-surface usage), not a CTA button, so
+      // it's outside the primary-CTA-must-be-green rule.
       decoration: BoxDecoration(
         color: C.navy,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Row(children: [
-          Icon(Icons.monetization_on_rounded, color: C.yellow, size: 22),
-          SizedBox(width: 8),
-          Text('ແຕ້ມຄົງເຫຼືອ', style: TextStyle(
+        Row(children: [
+          const Icon(Icons.monetization_on_rounded, color: C.yellow, size: 22),
+          const SizedBox(width: 8),
+          Text(tr('points_balance_label'), style: const TextStyle(
               color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
         ]),
         const SizedBox(height: 8),
-        Text(_formatPoints(points), style: const TextStyle(
-            color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900)),
+        // ✅ [Phase 2 / Batch C] fontSize matches AppTypography.display exactly.
+        Text(_formatPoints(points), style: AppTypography.display.copyWith(
+            color: Colors.white, fontWeight: FontWeight.w900)),
         const SizedBox(height: 2),
-        const Text('ສະສົມແຕ້ມຈາກທຸກການຈອງ ເພື່ອແລກສ່ວນຫຼຸດ',
-            style: TextStyle(color: Colors.white60, fontSize: 12)),
+        Text(tr('points_balance_sub'),
+            style: const TextStyle(color: Colors.white60, fontSize: 12)),
       ]),
     );
   }
@@ -215,28 +233,31 @@ class _RedeemCard extends StatelessWidget {
             blurRadius: 8, offset: const Offset(0, 3))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // ✅ [Phase 2 / Batch C] fontSize matches AppTypography.caption.
         Text(
-          '1 ແຕ້ມ = ${settings.redeemRate.toStringAsFixed(0)} ກີບ • ແລກຂັ້ນຕ່ຳ ${settings.minRedeemPoints} ແຕ້ມ',
-          style: const TextStyle(fontSize: 12, color: C.muted),
+          '${tr("redeem_rate_prefix")} ${settings.redeemRate.toStringAsFixed(0)} ${tr("kip_currency")} • '
+          '${tr("redeem_min_label")} ${settings.minRedeemPoints} ${tr("points_unit")}',
+          style: AppTypography.caption,
         ),
         const SizedBox(height: 12),
         if (!canRedeem)
-          Text('ສະສົມໃຫ້ຄົບ ${settings.minRedeemPoints} ແຕ້ມ ເພື່ອແລກຄູປອງ',
-              style: const TextStyle(fontSize: 13, color: C.orange, fontWeight: FontWeight.w600))
+          // ✅ fontSize+weight match AppTypography.label exactly.
+          Text(
+              '${tr("redeem_min_required_prefix")} ${settings.minRedeemPoints} ${tr("points_unit")} '
+              '${tr("redeem_min_required_suffix")}',
+              style: AppTypography.label.copyWith(color: C.orange))
         else
           Wrap(spacing: 10, runSpacing: 10, children: [
             for (final p in options)
-              ElevatedButton(
+              // ✅ [Phase 2 / Batch C] was C.navy — redeeming points is this
+              // screen's primary action, so it renders LinTho green like
+              // every other primary CTA (money-adjacent screen, see the
+              // migration plan's flagged CTA-color/trust concern).
+              AppButton.primary(
+                fullWidth: false,
+                loading: redeeming,
+                label: '${tr("redeem_button_prefix")} $p ${tr("points_unit")}',
                 onPressed: redeeming ? null : () => onRedeem(p),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: C.navy, foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: redeeming
-                    ? const SizedBox(width: 16, height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Text('ແລກ $p ແຕ້ມ'),
               ),
           ]),
       ]),
@@ -251,12 +272,13 @@ class _HistoryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final positive = txn.points >= 0;
+    // ✅ [Phase 2 / Batch C] restored tr() — see LINTHO_PHASE2_BATCH_C_AUDIT.md
     final label = switch (txn.type) {
-      'earn'             => 'ໄດ້ຮັບແຕ້ມຈາກການຈອງ',
-      'redeem'           => 'ແລກແຕ້ມເປັນຄູປອງ',
-      'manual_add'       => 'ແອັດມິນເພີ່ມແຕ້ມໃຫ້',
-      'manual_subtract'  => 'ແອັດມິນຫັກແຕ້ມ',
-      'expire'           => 'ແຕ້ມໝົດອາຍຸ',
+      'earn'             => tr('reward_tx_earn'),
+      'redeem'           => tr('reward_tx_redeem'),
+      'manual_add'       => tr('reward_tx_manual_add'),
+      'manual_subtract'  => tr('reward_tx_manual_subtract'),
+      'expire'           => tr('reward_tx_expire'),
       _                  => txn.type,
     };
     return Container(
@@ -264,7 +286,7 @@ class _HistoryRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: [BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 6, offset: const Offset(0, 2))],
@@ -275,14 +297,16 @@ class _HistoryRow extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: (positive ? C.green : C.red).withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.chip),
           ),
           child: Icon(positive ? Icons.add_rounded : Icons.remove_rounded,
               color: positive ? C.green : C.red, size: 18),
         ),
         const SizedBox(width: 12),
+        // ✅ fontSize+weight match AppTypography.label exactly (color
+        // already the same as label's default ink).
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.text)),
+          Text(label, style: AppTypography.label.copyWith(color: C.text)),
           if (txn.createdAt != null)
             Text(_formatDate(txn.createdAt!), style: const TextStyle(fontSize: 11, color: C.muted)),
         ])),
@@ -301,7 +325,7 @@ String _formatPoints(int points) {
     if (i > 0 && (s.length - i) % 3 == 0) buf.write(',');
     buf.write(s[i]);
   }
-  return '$buf ແຕ້ມ';
+  return '$buf ${tr("points_unit")}';
 }
 
 String _formatDate(DateTime d) =>
