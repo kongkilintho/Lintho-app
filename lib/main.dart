@@ -57,6 +57,7 @@ import 'package:intl/intl.dart';
 import 'lao_phone.dart';
 import 'widgets/pulsing_fade.dart';
 import 'widgets/error_state_view.dart';
+import 'widgets/empty_state_view.dart';
 import 'widgets/app_section.dart';
 import 'theme/app_theme.dart';
 import 'app_navigation_state.dart';
@@ -1063,7 +1064,14 @@ class _FloatingNavBar extends StatelessWidget {
     required String label,
     required VoidCallback onTap,
   }) {
-    return Material(
+    // ✅ [Phase 2 / Batch A] no Semantics on the nav tabs previously — icon+
+    // label already reads to screen readers via child order, but marking
+    // button/selected explicitly makes VoiceOver/TalkBack announce state.
+    return Semantics(
+      button: true,
+      selected: sel,
+      label: label,
+      child: Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
@@ -1096,6 +1104,7 @@ class _FloatingNavBar extends StatelessWidget {
             ]),
           ),
         ),
+      ),
       ),
     );
   }
@@ -1685,6 +1694,7 @@ class _SearchScreenState extends State<SearchScreen> {
               suffixIcon: _ctrl.text.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.close_rounded, color: C.muted, size: 18),
+                      tooltip: tr('clear_search_semantic'),
                       onPressed: () {
                         _ctrl.clear();
                         _debounce?.cancel();
@@ -1700,12 +1710,10 @@ class _SearchScreenState extends State<SearchScreen> {
         ),
       ),
       body: results.isEmpty
-          ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.search_off_rounded, color: C.muted, size: 40),
-              const SizedBox(height: 10),
-              Text(tr('search_no_results'), style: const TextStyle(
-                  color: C.muted, fontSize: 14, fontWeight: FontWeight.w600)),
-            ]))
+          ? EmptyStateView(
+              icon:  Icons.search_off_rounded,
+              title: tr('search_no_results'),
+            )
           : ListView(
               padding: const EdgeInsets.all(AppSpacing.lg),
               children: results.map((s) => _PopularCard(service: s)).toList(),
@@ -4477,26 +4485,17 @@ class FavoriteProvidersScreen extends StatelessWidget {
             color: C.text, fontWeight: FontWeight.w800, fontSize: 18)),
         centerTitle: true,
       ),
-      body: Center(child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 80, height: 80,
-            decoration: BoxDecoration(
-                color: C.red.withValues(alpha: 0.08),
-                shape: BoxShape.circle),
-            child: const Icon(Icons.favorite_outline,
-                color: C.red, size: 36),
-          ),
-          const SizedBox(height: 16),
-          Text(tr('no_favorite_providers'), style: const TextStyle(
-              color: C.text, fontSize: 15, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          Text(tr('no_favorite_providers_sub'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: C.muted, fontSize: 13)),
-        ],
-      )),
+      // ✅ [Phase 2 / Batch A] style-only migration to the shared empty
+      // state — this screen's nav entry point was already removed (🔒 AUDIT
+      // CUST-6 / 2026-08-02, see comment above its call site) since no real
+      // favorites feature exists behind it. Preserved as-is, no data/backend
+      // logic added; see OUT_OF_SCOPE_FINDINGS.md.
+      body: EmptyStateView(
+        icon:     Icons.favorite_outline,
+        accent:   C.red,
+        title:    tr('no_favorite_providers'),
+        subtitle: tr('no_favorite_providers_sub'),
+      ),
     );
   }
 }
@@ -4505,8 +4504,20 @@ class FavoriteProvidersScreen extends StatelessWidget {
 // PAYMENT HISTORY SCREEN
 // ════════════════════════════════════════════════════════════
 
-class PaymentHistoryScreen extends StatelessWidget {
+class PaymentHistoryScreen extends StatefulWidget {
   const PaymentHistoryScreen({super.key});
+
+  @override
+  State<PaymentHistoryScreen> createState() => _PaymentHistoryScreenState();
+}
+
+class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
+  // ✅ [Phase 2 / Batch A] the StreamBuilder below previously had no error
+  // branch — a stream failure left the screen stuck on its last frame
+  // (loading spinner or blank) with no feedback and no way to recover.
+  // `_streamKey` forces a fresh subscription (a real retry, not just a
+  // repaint) when the user taps "retry" on the new ErrorStateView.
+  int _streamKey = 0;
 
   String _scheduleLabel(Map<String, dynamic> b) {
     final ts = b['scheduledAt'] as Timestamp? ?? b['createdAt'] as Timestamp?;
@@ -4533,6 +4544,7 @@ class PaymentHistoryScreen extends StatelessWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: C.text, size: 20),
+          tooltip: tr('back_semantic'),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(tr('payment_history'), style: const TextStyle(
@@ -4540,10 +4552,17 @@ class PaymentHistoryScreen extends StatelessWidget {
         centerTitle: true,
       ),
       body: StreamBuilder<QuerySnapshot>(
+        key: ValueKey(_streamKey),
         stream: FirestoreService.getMyBookings(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
+          }
+          // ✅ [Phase 2 / Batch A] previously unhandled — see class doc comment.
+          if (snapshot.hasError) {
+            return ErrorStateView(
+              onRetry: () => setState(() => _streamKey++),
+            );
           }
           final docs = (snapshot.data?.docs ?? []).where((d) {
             final b = d.data() as Map<String, dynamic>;
@@ -4551,16 +4570,10 @@ class PaymentHistoryScreen extends StatelessWidget {
           }).toList();
 
           if (docs.isEmpty) {
-            return Center(child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.receipt_long_outlined, size: 48, color: C.muted),
-                const SizedBox(height: 12),
-                Text(tr('no_payment_history'), style: const TextStyle(
-                    color: C.muted, fontSize: 15,
-                    fontWeight: FontWeight.w600)),
-              ],
-            ));
+            return EmptyStateView(
+              icon:  Icons.receipt_long_outlined,
+              title: tr('no_payment_history'),
+            );
           }
 
           return ListView.builder(
@@ -4573,7 +4586,7 @@ class PaymentHistoryScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
                   boxShadow: [BoxShadow(
                       color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 8, offset: const Offset(0, 3))],
@@ -4583,7 +4596,7 @@ class PaymentHistoryScreen extends StatelessWidget {
                     width: 42, height: 42,
                     decoration: BoxDecoration(
                         color: C.green.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(AppRadius.card)),
                     child: const Icon(Icons.receipt_long,
                         color: C.green, size: 20),
                   ),
@@ -4605,7 +4618,7 @@ class PaymentHistoryScreen extends StatelessWidget {
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                           color: C.green.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8)),
+                          borderRadius: BorderRadius.circular(AppRadius.chip)),
                       child: Text(tr('paid'), style: const TextStyle(
                           fontSize: 10, color: C.green,
                           fontWeight: FontWeight.w700)),

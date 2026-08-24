@@ -90,3 +90,28 @@ Not re-verified in this session; carried forward from the prior UI/UX re-audit
 
 **Recommendation:** Handle as separate, explicitly-scoped engagements — not part of
 this Master Prompt's Phase 0/1.
+
+---
+
+## OOS-4 — `FavoriteProvidersScreen` has no feature behind it (Phase 2 / Batch A)
+
+**File:** `lib/main.dart` (`FavoriteProvidersScreen`, class only — unreachable)
+
+**Issue:** Confirmed during the Phase 2 Batch A audit (2026-08-24): this screen's
+nav entry point was already removed by a prior pass (🔒 AUDIT CUST-6 / 2026-08-02,
+comment at `main.dart` ~line 2959) because no real favorites feature exists behind
+it — no heart/favorite affordance anywhere in the app, no Firestore field or write
+path for a favorites list. The screen class was deliberately kept (not deleted) in
+case the feature gets built for real later, so it always renders its empty state.
+
+**What Phase 2 did:** Per explicit instruction, Batch A gave this screen a
+style-only migration — its existing empty state now renders through the shared
+`EmptyStateView` component instead of a hand-rolled `Container`/`Column`. No
+Firestore query, data model, or feature behavior was added or implied.
+
+**Severity:** Low (dead code / deferred feature, not a bug).
+
+**Recommendation:** A future, separately-scoped decision: either build the real
+favorites feature (heart-toggle affordance on provider cards/details, a Firestore
+field or subcollection, and restore the nav entry point) or delete
+`FavoriteProvidersScreen` entirely if the feature is no longer planned.

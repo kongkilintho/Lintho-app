@@ -80,8 +80,8 @@ class _CouponCard extends StatelessWidget {
       coupon.validUntil != null && DateTime.now().isAfter(coupon.validUntil!);
 
   String get _valueLabel => coupon.type == 'percentage'
-      ? 'ຫຼຸດ ${coupon.value}%'
-      : 'ຫຼຸດ ${coupon.value.toStringAsFixed(0)} ກີບ';
+      ? '${tr('coupon_discount_prefix')} ${coupon.value}%'
+      : '${tr('coupon_discount_prefix')} ${coupon.value.toStringAsFixed(0)} ${tr('kip_currency')}';
 
   @override
   Widget build(BuildContext context) {
@@ -109,27 +109,39 @@ class _CouponCard extends StatelessWidget {
                 fontSize: 15, fontWeight: FontWeight.w800, color: C.text)),
             const SizedBox(height: 2),
             Text(
-              _expired ? 'ໝົດອາຍຸແລ້ວ' : (coupon.status != 'active' ? 'ໃຊ້ໄປແລ້ວ' : 'ໃຊ້ໄດ້ຈົນຮອດ ${coupon.validUntil != null ? '${coupon.validUntil!.day}/${coupon.validUntil!.month}/${coupon.validUntil!.year}' : '-'}'),
+              _expired
+                  ? tr('coupon_expired_label')
+                  : (coupon.status != 'active'
+                      ? tr('coupon_used_label')
+                      : '${tr('coupon_valid_until_prefix')} ${coupon.validUntil != null ? '${coupon.validUntil!.day}/${coupon.validUntil!.month}/${coupon.validUntil!.year}' : '-'}'),
               style: const TextStyle(fontSize: 12, color: C.muted),
             ),
           ])),
           const SizedBox(width: 8),
-          InkWell(
-            onTap: active ? () {
-              Clipboard.setData(ClipboardData(text: coupon.code));
-              ScaffoldMessenger.of(context).showSnackBar(
-                  // 🔒 [AUDIT UI-10 / 2026-08-02]
-                  SnackBar(content: Text(tr('copied_to_clipboard'))));
-            } : null,
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                  color: C.navy.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8)),
-              child: Text(coupon.code, style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w800,
-                  color: C.navy, letterSpacing: 1)),
+          // ✅ [Phase 2 / Batch A] copy-code chip was ~28dp tall — below the
+          // 44dp minimum tap target and had no Semantics label.
+          Semantics(
+            button: true,
+            label: tr('coupon_copy_code_semantic'),
+            child: InkWell(
+              onTap: active ? () {
+                Clipboard.setData(ClipboardData(text: coupon.code));
+                ScaffoldMessenger.of(context).showSnackBar(
+                    // 🔒 [AUDIT UI-10 / 2026-08-02]
+                    SnackBar(content: Text(tr('copied_to_clipboard'))));
+              } : null,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 44),
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                    color: C.navy.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8)),
+                child: Text(coupon.code, style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w800,
+                    color: C.navy, letterSpacing: 1)),
+              ),
             ),
           ),
         ]),

@@ -23,6 +23,10 @@ import 'firestore_service.dart';
 import 'provider_model.dart';
 import 'chat_screen.dart';
 import 'booking_form_screen.dart';
+import 'theme/app_theme.dart' show AppRadius;
+import 'widgets/app_button.dart';
+import 'widgets/error_state_view.dart';
+import 'widgets/empty_state_view.dart';
 
 // ════════════════════════════════════════════════════════════
 // RIVERPOD PROVIDERS
@@ -59,10 +63,17 @@ class ProviderDetailsScreen extends ConsumerWidget {
       body: Stack(children: [
         provAsync.when(
           loading: () => const _ProviderDetailSkeleton(),
-          error:   (e, _) => Center(child: Text('${tr("error")}: $e')),
+          // ✅ [Phase 2 / Batch A] was a raw Text — now uses the shared
+          // error state with a working retry action.
+          error: (e, _) => ErrorStateView(
+            onRetry: () => ref.invalidate(providerDetailProvider(providerId)),
+          ),
           data: (provider) {
             if (provider == null) {
-              return Center(child: Text(tr('provider_not_found')));
+              return EmptyStateView(
+                icon:  Icons.person_off_outlined,
+                title: tr('provider_not_found'),
+              );
             }
             return _ProviderDetailsBody(provider: provider);
           },
@@ -116,7 +127,7 @@ class _ProviderDetailSkeletonState extends State<_ProviderDetailSkeleton>
     super.dispose();
   }
 
-  Widget _box(double w, double h, {double radius = 8}) => Container(
+  Widget _box(double w, double h, {double radius = AppRadius.chip}) => Container(
     width: w, height: h,
     decoration: BoxDecoration(
       color:        C.muted.withValues(alpha: 0.15),
@@ -144,9 +155,9 @@ class _ProviderDetailSkeletonState extends State<_ProviderDetailSkeleton>
                   ),
                 ),
                 const SizedBox(height: 12),
-                _box(140, 18, radius: 8),
+                _box(140, 18, radius: AppRadius.chip),
                 const SizedBox(height: 8),
-                _box(100, 13, radius: 6),
+                _box(100, 13, radius: AppRadius.chip),
               ],
             ),
           ),
@@ -157,7 +168,7 @@ class _ProviderDetailSkeletonState extends State<_ProviderDetailSkeleton>
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color:        Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.card),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,7 +190,7 @@ class _ProviderDetailSkeletonState extends State<_ProviderDetailSkeleton>
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color:        Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.card),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -187,10 +198,10 @@ class _ProviderDetailSkeletonState extends State<_ProviderDetailSkeleton>
                 _box(80, 14),
                 const SizedBox(height: 10),
                 Wrap(spacing: 8, runSpacing: 6, children: [
-                  _box(70, 28, radius: 14),
-                  _box(90, 28, radius: 14),
-                  _box(60, 28, radius: 14),
-                  _box(80, 28, radius: 14),
+                  _box(70, 28, radius: AppRadius.card),
+                  _box(90, 28, radius: AppRadius.card),
+                  _box(60, 28, radius: AppRadius.card),
+                  _box(80, 28, radius: AppRadius.card),
                 ]),
               ],
             ),
@@ -203,7 +214,7 @@ class _ProviderDetailSkeletonState extends State<_ProviderDetailSkeleton>
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color:        Colors.white,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.chip),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -354,13 +365,16 @@ class _ProviderDetailsBody extends ConsumerWidget {
           ),
         ),
         error: (e, _) => SliverToBoxAdapter(
-            child: Center(child: Text('$e'))),
+          child: ErrorStateView(
+            compact:  true,
+            onRetry:  () => ref.invalidate(providerReviewsProvider(provider.uid)),
+          ),
+        ),
         data: (reviews) => reviews.isEmpty
             ? SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Center(child: Text(tr('no_reviews'),
-                style: const TextStyle(color: C.muted))),
+          child: EmptyStateView(
+            icon:  Icons.rate_review_outlined,
+            title: tr('no_reviews'),
           ),
         )
             : SliverList(
@@ -437,7 +451,7 @@ class _ReviewSkeletonTileState extends State<_ReviewSkeletonTile>
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color:        Colors.white,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadius.chip),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -456,17 +470,17 @@ class _ReviewSkeletonTileState extends State<_ReviewSkeletonTile>
                 Container(width: 110, height: 12,
                     decoration: BoxDecoration(
                         color: C.muted.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(5))),
+                        borderRadius: BorderRadius.circular(AppRadius.chip))),
                 const SizedBox(height: 6),
                 Container(width: double.infinity, height: 11,
                     decoration: BoxDecoration(
                         color: C.muted.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(5))),
+                        borderRadius: BorderRadius.circular(AppRadius.chip))),
                 const SizedBox(height: 4),
                 Container(width: 160, height: 11,
                     decoration: BoxDecoration(
                         color: C.muted.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(5))),
+                        borderRadius: BorderRadius.circular(AppRadius.chip))),
               ],
             )),
           ],
@@ -558,7 +572,7 @@ class _ProfileHeader extends StatelessWidget {
                   horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
                 color:        Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadius.sheet),
               ),
               child: Text(
                 '${provider.experienceYears} ${tr("years_experience")}',
@@ -573,7 +587,7 @@ class _ProfileHeader extends StatelessWidget {
                     horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(
                   color:        Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(AppRadius.sheet),
                   border: Border.all(
                       color: Colors.white.withValues(alpha: 0.4)),
                 ),
@@ -613,7 +627,7 @@ class _SectionCard extends StatelessWidget {
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
       color:        Colors.white,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       boxShadow: [BoxShadow(
         color:      Colors.black.withValues(alpha: 0.05),
         blurRadius: 8, offset: const Offset(0, 2),
@@ -648,7 +662,7 @@ class _ReviewTile extends StatelessWidget {
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
       color:        Colors.white,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(AppRadius.chip),
       boxShadow: [BoxShadow(
         color:      Colors.black.withValues(alpha: 0.04),
         blurRadius: 6, offset: const Offset(0, 2),
@@ -731,22 +745,15 @@ class _BottomActions extends StatelessWidget {
       child: Row(children: [
         // Chat
         Expanded(
-          child: OutlinedButton.icon(
+          child: AppButton.outline(
+            label: tr('chat'),
+            icon:  Icons.chat_bubble_outline,
             onPressed: () => Navigator.push(context,
               MaterialPageRoute(builder: (_) => ChatScreen(
                 receiverId:   provider.uid,
                 // ✅ [FIX-1] displayName ແທນ name
                 receiverName: provider.displayName,
               )),
-            ),
-            icon:  const Icon(Icons.chat_bubble_outline),
-            label: Text(tr('chat')),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: C.primary,
-              side:    const BorderSide(color: C.primary),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape:   RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
             ),
           ),
         ),
@@ -759,23 +766,14 @@ class _BottomActions extends StatelessWidget {
         // defense-in-depth ຖ້າສະຖານະປ່ຽນລະຫວ່າງທາງ).
         Expanded(
           flex: 2,
-          child: ElevatedButton.icon(
+          child: AppButton.primary(
+            label: provider.isOnline
+                ? tr('book_now') : tr('provider_currently_offline'),
+            icon:  provider.isOnline
+                ? Icons.calendar_today : Icons.schedule_outlined,
             onPressed: !provider.isOnline ? null : () => Navigator.push(context,
               MaterialPageRoute(builder: (_) =>
                   BookingFormScreen(providerId: provider.uid)),
-            ),
-            icon:  Icon(provider.isOnline
-                ? Icons.calendar_today : Icons.schedule_outlined, size: 18),
-            label: Text(provider.isOnline
-                ? tr('book_now') : tr('provider_currently_offline')),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: C.primary,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: C.border,
-              disabledForegroundColor: C.muted,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape:   RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
             ),
           ),
         ),

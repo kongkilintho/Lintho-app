@@ -15,6 +15,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
+import 'widgets/app_button.dart';
 
 const _vientianeCenter = LatLng(17.9757, 102.6331);
 
@@ -110,6 +111,7 @@ class _MapPickerScreenState extends State<MapPickerScreen>
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios,
               color: C.navy, size: 20),
+          tooltip:   tr('back_semantic'),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(tr('map_picker_title'), style: const TextStyle(
@@ -154,7 +156,9 @@ class _MapPickerScreenState extends State<MapPickerScreen>
         Positioned(
           right: 16, bottom: 120,
           child: FloatingActionButton(
-            mini:            true,
+            // ✅ [Phase 2 / Batch A] mini FAB was 40×40, below the 44dp
+            // minimum tap target — default (non-mini) size is 56dp.
+            tooltip:         tr('use_current_location'),
             onPressed:       _loading ? null : _goToMyLocation,
             child: _loading
                 ? AnimatedBuilder(
@@ -174,19 +178,13 @@ class _MapPickerScreenState extends State<MapPickerScreen>
         // ── Confirm Button ──
         Positioned(
           left: 16, right: 16, bottom: 30,
-          child: ElevatedButton(
+          // ✅ [Phase 2 / Batch A] was a raw navy ElevatedButton — this is
+          // the screen's primary action, so it must render LinTho green
+          // like every other primary CTA (AppButton.primary can't be
+          // recolored, which is the point).
+          child: AppButton.primary(
+            label:     tr('confirm_this_address'),
             onPressed: () => Navigator.pop(context, _picked),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: C.navy,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-            child: Text(tr('confirm_this_address'), style: const TextStyle(
-              color:      Colors.white,
-              fontSize:   15,
-              fontWeight: FontWeight.w700,
-            )),
           ),
         ),
       ]),
