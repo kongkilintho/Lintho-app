@@ -3,7 +3,7 @@
 // ▸ "icon + ໂຕເລກໃຫຍ່ + label" ຖືກສ້າງແຍກກັນ 3 ບ່ອນ: home_tab.dart's
 //   _StatCard, profile_tab.dart's _Stat, ແລະ main.dart's inline _stat() —
 //   ຄົນລະ radius/padding/font. ນີ້ຄື component ດຽວ, ໃຊ້ໄດ້ທັງແບບເຕັມສີ
-//   (solid, ໃຊ້ໃນ wallet/earnings) ແລະ ແບບໂປ່ງໃສເທິງພື້ນຂາວ (outline).
+//   (solid) ແລະ ແບບໂປ່ງໃສເທິງພື້ນຂາວ (outline).
 //
 // ▸ main.dart's _stat() ແມ່ນຮູບຮ່າງແຕກຕ່າງອອກໄປແທ້ (icon ຢູ່ໃນ badge ວົງມົນ
 //   ໂປ່ງໃສ, tap ripple, ບໍ່ມີ card background) — ບໍ່ໄດ້ລວມເຂົ້ານີ້, ປະໄວ້
@@ -12,6 +12,15 @@
 // ▸ home_tab.dart / profile_tab.dart ຄົນລະໜ້າຕາກັນ (ຂະໜາດ font/icon, ສີພື້ນ,
 //   shadow, ການຈັດແຖວ) — override parameter ຂ້າງລຸ່ມນີ້ຖືກເພີ່ມສະເພາະໃຫ້ທັງ
 //   2 ບ່ອນນັ້ນຄົງໜ້າຕາເກົ່າໄວ້ຄັກໆ ຫຼັງລວມເຂົ້າ widget ດຽວ (ບໍ່ປ່ຽນ visual).
+//
+// ▸ [Phase 2 Batch D / 2026-08-24] earnings_tab.dart's wallet cards
+//   (_WalletCards/_Card) deliberately do NOT use StatCard — they need
+//   *multiple* independently-tappable action pills per card, each with its
+//   own optional accent color (e.g. gold "top up" vs. default "withdraw"),
+//   which actionLabel (a single non-interactive pill) doesn't support.
+//   Extending StatCard for this one caller wouldn't meet the "3+ uses"
+//   bar, so this is a documented, legitimate exception, not unmigrated
+//   debt — see LINTHO_PHASE2_BATCH_D_AUDIT.md §4.
 // ============================================================
 
 import 'package:flutter/material.dart';

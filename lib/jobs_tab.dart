@@ -18,6 +18,7 @@ import 'Booking.dart';
 import 'booking_provider.dart';
 import 'home_tab.dart' show StatusBadge; // ✅ ຈາກ home_tab ຕາມເດີມ
 import 'job_workflow_Screen.dart';
+import 'theme/app_theme.dart' show AppRadius;
 import 'widgets/empty_state_view.dart';
 import 'widgets/error_state_view.dart';
 import 'widgets/skeleton_box.dart';
@@ -167,7 +168,7 @@ class _JobHistoryCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color:        Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: [BoxShadow(
           color:      Colors.black.withValues(alpha: 0.04),
           blurRadius: 8,
@@ -176,9 +177,9 @@ class _JobHistoryCard extends StatelessWidget {
       ),
       child: Material(
         color:        Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         child: InkWell(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           // ✅ [FIX] ບັດນີ້ເຄີຍກົດແລ້ວບໍ່ມີຫຍັງເກີດຂຶ້ນ (dead tap target) —
           // JobWorkflowScreen ຮອງຮັບ status completed/cancelled/rejected
           // ແບບ read-only ຢູ່ແລ້ວ, ຈຶ່ງໃຊ້ເປັນໜ້າລາຍລະອຽດປະຫວັດວຽກນຳກັນ.
@@ -190,7 +191,7 @@ class _JobHistoryCard extends StatelessWidget {
               Container(
                 width: 50, height: 50,
                 decoration: BoxDecoration(
-                  color: C.bg, borderRadius: BorderRadius.circular(14),
+                  color: C.bg, borderRadius: BorderRadius.circular(AppRadius.card),
                 ),
                 // ✅ [FIX H11] Icon ຈາກ category ແທນ raw emoji ທີ່ເກັບໄວ້ໃນ doc
                 child: Center(child: Icon(booking.serviceIcon,

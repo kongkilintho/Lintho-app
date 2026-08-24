@@ -358,7 +358,8 @@ class _JobListView extends ConsumerWidget {
         children: [
           if (pending.isNotEmpty) ...[
             _SectionHeader(
-              title:      '${tr("new_jobs")} 🔔',
+              title:      tr("new_jobs"),
+              icon:       Icons.notifications_outlined,
               badge:      '${pending.length} ${tr("pending")}',
               badgeColor: C.red,
             ),
@@ -370,7 +371,8 @@ class _JobListView extends ConsumerWidget {
           // ໃຫ້ provider ຄົນນີ້ຮັບເອງໄດ້ ຄືກັນກັບວຽກທີ່ຖືກສົ່ງມາຫາໂດຍກົງ
           if (openJobs.isNotEmpty) ...[
             _SectionHeader(
-              title:      '${tr("open_jobs")} 📋',
+              title:      tr("open_jobs"),
+              icon:       Icons.assignment_outlined,
               badge:      '${openJobs.length}',
               // ✅ [Brand color audit 2026-07-27] "ວຽກເປີດ" = ຮັບໄດ້ເລີຍ →
               // ສີຂຽວແບຣນ (ແທນສີຟ້າ), ແຍກຈາກ "ວຽກໃໝ່ລໍຖ້າຕອບ" ທີ່ຍັງເປັນສີແດງ
@@ -381,7 +383,7 @@ class _JobListView extends ConsumerWidget {
             const SizedBox(height: 16),
           ],
           if (active.isNotEmpty) ...[
-            _SectionHeader(title: '${tr("inprogress")} ⚡'),
+            _SectionHeader(title: tr("inprogress"), icon: Icons.bolt_outlined),
             const SizedBox(height: 8),
             ...active.map((b) => JobCard(booking: b)),
           ],
@@ -392,14 +394,21 @@ class _JobListView extends ConsumerWidget {
 }
 
 class _SectionHeader extends StatelessWidget {
-  final String  title;
-  final String? badge;
-  final Color?  badgeColor;
-  const _SectionHeader({required this.title, this.badge, this.badgeColor});
+  final String    title;
+  final IconData? icon;
+  final String?   badge;
+  final Color?    badgeColor;
+  const _SectionHeader({required this.title, this.icon, this.badge, this.badgeColor});
 
   @override
   Widget build(BuildContext context) {
     return Row(children: [
+      // ✅ [Phase 2 Batch D] bell/clipboard/lightning emoji → Material icon —
+      // see Migration Plan §2 "emoji used as functional icon" finding
+      if (icon != null) ...[
+        Icon(icon, size: 16, color: C.text),
+        const SizedBox(width: 6),
+      ],
       Text(title, style: const TextStyle(
         fontSize: 15, fontWeight: FontWeight.w800, color: C.text,
       )),
@@ -409,7 +418,7 @@ class _SectionHeader extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
           decoration: BoxDecoration(
             color:        (badgeColor ?? C.primary).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.chip),
           ),
           child: Text(badge!, style: TextStyle(
             fontSize: 11, color: badgeColor ?? C.primary,
@@ -468,7 +477,7 @@ class _OfflineViewState extends ConsumerState<_OfflineView> {
             width: 80, height: 80,
             decoration: BoxDecoration(
               color:        C.red.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(AppRadius.sheet),
             ),
             child: const Icon(Icons.wifi_off_rounded, color: C.red, size: 36),
           ),
@@ -501,7 +510,7 @@ class _OfflineViewState extends ConsumerState<_OfflineView> {
               textStyle: const TextStyle(
                   fontSize: 15, fontWeight: FontWeight.w800),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(AppRadius.card)),
             ),
           )),
         ],
@@ -531,7 +540,7 @@ class StatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color:        color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.chip),
       ),
       child: Text(status.label, style: TextStyle(
         fontSize: 10, color: color, fontWeight: FontWeight.w700,
@@ -621,7 +630,7 @@ class JobCard extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color:        Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: isPending
             ? Border.all(
             color: C.sky.withValues(alpha: 0.5), width: 1.5)
@@ -633,9 +642,9 @@ class JobCard extends ConsumerWidget {
       ),
       child: Material(
         color:        Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         child: InkWell(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           onTap: () => Navigator.push(context,
               MaterialPageRoute(builder: (_) =>
                   JobWorkflowScreen(initialBooking: booking))),
@@ -647,7 +656,7 @@ class JobCard extends ConsumerWidget {
                   width: 50, height: 50,
                   decoration: BoxDecoration(
                     color:        C.bg,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(AppRadius.card),
                   ),
                   // ✅ [FIX H11] Icon ຈາກ category ແທນ raw emoji ທີ່ເກັບໄວ້ໃນ doc
                   child: Center(child: Icon(booking.serviceIcon,

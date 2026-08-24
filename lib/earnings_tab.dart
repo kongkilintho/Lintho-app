@@ -14,6 +14,7 @@ import 'app_locale.dart';
 import 'Booking.dart';
 import 'booking_provider.dart';
 import 'payment_config_provider.dart';
+import 'theme/app_theme.dart' show AppRadius;
 import 'widgets/error_state_view.dart';
 
 // ✅ [UI Polish] ຍອດຕ່ຳກວ່ານີ້ຈະສະແດງ banner ເຕືອນໃຫ້ຕື່ມເງິນ
@@ -110,7 +111,7 @@ class ProviderEarningsTab extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+          borderRadius: AppRadius.sheetTop),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Padding(
         padding: EdgeInsets.only(
@@ -158,8 +159,8 @@ class ProviderEarningsTab extends ConsumerWidget {
               // ✅ [FIX C4] ກ່ອນໜ້ານີ້ກວດແຕ່ amt == null — ຈຳນວນ 0 ຫຼືຕິດລົບ
               // ຜ່ານໄດ້ (ບໍ່ມີ amt <= 0 guard)
               if (amt == null || amt <= 0) {
-                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                    content: Text('ຈຳນວນເງິນບໍ່ຖືກຕ້ອງ'),
+                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                    content: Text(tr('invalid_amount')),
                     backgroundColor: C.red));
                 return;
               }
@@ -182,7 +183,7 @@ class ProviderEarningsTab extends ConsumerWidget {
               }
             },
             style: ElevatedButton.styleFrom(
-                backgroundColor: C.navy, elevation: 0,
+                backgroundColor: C.primary, elevation: 0,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.symmetric(vertical: 16)),
@@ -252,7 +253,7 @@ class ProviderEarningsTab extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+          borderRadius: AppRadius.sheetTop),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Padding(
           padding: EdgeInsets.only(
@@ -298,7 +299,7 @@ class ProviderEarningsTab extends ConsumerWidget {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: C.bg,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
                   border: Border.all(color: C.border),
                 ),
                 child: Column(children: [
@@ -306,7 +307,7 @@ class ProviderEarningsTab extends ConsumerWidget {
                       fontSize: 13, fontWeight: FontWeight.w800, color: C.text)),
                   const SizedBox(height: 12),
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(AppRadius.chip),
                     child: cfg.qrImageUrl != null
                         ? Image.network(
                             cfg.qrImageUrl!,
@@ -391,8 +392,8 @@ class ProviderEarningsTab extends ConsumerWidget {
                 onPressed: submitting ? null : () async {
                   final amt = double.tryParse(ctrl.text.replaceAll(',', ''));
                   if (amt == null || amt <= 0) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                        content: Text('ຈຳນວນເງິນບໍ່ຖືກຕ້ອງ'),
+                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                        content: Text(tr('invalid_amount')),
                         backgroundColor: C.red));
                     return;
                   }
@@ -467,7 +468,7 @@ class ProviderEarningsTab extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+          borderRadius: AppRadius.sheetTop),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Padding(
         padding: EdgeInsets.only(
@@ -510,7 +511,7 @@ class ProviderEarningsTab extends ConsumerWidget {
               }
             },
             style: ElevatedButton.styleFrom(
-                backgroundColor: C.navy, elevation: 0,
+                backgroundColor: C.primary, elevation: 0,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.symmetric(vertical: 16)),
@@ -625,7 +626,7 @@ class _EarningsSkeletonState extends State<_EarningsSkeleton>
           height: 72, padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16)),
+              borderRadius: BorderRadius.circular(AppRadius.card)),
           child: Row(children: [
             _box(44, 44, r: 12),
             const SizedBox(width: 14),
@@ -814,7 +815,7 @@ class _Card extends StatelessWidget {
                     color: Colors.transparent,
                     child: InkWell(
                       onTap: a.onTap,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(AppRadius.chip),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 5),
@@ -822,7 +823,7 @@ class _Card extends StatelessWidget {
                           // ✅ [UI Polish] soft accent (ຖ້າມີ) ໃຫ້ pill ນັ້ນເດັ່ນ
                           // ຂຶ້ນມາ — ບໍ່ດັ່ງນັ້ນໃຊ້ pill ໂປ່ງໃສແບບເກົ່າ
                           color: a.accent ?? Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(AppRadius.chip),
                         ),
                         child: Text(a.label, style: TextStyle(
                             color: a.accent != null ? C.navy : Colors.white,
@@ -982,7 +983,7 @@ class _BankCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(16),
+        color: Colors.white, borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: [BoxShadow(
           // ✅ withOpacity → withValues
           color: Colors.black.withValues(alpha: 0.04),
@@ -1017,13 +1018,13 @@ class _BankCard extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AppRadius.chip),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 // ✅ withOpacity → withValues
                 color: C.navy.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadius.chip),
               ),
               child: Text(
                   wallet.hasBankLinked ? tr('edit') : tr('link'),

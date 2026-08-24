@@ -18,6 +18,7 @@ import 'jobs_tab.dart';
 import 'earnings_tab.dart';
 import 'online_provider.dart';
 import 'profile_tab.dart';
+import 'theme/app_theme.dart' show AppRadius;
 
 // ── NAV INDEX ────────────────────────────────────────────────
 
@@ -120,14 +121,14 @@ class _BottomNav extends StatelessWidget {
                     color:        selected
                         ? C.navy.withValues(alpha: 0.07) // ✅ fix
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(AppRadius.card),
                   ),
                   // ✅ InkWell ripple
                   child: Material(
                     color:        Colors.transparent,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(AppRadius.card),
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(AppRadius.card),
                       onTap:       () => onTap(i),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),

@@ -14,8 +14,8 @@ import 'app_colors.dart';
 import 'app_locale.dart';
 import 'Booking.dart';
 import 'booking_provider.dart';
-import 'booking_repository.dart';
 import 'chat_screen.dart';
+import 'theme/app_theme.dart' show AppRadius;
 import 'widgets/app_icon_button.dart';
 import 'widgets/status_stepper.dart' as shared;
 import 'widgets/pulsing_fade.dart';
@@ -121,6 +121,7 @@ class JobWorkflowScreen extends ConsumerWidget {
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios,
             color: Colors.white, size: 20),
+        tooltip: tr('back_semantic'),
         onPressed: () => Navigator.pop(context),
       ),
       title: Column(
@@ -235,7 +236,7 @@ class _WorkflowSkeletonState extends State<_WorkflowSkeleton>
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppRadius.card),
             ),
             child: Row(children: [
               _box(44, 44, radius: 22),
@@ -383,7 +384,7 @@ class _CustomerCard extends ConsumerWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: [BoxShadow(
           // ✅ RULE: withValues(alpha:) ແທນ withOpacity
             color: Colors.black.withValues(alpha: 0.05),
@@ -546,7 +547,7 @@ class _CustomerJobPhoto extends StatelessWidget {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: [BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8, offset: const Offset(0, 3))],
@@ -627,7 +628,7 @@ class _PhotoSectionState extends ConsumerState<_PhotoSection> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: [BoxShadow(
           // ✅ RULE: withValues(alpha:) ແທນ withOpacity
             color: Colors.black.withValues(alpha: 0.05),
@@ -650,7 +651,7 @@ class _PhotoSectionState extends ConsumerState<_PhotoSection> {
                   decoration: BoxDecoration(
                     // ✅ RULE: withValues(alpha:) ແທນ withOpacity
                       color: C.orange.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(AppRadius.chip)),
                   child: Text(tr('required_badge'), style: const TextStyle(
                       fontSize: 10, color: C.orange,
                       fontWeight: FontWeight.w700)),
@@ -754,7 +755,7 @@ class _PhotoSlot extends StatelessWidget {
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 color: C.green,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadius.chip),
               ),
               child: const Icon(Icons.check,
                   color: Colors.white, size: 12),
@@ -841,7 +842,7 @@ class _AdditionalChargesSection extends ConsumerWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
               color: approved ? C.green : C.orange, width: 1.5),
         ),
@@ -908,8 +909,7 @@ class _AdditionalChargesSection extends ConsumerWidget {
     showModalBottomSheet(
       context: context, isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius:
-          BorderRadius.vertical(top: Radius.circular(24))),
+          borderRadius: AppRadius.sheetTop),
       // ✅ fix: dispose() ສະເໝີຫຼັງ sheet ປິດ (ບໍ່ວ່າ submit ຫຼື swipe ປິດ)
       builder: (_) => StatefulBuilder(
         builder: (context, setSheetState) => Padding(
@@ -1184,7 +1184,7 @@ class _ActionButton extends ConsumerWidget {
             foregroundColor: Colors.white,
             elevation: 0,
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
+                borderRadius: BorderRadius.circular(AppRadius.card)),
             padding: const EdgeInsets.symmetric(vertical: 16),
           ),
         ),
@@ -1363,7 +1363,7 @@ class _CancelJobButton extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+          borderRadius: AppRadius.sheetTop),
       builder: (_) => StatefulBuilder(
         builder: (ctx, setS) => Padding(
           padding: const EdgeInsets.all(20),

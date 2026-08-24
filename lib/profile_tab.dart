@@ -675,6 +675,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios,
               color: C.text, size: 20),
+          tooltip: tr('back_semantic'),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(tr('edit_profile'), style: const TextStyle(
@@ -875,7 +876,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   if (ok) Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: C.navy, elevation: 0,
+                  backgroundColor: C.primary, elevation: 0,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -984,6 +985,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios,
               color: C.text, size: 20),
+          tooltip: tr('back_semantic'),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(tr('my_services'), style: const TextStyle(
@@ -1032,7 +1034,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                   if (mounted) Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: C.navy, elevation: 0,
+                  backgroundColor: C.primary, elevation: 0,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1065,6 +1067,7 @@ class ScheduleScreen extends ConsumerWidget {
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios,
               color: C.text, size: 20),
+          tooltip: tr('back_semantic'),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(tr('work_schedule'), style: const TextStyle(
@@ -1146,7 +1149,7 @@ class _ScheduleBodyState extends ConsumerState<_ScheduleBody> {
                 if (mounted) Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: C.navy, elevation: 0,
+                backgroundColor: C.primary, elevation: 0,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1178,6 +1181,7 @@ class ReviewsScreen extends ConsumerWidget {
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios,
               color: C.text, size: 20),
+          tooltip: tr('back_semantic'),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(tr('reviews_comments'), style: const TextStyle(
@@ -1236,6 +1240,7 @@ class _KycScreenState extends ConsumerState<KycScreen> {
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios,
               color: C.text, size: 20),
+          tooltip: tr('back_semantic'),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(tr('kyc'), style: const TextStyle(
@@ -1344,7 +1349,7 @@ class _KycScreenState extends ConsumerState<KycScreen> {
                         fontWeight: FontWeight.w800,
                       )),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: C.navy, elevation: 0,
+                    backgroundColor: C.primary, elevation: 0,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                     padding: const EdgeInsets.symmetric(
@@ -1375,6 +1380,7 @@ class HelpScreen extends ConsumerWidget {
         leading: IconButton(
           icon:      const Icon(Icons.arrow_back_ios,
               color: C.text, size: 20),
+          tooltip: tr('back_semantic'),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(tr('help'), style: const TextStyle(
@@ -1749,7 +1755,7 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                           if (mounted) setState(() => _replying = false);
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: C.navy, elevation: 0,
+                          backgroundColor: C.primary, elevation: 0,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8)),
                           padding: const EdgeInsets.symmetric(
