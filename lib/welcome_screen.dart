@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_colors.dart';
 import 'app_locale.dart';
+import 'brand_mark_tile.dart';
 import 'language_selector.dart';
 import 'legal_content_provider.dart';
 import 'main.dart' show LoginPage;
@@ -116,13 +117,10 @@ class _WelcomeHeader extends StatelessWidget {
               ),
             ],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(26),
-            child: Image.asset(
-              'assets/icons/lintho_logo_3d.png',
-              fit: BoxFit.contain,
-            ),
-          ),
+          // ✅ [FIX E-07 / Phase 2 Batch E] shared BrandMarkTile instead of a
+          // raw Image.asset+ClipRRect — same 92px/26-radius look, the
+          // BoxShadow glow stays on the outer Container above.
+          child: const BrandMarkTile(size: 92, radius: 26),
         ),
         const SizedBox(height: 18),
         Text(

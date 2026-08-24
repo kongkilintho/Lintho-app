@@ -24,6 +24,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'Booking.dart' show serviceIconForCategory;
+import 'brand_mark_tile.dart';
 import 'provider_dashboard.dart';
 import 'firestore_service.dart';
 import 'review_screen.dart';
@@ -197,15 +198,13 @@ class _SplashSkeletonState extends State<_SplashSkeleton>
       ),
       child: FadeTransition(
         opacity: _fade,
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Image.asset(
-            'assets/icons/lintho_logo_3d.png',
-            width: 96,
-            height: 96,
-            fit: BoxFit.contain,
-          ),
-          const SizedBox(height: 20),
-          const Text(
+        child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          // ✅ [FIX E-07 / Phase 2 Batch E] shared BrandMarkTile instead of a
+          // raw Image.asset — radius:0 keeps the exact unrounded look this
+          // screen already had (BrandMarkTile's own default would round it).
+          BrandMarkTile(size: 96, radius: 0),
+          SizedBox(height: 20),
+          Text(
             'LinTho',
             style: TextStyle(
               color: Colors.white,
@@ -213,8 +212,8 @@ class _SplashSkeletonState extends State<_SplashSkeleton>
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
+          SizedBox(height: 8),
+          Text(
             'ທຸກເລື່ອງຊ່າງ ຈົບງ່າຍໃນແອັບດຽວ',
             style: TextStyle(color: C.splashSubtext, fontSize: 15, fontWeight: FontWeight.w700),
           ),
@@ -222,6 +221,56 @@ class _SplashSkeletonState extends State<_SplashSkeleton>
       ),
     );
   }
+}
+
+// ════════════════════════════════════════════════════════════
+// POST-AUTH DESTINATION
+// 🔒 [FIX E-01/E-02 / Phase 2 Batch E] The role/kycStatus → screen mapping
+// used to be duplicated between RoleRouter (below) and
+// _LoginPageState._loginWithGoogle() — and _login() (email/password) had no
+// copy of it at all, so a provider signing in with email+password (the
+// primary login method, not the secondary "or continue with Google")
+// always landed on the customer MainShell instead of their dashboard/
+// pending-approval screen, until the app was restarted. resolveRoleDestination
+// is now the ONE place this mapping is expressed; RoleRouter's live stream
+// and both LoginPage sign-in paths all call it.
+// ════════════════════════════════════════════════════════════
+
+/// Pure decision — given an already-resolved role/kycStatus pair, which
+/// screen the user should land on. No I/O here; callers do their own reads
+/// (RoleRouter via a live stream, LoginPage via a one-time fetch) and pass
+/// the result in, so this stays a single, easily-testable source of truth.
+Widget resolveRoleDestination({required String? role, required String? kycStatus}) {
+  if (role == 'provider') {
+    return kycStatus == 'verified'
+        ? const ProviderDashboard()
+        : const PendingApprovalScreen();
+  }
+  return const MainShell();
+}
+
+/// One-time post-sign-in destination lookup — used right after a successful
+/// LoginPage sign-in, where a single snapshot is enough since the app
+/// immediately navigates away (unlike RoleRouter, which stays mounted and
+/// needs a live stream to react to e.g. an admin approving the account
+/// while the app is open).
+Future<Widget> resolvePostAuthDestination() async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return const LoginPage();
+  if (user.email == 'admin@sabee.la') return const _AdminRedirectScreen();
+
+  final userSnap =
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+  if (!userSnap.exists) return const _IncompleteRegistrationScreen();
+
+  final role = userSnap.data()?['role'] as String? ?? 'customer';
+  String? kycStatus;
+  if (role == 'provider') {
+    final provSnap = await FirebaseFirestore.instance
+        .collection('providers').doc(user.uid).get();
+    kycStatus = provSnap.data()?['kycStatus'] as String?;
+  }
+  return resolveRoleDestination(role: role, kycStatus: kycStatus);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -305,12 +354,13 @@ class _RoleRouterState extends State<RoleRouter> {
               }
               final kycStatus = (provSnapshot.data?.data()
                   as Map<String, dynamic>?)?['kycStatus'] as String?;
-              if (kycStatus == 'verified') return const ProviderDashboard();
-              return const PendingApprovalScreen();
+              // 🔒 [FIX E-01/E-02] delegate to the shared decision function —
+              // see resolveRoleDestination() above.
+              return resolveRoleDestination(role: role, kycStatus: kycStatus);
             },
           );
         }
-        return const MainShell();
+        return resolveRoleDestination(role: role, kycStatus: null);
       },
     );
   }
@@ -483,8 +533,15 @@ class _LoginPageState extends State<LoginPage>
       // ຖ້າ authStateChanges() event ມາຊ້າກວ່າ (race), ໜ້າ WelcomeScreen ເກົ່າ
       // ຈະຄ້າງໂຜ່ຢູ່ຈົນກວ່າຈະ hot reload/rebuild. Navigate ໄປ MainShell ກົງໆ
       // ແລະລຶບ route stack ທັງໝົດ ບໍ່ຕ້ອງອີງໃສ່ timing ຂອງ stream ເລີຍ.
+      // 🔒 [FIX E-01/E-02 / Phase 2 Batch E] ກ່ອນໜ້ານີ້ navigate ໄປ MainShell
+      // ຕົງໆສະເໝີ ບໍ່ວ່າ role ຫຍັງ — ຊ່າງທີ່ login ດ້ວຍເບີໂທ+ລະຫັດຜ່ານ (ທາງເລືອກ
+      // ຫຼັກ, ບໍ່ແມ່ນ Google) ຈຶ່ງເຫັນ MainShell ຂອງລູກຄ້າແທນ Dashboard/Pending
+      // ຂອງຕົນເອງ, ຈົນກວ່າຈະປິດ-ເປີດແອັບໃໝ່. ຕອນນີ້ໃຊ້ resolvePostAuthDestination()
+      // ດຽວກັນກັບ RoleRouter — ອ່ານ role/kycStatus ກ່ອນ navigate ສະເໝີ.
+      final destination = await resolvePostAuthDestination();
+      if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MainShell()),
+        MaterialPageRoute(builder: (_) => destination),
         (route) => false,
       );
     } on FirebaseAuthException catch (e) {
@@ -494,6 +551,16 @@ class _LoginPageState extends State<LoginPage>
             => tr('wrong_pass'),
         _   => '${tr("error")} (${e.code})',
       });
+    } catch (e) {
+      // 🔒 [FIX / Phase 2 Batch E final audit] resolvePostAuthDestination()
+      // (called right after a successful sign-in, above) does 1-2 Firestore
+      // .get() calls — a transient read failure there throws FirebaseException,
+      // not FirebaseAuthException, so it previously fell through uncaught,
+      // leaving the user stuck on LoginPage with no message (finally only
+      // clears the spinner). Generic tr('error') only — no raw exception
+      // detail shown to the user.
+      if (!mounted) return;
+      setState(() => _error = tr('error'));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -554,29 +621,20 @@ class _LoginPageState extends State<LoginPage>
       // ✅ [FIX] ບັນຊີ Provider ບາງບັນຊີ login ດ້ວຍ Google — ກວດ role ໃນ
       // Firestore ທັນທີຫຼັງ sign-in ແລ້ວໂດດໄປ Provider Dashboard ໂດຍກົງ,
       // ບໍ່ຕ້ອງລໍ RoleRouter stream ອັບເດດ.
-      if (role == 'provider') {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (_) => kycStatus == 'verified'
-                ? const ProviderDashboard()
-                : const PendingApprovalScreen(),
-          ),
-          (route) => false,
-        );
-      } else {
-        // 🔒 [BUG FIX] popUntil(isFirst) ອີງໃສ່ StreamBuilder<User?> ຢູ່ root
-        // (LinThoApp) rebuild home widget ຈາກ WelcomeScreen → RoleRouter ໃຫ້
-        // ທັນກ່ອນ pop animation ຈະແລ້ວ. Google Sign-In ຜ່ານ account picker
-        // (Custom Tab/WebView) ເຮັດໃຫ້ແອັບ pause/resume ກາງທາງ — authStateChanges()
-        // event ບາງຄັ້ງມາຊ້າກວ່າ pop ນີ້ (race condition), ເຮັດໃຫ້ WelcomeScreen
-        // ເກົ່າຄ້າງໂຜ່ຢູ່ຈົນກວ່າຈະ hot reload. ແກ້ໂດຍ navigate ໄປ MainShell ກົງໆ
-        // ແລະລຶບ route stack ທັງໝົດ (ຄືກັນກັບ branch 'provider' ຂ້າງເທິງ),
-        // ບໍ່ຕ້ອງອີງໃສ່ timing ຂອງ stream ເລີຍ.
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const MainShell()),
-          (route) => false,
-        );
-      }
+      // 🔒 [BUG FIX] popUntil(isFirst) ອີງໃສ່ StreamBuilder<User?> ຢູ່ root
+      // (LinThoApp) rebuild home widget ຈາກ WelcomeScreen → RoleRouter ໃຫ້
+      // ທັນກ່ອນ pop animation ຈະແລ້ວ. Google Sign-In ຜ່ານ account picker
+      // (Custom Tab/WebView) ເຮັດໃຫ້ແອັບ pause/resume ກາງທາງ — authStateChanges()
+      // event ບາງຄັ້ງມາຊ້າກວ່າ pop ນີ້ (race condition), ເຮັດໃຫ້ WelcomeScreen
+      // ເກົ່າຄ້າງໂຜ່ຢູ່ຈົນກວ່າຈະ hot reload. ແກ້ໂດຍ navigate ໄປ destination ກົງໆ
+      // ແລະລຶບ route stack ທັງໝົດ, ບໍ່ຕ້ອງອີງໃສ່ timing ຂອງ stream ເລີຍ.
+      // 🔒 [FIX E-01/E-02] ຕັດສິນ destination ຜ່ານ resolveRoleDestination() —
+      // ດຽວກັນກັບ RoleRouter/_login() ຂ້າງເທິງ, ບໍ່ໃຫ້ logic ນີ້ແຍກກັນອີກຕໍ່ໄປ.
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+            builder: (_) => resolveRoleDestination(role: role, kycStatus: kycStatus)),
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = '${tr("error")}: $e');
@@ -760,6 +818,11 @@ class _LoginPageState extends State<LoginPage>
                       // ພິມ '@'/ຕົວອັກສອນບໍ່ໄດ້ ຈຶ່ງ login ບໍ່ຜ່ານ
                       keyboardType: TextInputType.emailAddress,
                       autocorrect: false,
+                      // ✅ [FIX E-05 / Phase 2 Batch E] password-manager
+                      // autofill — ໜ້ານີ້ຮັບທັງເບີໂທ/email ຈຶ່ງໃຊ້ username
+                      // (ບໍ່ແມ່ນ email/telephoneNumber ສະເພາະ) ໃຫ້ຈັບຄູ່ໄດ້ບໍ່ວ່າ
+                      // ບັນຊີບັນທຶກໄວ້ດ້ວຍຄ່າໃດ
+                      autofillHints: const [AutofillHints.username],
                       style: const TextStyle(
                           fontSize: 15, color: C.text),
                       decoration: _fieldDecoration(
@@ -771,6 +834,10 @@ class _LoginPageState extends State<LoginPage>
                     TextField(
                       controller: _passCtrl,
                       obscureText: _obscure,
+                      // ✅ [FIX E-05 / Phase 2 Batch E] existing-account
+                      // password (ບໍ່ແມ່ນ newPassword — ນີ້ຄື login, ບໍ່ແມ່ນ
+                      // ລົງທະບຽນ)
+                      autofillHints: const [AutofillHints.password],
                       style: const TextStyle(
                           fontSize: 15, color: C.text),
                       decoration: _fieldDecoration(

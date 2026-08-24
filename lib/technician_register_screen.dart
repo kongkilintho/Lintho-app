@@ -624,8 +624,20 @@ class _TechnicianRegisterScreenState extends State<TechnicianRegisterScreen> {
                 _idDocFile = null; _idSelfieFile = null;
                 _lat = null; _lng = null; _locationDeniedForever = false;
               });
-            } else if (_step > 0 && _step != 1) {
-              // ✅ ບໍ່ໃຫ້ກັບຄືນຫາ OTP step ຫຼັງຢືນຢັນສຳເລັດແລ້ວ
+            } else if (_step == 1) {
+              // 🔒 [FIX E-03 / Phase 2 Batch E] ກ່ອນໜ້ານີ້ step 1 (OTP) ຕົກລົງ
+              // else ຂ້າງລຸ່ມ ເຮັດໃຫ້ Navigator.pop() ອອກຈາກໜ້າລົງທະບຽນທັງໝົດ
+              // ແທນທີ່ຈະຍ້ອນກັບໄປແກ້ເບີໂທ, ບໍ່ຄືກັນກັບ phone_verification.dart
+              // ທີ່ຈັດການ pattern ດຽວກັນນີ້ຢູ່ແລ້ວ. ຕອນນີ້ຍ້ອນກັບໄປ step 0 ຄືກັນ.
+              _resendTimer?.cancel();
+              setState(() {
+                _step = 0; _error = null;
+                _verificationId = null; _resendCooldown = 0;
+                _otpCtrl.clear();
+              });
+            } else if (_step > 0) {
+              // ✅ ບໍ່ໃຫ້ກັບຄືນຫາ OTP step ຫຼັງຢືນຢັນສຳເລັດແລ້ວ (_step==1 ຖືກ
+              // ຈັດການແຍກຕ່າງຫາກຂ້າງເທິງ, ບໍ່ຕົກລົງມາເຖິງນີ້)
               setState(() { _step -= 1; _error = null; });
             } else {
               Navigator.pop(context);

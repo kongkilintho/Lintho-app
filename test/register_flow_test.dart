@@ -23,6 +23,8 @@
 // Suite + integration_test package ແທນ.
 // ============================================================
 
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -31,8 +33,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lintho/register_otp.dart';
 import 'package:lintho/customer_register_flow.dart';
 import 'package:lintho/technician_register_screen.dart';
+import 'package:lintho/main.dart' show resolveRoleDestination, MainShell;
+import 'package:lintho/provider_dashboard.dart';
+import 'package:lintho/pending_approval_screen.dart';
 
 Widget _wrap(Widget child) => MaterialApp(home: child);
+String _read(String relativePath) => File(relativePath).readAsStringSync();
 
 void main() {
   group('Register entry — navigation & no-exception smoke test', () {
@@ -264,6 +270,154 @@ void main() {
       await db.collection('users').doc(uid).set({'role': 'provider'});
 
       expect(await wouldBlock(db, uid, 'provider'), isFalse);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════
+  // TEST 1 — E-01/E-02 regression: post-auth destination
+  // ══════════════════════════════════════════════════════════
+  //
+  // resolveRoleDestination() (lib/main.dart) is the single source of truth
+  // extracted for the Phase 2 Batch E fix — previously RoleRouter and
+  // LoginPage._loginWithGoogle() each had their own copy of this decision,
+  // and LoginPage._login() (email/password — the primary login method) had
+  // no copy at all, so a provider signing in with email/password always
+  // landed on the customer MainShell. It's a pure function (no Firebase
+  // I/O), so it can be exercised directly without any mocking — this is
+  // exactly why it was extracted as a pure function rather than inlined.
+  group('resolveRoleDestination — E-01/E-02: single source of truth for '
+      'post-auth destination', () {
+    test('customer → MainShell', () {
+      final w = resolveRoleDestination(role: 'customer', kycStatus: null);
+      expect(w, isA<MainShell>());
+    });
+
+    test('provider + kycStatus verified → ProviderDashboard', () {
+      final w = resolveRoleDestination(role: 'provider', kycStatus: 'verified');
+      expect(w, isA<ProviderDashboard>());
+    });
+
+    test('provider + kycStatus pending → PendingApprovalScreen', () {
+      final w = resolveRoleDestination(role: 'provider', kycStatus: 'pending');
+      expect(w, isA<PendingApprovalScreen>());
+    });
+
+    test('provider + kycStatus rejected → PendingApprovalScreen', () {
+      final w = resolveRoleDestination(role: 'provider', kycStatus: 'rejected');
+      expect(w, isA<PendingApprovalScreen>());
+    });
+
+    test('provider + missing/null kycStatus → PendingApprovalScreen', () {
+      final w = resolveRoleDestination(role: 'provider', kycStatus: null);
+      expect(w, isA<PendingApprovalScreen>());
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════
+  // TEST 1b — E-01/E-02 regression: no duplicate decision tree left behind
+  // ══════════════════════════════════════════════════════════
+  //
+  // Source-based guard (same style as service_icon_remaining_spots_test.dart)
+  // — _login() must resolve its destination through the shared function
+  // (not hardcode MainShell again), and neither login path should still
+  // contain its own inline "kycStatus == 'verified' ? ... : ..." branch.
+  group('main.dart — E-01/E-02: no duplicated role-routing logic remains', () {
+    final source = _read('lib/main.dart');
+
+    test('_login() no longer hardcodes MainShell as the destination', () {
+      final start = source.indexOf('Future<void> _login() async {');
+      final end = source.indexOf('Future<void> _loginWithGoogle()');
+      final block = source.substring(start, end);
+      expect(block, contains('resolvePostAuthDestination()'));
+      expect(block, isNot(contains('builder: (_) => const MainShell()')));
+    });
+
+    test('_loginWithGoogle() delegates the final branch to '
+        'resolveRoleDestination(), not its own inline ternary', () {
+      final start = source.indexOf('Future<void> _loginWithGoogle()');
+      final end = source.indexOf('Future<void> _forgotPassword()');
+      final block = source.substring(start, end);
+      expect(block, contains('resolveRoleDestination(role: role, kycStatus: kycStatus)'));
+      expect(block, isNot(contains("kycStatus == 'verified'\n                ? const ProviderDashboard()")));
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════
+  // TEST 2 — E-03 regression: OTP-step back navigation
+  // ══════════════════════════════════════════════════════════
+  //
+  // Driving CustomerRegisterFlow/TechnicianRegisterScreen to _step==1 (OTP)
+  // for a real interaction test would require a live FirebaseAuth
+  // verifyPhoneNumber() call (no Firebase is initialized in this widget-test
+  // environment — see this file's header note on why the flows above use
+  // contract tests instead of full E2E). Source-based regression guard
+  // instead: confirms the back-button handler now special-cases _step==1
+  // (reset to step 0) rather than falling through to Navigator.pop(), for
+  // both registration flows.
+  group('customer_register_flow.dart / technician_register_screen.dart — '
+      'E-03: OTP step back button returns to phone step', () {
+    test('customer_register_flow.dart handles _step==1 before the pop '
+        'fallback', () {
+      final source = _read('lib/customer_register_flow.dart');
+      final start = source.indexOf('onPressed: _loading ? null : () {');
+      final end = source.indexOf('),\n        ),\n      ),\n      body:');
+      final block = source.substring(start, end == -1 ? start + 1500 : end);
+      expect(block, contains('} else if (_step == 1) {'));
+      // the _step==1 branch must appear before the final else{} that pops
+      final step1Index = block.indexOf('_step == 1');
+      final popIndex = block.indexOf('Navigator.pop(context);');
+      expect(step1Index, greaterThan(0));
+      expect(popIndex, greaterThan(step1Index));
+    });
+
+    test('technician_register_screen.dart handles _step==1 before the '
+        'generic decrement/pop fallback', () {
+      final source = _read('lib/technician_register_screen.dart');
+      final start = source.indexOf('onPressed: _loading ? null : () {');
+      final end = source.indexOf('),\n        ),\n      ),\n      body:');
+      final block = source.substring(start, end == -1 ? start + 2000 : end);
+      expect(block, contains('} else if (_step == 1) {'));
+      final step1Index = block.indexOf('_step == 1');
+      final decrementIndex = block.indexOf('_step -= 1');
+      final popIndex = block.indexOf('Navigator.pop(context);');
+      expect(step1Index, greaterThan(0));
+      expect(decrementIndex, greaterThan(step1Index));
+      expect(popIndex, greaterThan(decrementIndex));
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════
+  // TEST 3 — Pending approval: rejected vs. generic state
+  // ══════════════════════════════════════════════════════════
+  group('pending_approval_screen.dart — rejected vs. generic pending UI', () {
+    // PendingApprovalScreen.build() reads FirebaseAuth.instance.currentUser
+    // unconditionally (not inside a tap handler), which throws
+    // `[core/no-app]` in this widget-test environment (no Firebase
+    // initialized) — so, consistent with this file's other Firebase-touching
+    // screens, this is a source-based regression guard rather than a pump.
+
+    // Reaching kycStatus=='rejected' requires a live providers/{uid} stream
+    // (FirebaseAuth + Firestore), not available in this widget-test
+    // environment — source-based regression guard instead, confirming the
+    // rejected branch still wires reason text + resubmit CTA + KycScreen
+    // navigation, and that E-04's CTA-color fix is in place.
+    test('rejected kycStatus renders reject reason + resubmit CTA routed '
+        'to KycScreen, with the primary (not navy) CTA color', () {
+      final source = _read('lib/pending_approval_screen.dart');
+      expect(source, contains("kycStatus == 'rejected'"));
+      expect(source, contains('rejectReason: rejectReason'));
+      expect(source, contains('kyc_rejected_reason_label'));
+      expect(source, contains('builder: (_) => const KycScreen()'));
+      // ✅ [FIX E-04] was C.navy — must not regress back to it.
+      expect(source, isNot(contains('backgroundColor: C.navy, elevation: 0,')));
+      expect(source, contains('backgroundColor: C.primary, elevation: 0,'));
+    });
+
+    test('non-rejected kycStatus keeps the generic pending body (no reject '
+        'reason, no resubmit CTA)', () {
+      final source = _read('lib/pending_approval_screen.dart');
+      // default constructor path used for everything except 'rejected'
+      expect(source, contains('return const _PendingApprovalBody();'));
     });
   });
 }

@@ -402,6 +402,18 @@ class _CustomerRegisterFlowState extends State<CustomerRegisterFlow> {
                 // ເກົ່າຫຼຸດຕິດໄປກັບເບີໂທໃໝ່ທີ່ຈະລົງທະບຽນ
                 _lat = null; _lng = null;
               });
+            } else if (_step == 1) {
+              // 🔒 [FIX E-03 / Phase 2 Batch E] ກ່ອນໜ້ານີ້ບໍ່ໄດ້ຈັດການ step 1
+              // (OTP) ໂດຍສະເພາະ — ຕົກລົງ else ຂ້າງລຸ່ມ ເຮັດໃຫ້ Navigator.pop()
+              // ອອກຈາກໜ້າລົງທະບຽນທັງໝົດ ແທນທີ່ຈະຍ້ອນກັບໄປແກ້ເບີໂທ, ບໍ່ຄືກັນກັບ
+              // phone_verification.dart ທີ່ຈັດການ pattern ດຽວກັນນີ້ຢູ່ແລ້ວ. ຕອນນີ້
+              // ຍ້ອນກັບໄປ step 0 ຄືກັນ.
+              _resendTimer?.cancel();
+              setState(() {
+                _step = 0; _error = null;
+                _verificationId = null; _resendCooldown = 0;
+                _otpCtrl.clear();
+              });
             } else {
               Navigator.pop(context);
             }

@@ -95,7 +95,7 @@ class _PendingApprovalBody extends StatelessWidget {
                     onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const KycScreen())),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: C.navy, elevation: 0,
+                      backgroundColor: C.primary, elevation: 0,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
                     ),

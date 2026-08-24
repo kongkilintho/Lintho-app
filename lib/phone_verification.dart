@@ -296,6 +296,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: C.text, size: 20),
+          tooltip: tr('back_semantic'), // ✅ [FIX E-06 / Phase 2 Batch E]
           onPressed: _loading ? null : () {
             if (_step == 1) {
               _resendTimer?.cancel();
