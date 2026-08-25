@@ -1094,6 +1094,62 @@ exports.deleteOwnAccount = functions.https.onCall(async (data, context) => {
   return { uid };
 });
 
+// 🔒 [BATCH L — useDeleteCustomer security fix, 2026-08-25] Confirmed HIGH:
+// lintho-admin's useDeleteCustomer (src/lib/hooks/index.ts) only ever
+// called deleteDoc(doc(db,'users',id)) directly from the client — Firebase
+// Auth was never touched, so a "deleted" customer's session/account stayed
+// fully usable indefinitely. Worse, isActiveCustomer() (firestore.rules)
+// treats a missing users/{uid} doc as an active, unrestricted customer
+// (same fallback getRole() uses everywhere else in this codebase), so the
+// "deleted" customer could keep creating bookings/reviews/reward
+// redemptions and even recreate their own profile doc via the existing
+// self-service create rule — fully undoing the admin's action.
+//
+// This callable is the fix, combining the two existing admin-account-
+// deletion patterns above rather than inventing a new one:
+// _assertSuperAdmin()-gated authorization (deleteAdminUser) + addresses-
+// subcollection cleanup (deleteOwnAccount).
+//
+// Auth is deleted BEFORE Firestore — the same order deleteAdminUser
+// already uses, the reverse of deleteOwnAccount's order. Deliberately: if
+// Firestore cleanup then fails partway, the account is already locked out
+// (safe failure — matches this fix's whole purpose). The reverse order
+// would risk reproducing the exact original bug (Firestore doc gone, Auth
+// still fully usable) if the Auth deletion step failed after Firestore had
+// already succeeded.
+exports.deleteCustomer = functions.https.onCall(async (data, context) => {
+  const callerUid = await _assertSuperAdmin(context);
+  const { uid } = data || {};
+  if (typeof uid !== 'string' || !uid) {
+    throw new functions.https.HttpsError('invalid-argument', 'ບໍ່ພົບ uid.');
+  }
+  if (uid === callerUid) {
+    throw new functions.https.HttpsError('failed-precondition', 'ບໍ່ສາມາດລຶບບັນຊີຕົນເອງໄດ້.');
+  }
+
+  try {
+    await admin.auth().deleteUser(uid);
+  } catch (err) {
+    // auth/user-not-found — e.g. a retry after a prior call already
+    // deleted the Auth account but failed before the Firestore cleanup
+    // below completed. Safe to proceed: the account is already locked out
+    // either way, and finishing the Firestore cleanup is exactly what a
+    // retry should do. Any other error is a real failure — surfaced to the
+    // caller, not swallowed, so the admin knows deletion did not complete.
+    if (err.code !== 'auth/user-not-found') {
+      throw new functions.https.HttpsError('internal', 'ລຶບບັນຊີ Auth ລົ້ມເຫຼວ: ' + err.message);
+    }
+  }
+
+  const addressesSnap = await db.collection('users').doc(uid).collection('addresses').get();
+  const batch = db.batch();
+  addressesSnap.forEach((doc) => batch.delete(doc.ref));
+  batch.delete(db.collection('users').doc(uid));
+  await batch.commit();
+
+  return { uid };
+});
+
 // 🔒 [BATCH H — Customer suspend/ban enforcement, Critical, 2026-08-25]
 // users/{uid}.status (admin-set via useSuspendCustomer/useBanCustomer,
 // lintho-admin/src/lib/hooks/index.ts) was previously write-only — nothing
