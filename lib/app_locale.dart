@@ -48,6 +48,11 @@ final _strings = <AppLang, Map<String, String>>{
   AppLang.lo: {
     'app_name':       'LinTho',
     'tagline':        'ດູແລເຮືອນ ພຽງໜຶ່ງຄລິກ',
+    // ✅ [FIX L-1 / Batch G] Splash screen's own tagline — kept distinct
+    // from 'tagline' above since that key's wording doesn't match what's
+    // actually shown on Splash (different copy, not a duplicate); Lao value
+    // here is byte-identical to the previously-hardcoded text.
+    'splash_tagline': 'ທຸກເລື່ອງຊ່າງ ຈົບງ່າຍໃນແອັບດຽວ',
     'welcome_slogan': 'ເອີ້ນຊ່າງລ້າງແອ ແລະ ທຳຄວາມສະອາດ ວ່ອງໄວ ທັນໃຈ',
     'login':          'ເຂົ້າສູ່ລະບົບ',
     'register':       'ສ້າງບັນຊີ',
@@ -943,6 +948,13 @@ final _strings = <AppLang, Map<String, String>>{
     'confirm_payment_title':         'ຢືນຢັນວ່າໄດ້ຮັບເງິນແລ້ວ?',
     'confirm_payment_body':          'ກົດຢືນຢັນສະເພາະຫຼັງຈາກທ່ານໄດ້ຮັບເງິນຈາກລູກຄ້າແລ້ວເທົ່ານັ້ນ\n(ເງິນສົດ ຫຼື ໂອນຜ່ານທະນາຄານ) — ຈຳເປັນກ່ອນຈຶ່ງຈະປິດງານໄດ້',
     'payment_confirmed_snackbar':    '✅ ຢືນຢັນຮັບເງິນແລ້ວ — ຕອນນີ້ສາມາດປິດງານໄດ້',
+    // ✅ [FIX L-2 / Batch G] customer-side BCEL transfer-confirmation card
+    // (tracking_screen.dart) — distinct from action_confirm_payment/
+    // confirm_payment_* above, which are the provider-side "I received
+    // payment" equivalents.
+    'tracking_bcel_confirm_title':   'ໂອນເງິນຜ່ານ BCEL ແລ້ວບໍ?',
+    'tracking_bcel_confirm_hint':    'ກົດຢືນຢັນເມື່ອທ່ານໂອນເງິນຄ່າບໍລິການໃຫ້ຊ່າງແລ້ວ',
+    'tracking_bcel_confirm_button':  'ຢືນຢັນວ່າໄດ້ໂອນເງິນແລ້ວ',
     'action_complete_job':           'ສຳເລັດວຽກ', // 🔒 [AUDIT UI-4] see action_start_travel comment above
     'action_cancel_job':             '❌  ຍົກເລີກວຽກ',
     'confirm_complete_title':        'ຢືນຢັນສຳເລັດ?',
@@ -1048,6 +1060,7 @@ final _strings = <AppLang, Map<String, String>>{
   AppLang.en: {
     'app_name':       'LinTho',
     'tagline':        'Home care, one tap away',
+    'splash_tagline': 'Every home-service need, done easily in one app',
     'welcome_slogan': 'Clean • Fast • Trusted',
     'login':          'Login',
     'register':       'Create Account',
@@ -1901,6 +1914,9 @@ final _strings = <AppLang, Map<String, String>>{
     'confirm_payment_title':         'Confirm payment received?',
     'confirm_payment_body':          'Only confirm after you have actually received payment from the customer\n(cash or bank transfer) — required before you can complete the job',
     'payment_confirmed_snackbar':    '✅ Payment confirmed — you can now complete the job',
+    'tracking_bcel_confirm_title':   'Transferred via BCEL?',
+    'tracking_bcel_confirm_hint':    'Confirm once you have transferred the service fee to the technician',
+    'tracking_bcel_confirm_button':  'Confirm transfer sent',
     'action_complete_job':           'Complete Job',
     'action_cancel_job':             '❌  Cancel Job',
     'confirm_complete_title':        'Confirm completion?',
@@ -1995,6 +2011,7 @@ final _strings = <AppLang, Map<String, String>>{
   AppLang.th: {
     'app_name':       'LinTho',
     'tagline':        'ดูแลบ้าน เพียงแตะเดียว',
+    'splash_tagline': 'ทุกเรื่องช่าง จบง่ายในแอปเดียว',
     'welcome_slogan': 'สะอาด • รวดเร็ว • ไว้ใจได้',
     'login':          'เข้าสู่ระบบ',
     'register':       'สร้างบัญชี',
@@ -2835,6 +2852,9 @@ final _strings = <AppLang, Map<String, String>>{
     'confirm_payment_title':         'ยืนยันว่าได้รับเงินแล้ว?',
     'confirm_payment_body':          'กดยืนยันเฉพาะเมื่อท่านได้รับเงินจากลูกค้าแล้วเท่านั้น\n(เงินสดหรือโอนผ่านธนาคาร) — จำเป็นก่อนจะปิดงานได้',
     'payment_confirmed_snackbar':    '✅ ยืนยันรับเงินแล้ว — ตอนนี้สามารถปิดงานได้',
+    'tracking_bcel_confirm_title':   'โอนเงินผ่าน BCEL แล้วหรือยัง?',
+    'tracking_bcel_confirm_hint':    'กดยืนยันเมื่อท่านโอนค่าบริการให้ช่างแล้ว',
+    'tracking_bcel_confirm_button':  'ยืนยันว่าโอนเงินแล้ว',
     'action_complete_job':           'งานเสร็จสมบูรณ์',
     'action_cancel_job':             '❌  ยกเลิกงาน',
     'confirm_complete_title':        'ยืนยันงานเสร็จ?',
@@ -2929,6 +2949,7 @@ final _strings = <AppLang, Map<String, String>>{
   AppLang.zh: {
     'app_name':       'LinTho',
     'tagline':        '居家服务，一键搞定',
+    'splash_tagline': '所有维修服务，一个应用轻松搞定',
     'welcome_slogan': '清洁 • 快速 • 可信赖',
     'login':          '登录',
     'register':       '创建账户',
@@ -3769,6 +3790,9 @@ final _strings = <AppLang, Map<String, String>>{
     'confirm_payment_title':         '确认已收到款项？',
     'confirm_payment_body':          '只有在您已实际收到客户付款后才能确认\n（现金或银行转账）— 完成工作前必须先确认收款',
     'payment_confirmed_snackbar':    '✅ 已确认收款 — 现在可以完成工作了',
+    'tracking_bcel_confirm_title':   '已通过BCEL转账了吗？',
+    'tracking_bcel_confirm_hint':    '向技师转账服务费后请点击确认',
+    'tracking_bcel_confirm_button':  '确认已转账',
     'action_complete_job':           '完成工作',
     'action_cancel_job':             '❌  取消工作',
     'confirm_complete_title':        '确认完成？',

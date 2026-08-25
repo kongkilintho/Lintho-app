@@ -198,13 +198,16 @@ class _SplashSkeletonState extends State<_SplashSkeleton>
       ),
       child: FadeTransition(
         opacity: _fade,
-        child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        // 🔒 [FIX L-1 / Batch G] can no longer be a const Column — tr() is a
+        // runtime call, not a compile-time constant, unlike the hardcoded
+        // Lao string this replaced.
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           // ✅ [FIX E-07 / Phase 2 Batch E] shared BrandMarkTile instead of a
           // raw Image.asset — radius:0 keeps the exact unrounded look this
           // screen already had (BrandMarkTile's own default would round it).
-          BrandMarkTile(size: 96, radius: 0),
-          SizedBox(height: 20),
-          Text(
+          const BrandMarkTile(size: 96, radius: 0),
+          const SizedBox(height: 20),
+          const Text(
             'LinTho',
             style: TextStyle(
               color: Colors.white,
@@ -212,10 +215,15 @@ class _SplashSkeletonState extends State<_SplashSkeleton>
               fontWeight: FontWeight.w800,
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
-            'ທຸກເລື່ອງຊ່າງ ຈົບງ່າຍໃນແອັບດຽວ',
-            style: TextStyle(color: C.splashSubtext, fontSize: 15, fontWeight: FontWeight.w700),
+            // was hardcoded Lao, ignoring the user's selected locale — the
+            // first screen every user sees. Uses a new splash_tagline key
+            // (not the pre-existing but orphaned and differently-worded
+            // 'tagline' key — verified its wording doesn't match this
+            // screen's actual copy, see app_locale.dart).
+            tr('splash_tagline'),
+            style: const TextStyle(color: C.splashSubtext, fontSize: 15, fontWeight: FontWeight.w700),
           ),
         ]),
       ),

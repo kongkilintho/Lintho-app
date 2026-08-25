@@ -17,6 +17,7 @@ import 'booking_provider.dart';
 import 'chat_screen.dart';
 import 'theme/app_theme.dart' show AppRadius;
 import 'widgets/app_icon_button.dart';
+import 'widgets/error_state_view.dart';
 import 'widgets/status_stepper.dart' as shared;
 import 'widgets/pulsing_fade.dart';
 
@@ -55,7 +56,22 @@ class JobWorkflowScreen extends ConsumerWidget {
       // ✅ RULE: Skeleton loading ແທນ CircularProgressIndicator
       loading: () => _buildScaffold(context, initialBooking, ref,
           isLoading: true),
-      error:   (_, __) => _buildScaffold(context, initialBooking, ref),
+      // 🔒 [FIX F2 / Batch G] a stream error used to silently render the
+      // stale initialBooking as a fully interactive scaffold — visually
+      // identical to a successful live load, so a provider could act on
+      // (or simply trust) data that might no longer reflect the booking's
+      // real state. Now shows a retryable ErrorStateView instead, same
+      // pattern as the rest of the app; the AppBar still renders from
+      // initialBooking (static info only) so back/call navigation stays
+      // available.
+      error:   (_, __) => Scaffold(
+        backgroundColor: C.background,
+        appBar: _buildAppBar(context, initialBooking),
+        body: ErrorStateView(
+          onRetry: () =>
+              ref.invalidate(singleBookingProvider(initialBooking.id)),
+        ),
+      ),
       data:    (b)     => _buildScaffold(context, b, ref),
     );
   }

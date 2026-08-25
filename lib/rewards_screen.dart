@@ -42,7 +42,23 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _BalanceCard(points: pointsAsync.value ?? 0),
+          // 🔒 [FIX F3 / Batch G] a points-stream error used to collapse to
+          // `pointsAsync.value ?? 0` — indistinguishable from a genuinely
+          // empty balance. Now uses the same loading/error/data pattern as
+          // settingsAsync/historyAsync below, with a real retry.
+          pointsAsync.when(
+            loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Center(child: CircularProgressIndicator())),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: ErrorStateView(
+                compact: true,
+                onRetry: () => ref.invalidate(rewardPointsProvider),
+              ),
+            ),
+            data: (points) => _BalanceCard(points: points),
+          ),
           const SizedBox(height: 20),
           Text(tr('redeem_points_title'), style: const TextStyle(
               fontSize: 14, fontWeight: FontWeight.w700, color: C.text)),

@@ -418,17 +418,31 @@ class ProviderTransaction {
   // transactions/earnings stream for that provider. Same defaulting
   // pattern as ProviderProfile.kycStatus below (byName with a fallback
   // literal) and Wallet/Review's `as X? ?? default` fields.
+  // 🔒 [FIX F1 / Batch G] Batch F's fallback only covered a missing/null
+  // 'type' field — `.byName()` still throws on a non-null but invalid
+  // string (legacy value, typo from a manual edit), the same failure mode
+  // Booking._parseStatus (above) was hardened against for JobStatus.
+  // _parseType() below applies the identical safe-lookup-with-fallback
+  // pattern instead of the throwing `.byName()`.
   factory ProviderTransaction.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return ProviderTransaction(
       id:          doc.id,
       providerId:  d['providerId']  as String? ?? '',
-      type:        TxType.values.byName(d['type'] as String? ?? 'adjustment'),
+      type:        _parseType(d['type'] as String?),
       amount:     (d['amount']      as num?)?.toDouble() ?? 0,
       bookingId:   d['bookingId']   as String?,
       description: d['description'] as String? ?? '',
       createdAt:  (d['createdAt']   as Timestamp?)?.toDate() ?? DateTime.now(),
     );
+  }
+
+  static TxType _parseType(String? raw) {
+    if (raw == null) return TxType.adjustment;
+    for (final t in TxType.values) {
+      if (t.name == raw) return t;
+    }
+    return TxType.adjustment;
   }
 
   // ✅ [Admin wallet adjustment] ທຸກ type ອື່ນ amount ເປັນບວກສະເໝີ ແລະ sign/ສີ
@@ -548,10 +562,22 @@ class ProviderProfile {
       reviewCount:    d['reviewCount']    as int?    ?? 0,
       totalJobs:      d['totalJobs']      as int?    ?? 0,
       completionRate:(d['completionRate'] as num?)?.toDouble() ?? 0,
-      kycStatus: KycStatus.values.byName(d['kycStatus'] as String? ?? 'none'),
+      kycStatus:      _parseKycStatus(d['kycStatus'] as String?),
       fcmTokens:      List<String>.from(d['fcmTokens'] ?? []),
       createdAt:     (d['createdAt'] as Timestamp?)?.toDate(),
     );
+  }
+
+  // 🔒 [FIX F1 / Batch G] `.byName()` throws on a non-null but invalid
+  // string (legacy value, typo) — same failure mode as Booking._parseStatus
+  // above; a malformed kycStatus otherwise crashes the provider's own
+  // RoleRouter stream via Stream.map(ProviderProfile.fromFirestore).
+  static KycStatus _parseKycStatus(String? raw) {
+    if (raw == null) return KycStatus.none;
+    for (final s in KycStatus.values) {
+      if (s.name == raw) return s;
+    }
+    return KycStatus.none;
   }
 
   Map<String, dynamic> toMap() => {

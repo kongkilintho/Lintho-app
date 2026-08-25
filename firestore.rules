@@ -712,21 +712,35 @@ service cloud.firestore {
 
       // ອັບເດດ: ເຈົ້າຂອງແກ້ໄຂ profile/location ຂອງຕົນເອງໄດ້
       // ກວດ lat/lng ໃຫ້ຖືກຕ້ອງສະເພາະເວລາມີການແກ້ໄຂ field ນັ້ນ
-      // ✅ kycStatus/isVerified/rejectReason/suspendReason ຫ້າມ owner ແກ້ໄຂ
-      // ເອງເດັດຂາດ — field ເຫຼົ່ານີ້ຕ້ອງຖືກປ່ຽນຜ່ານ admin (LinTho Admin Panel)
-      // ຜ່ານ admin bypass rule (line 58-60) ເທົ່ານັ້ນ ບໍ່ດັ່ງນັ້ນ provider ຈະ
-      // ສາມາດ self-approve ຕົນເອງເປັນ verified ໄດ້
+      // ✅ isVerified/rejectReason/suspendReason ຫ້າມ owner ແກ້ໄຂເອງເດັດຂາດ —
+      // field ເຫຼົ່ານີ້ຕ້ອງຖືກປ່ຽນຜ່ານ admin (LinTho Admin Panel) ຜ່ານ admin
+      // bypass rule (line 58-60) ເທົ່ານັ້ນ ບໍ່ດັ່ງນັ້ນ provider ຈະສາມາດ
+      // self-approve ຕົນເອງເປັນ verified ໄດ້
       // 🔒 [AUDIT H6] ກ່ອນໜ້ານີ້ customer ຄົນໃດກໍໄດ້ສາມາດຂຽນ rating/totalJobs/
       // completionRate ຂອງ provider ຄົນໃດກໍໄດ້ໂດຍກົງ (ບໍ່ຕ້ອງມີ review/booking
       // ຈິງເລີຍ) — ຕອນນີ້ 3 field ນີ້ຄິດໄລ່ຢູ່ Cloud Function ເທົ່ານັ້ນ
       // (onReviewCreated/onBookingStatusChange, functions/index.js), ອອກຈາກ
       // list ທີ່ client ຂຽນໄດ້ຫມົດ.
+      // 🔒 [FIX KYC-2 / Batch G] kycStatus used to be in the blanket-blocked
+      // list above, which also permanently blocked the one legitimate
+      // self-service transition: a rejected provider resubmitting KYC
+      // (uploadKyc() writes photos/kyc/{uid} fine, then this rule denied the
+      // providers/{uid}.kycStatus='pending' write, leaving every rejected
+      // provider stuck forever with no way back in). Now kycStatus is
+      // allowed in the diff ONLY for the exact rejected|none -> pending
+      // self-transition; every other kycStatus write (any path to
+      // 'verified', writing 'rejected'/'suspended', or moving from
+      // 'pending'/'verified' to anything) still falls through to deny here —
+      // those states can only ever be set by the admin-tier branch below.
       allow update: if isAuth() &&
         isOwner(providerId) && isValidLatLngIfChanged() &&
         !request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['kycStatus', 'isVerified', 'rejectReason', 'suspendReason',
+          .hasAny(['isVerified', 'rejectReason', 'suspendReason',
             'rating', 'totalJobs', 'completionRate',
-            'kycDocUrl', 'kycIdUrl', 'kycSelfieUrl', 'phone']);
+            'kycDocUrl', 'kycIdUrl', 'kycSelfieUrl', 'phone']) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['kycStatus']) ||
+          (resource.data.get('kycStatus', 'none') in ['none', 'rejected'] &&
+            request.resource.data.kycStatus == 'pending'));
 
       // 🔒 [AUDIT SEC-1/ADM-1 / 2026-08-02] Admin approve/reject/suspend
       // (useApproveProvider/useRejectProvider/useSuspendProvider — writes

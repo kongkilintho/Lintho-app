@@ -938,11 +938,11 @@ class _TrackingScreenState extends State<TrackingScreen>
                     border: Border.all(color: C.gold.withValues(alpha: 0.3)),
                   ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('ໂອນເງິນຜ່ານ BCEL ແລ້ວບໍ?', style: TextStyle(
+                    Text(tr('tracking_bcel_confirm_title'), style: const TextStyle(
                         fontWeight: FontWeight.w800, color: C.textPrimary, fontSize: 13)),
                     const SizedBox(height: AppSpacing.xs),
-                    const Text('ກົດຢືນຢັນເມື່ອທ່ານໂອນເງິນຄ່າບໍລິການໃຫ້ຊ່າງແລ້ວ',
-                        style: TextStyle(color: C.muted, fontSize: 12)),
+                    Text(tr('tracking_bcel_confirm_hint'),
+                        style: const TextStyle(color: C.muted, fontSize: 12)),
                     const SizedBox(height: 10),
                     SizedBox(width: double.infinity, child: ElevatedButton(
                       onPressed: _confirmingPayment ? null : _confirmPaymentSent,
@@ -955,7 +955,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                           ? const SizedBox(width: 16, height: 16,
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.white))
-                          : const Text('ຢືນຢັນວ່າໄດ້ໂອນເງິນແລ້ວ', style: TextStyle(
+                          : Text(tr('tracking_bcel_confirm_button'), style: const TextStyle(
                               color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
                     )),
                   ]),
@@ -982,12 +982,19 @@ class _TrackingScreenState extends State<TrackingScreen>
                       padding: const EdgeInsets.symmetric(
                           vertical: 14),
                     ),
-                    child: const Text(
-                      '⭐ ໃຫ້ຄະແນນຊ່າງ',
-                      style: TextStyle(
-                        color: Colors.white, fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.star_rounded, color: Colors.white, size: 18),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          tr('rate_provider'),
+                          style: const TextStyle(
+                            color: Colors.white, fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

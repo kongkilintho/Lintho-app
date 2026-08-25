@@ -11,7 +11,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:async';
-import 'main.dart' show firebaseOptions;
+import 'main.dart' show firebaseOptions, resolvePostAuthDestination;
 import 'app_colors.dart';
 import 'app_locale.dart';
 import 'Booking.dart';
@@ -210,6 +210,19 @@ class FCMService {
 
     try {
       if (type == 'new_booking' && bookingId.isNotEmpty) {
+        // 🔒 [FIX NAV-1b / Batch G] JobWorkflowScreen used to be pushed
+        // unconditionally for whoever is currently signed in — no role/
+        // kycStatus check. Reuses resolvePostAuthDestination(), the same
+        // single source of truth RoleRouter/_login()/_loginWithGoogle()
+        // already use, instead of duplicating a role/kyc lookup here. If
+        // the signed-in user isn't actually a verified provider, route
+        // them to wherever they actually belong instead.
+        final dest = await resolvePostAuthDestination();
+        if (!ctx.mounted) return;
+        if (dest is! ProviderDashboard) {
+          nav.push(MaterialPageRoute(builder: (_) => dest));
+          return;
+        }
         final doc = await _db.collection('bookings').doc(bookingId).get()
             .timeout(const Duration(seconds: 10));
         if (!doc.exists) return showNavError();
@@ -255,10 +268,17 @@ class FCMService {
       } else if (type == 'payment') {
         // ✅ ຄ່າແຮງ/wallet notification ສົ່ງຫາ provider ເທົ່ານັ້ນ — ໄປ
         // ProviderDashboard tab ລາຍຮັບ (index 2, ເບິ່ງ provider_dashboard.dart)
-        ProviderScope.containerOf(ctx, listen: false)
-            .read(navIndexProvider.notifier).state = 2;
+        // 🔒 [FIX NAV-1 / Batch G] same fix as new_booking above — verify via
+        // resolvePostAuthDestination() before assuming ProviderDashboard is
+        // the right screen for whoever is currently signed in, instead of
+        // hardcoding it unconditionally.
+        final dest = await resolvePostAuthDestination();
         if (!ctx.mounted) return;
-        nav.push(MaterialPageRoute(builder: (_) => const ProviderDashboard()));
+        if (dest is ProviderDashboard) {
+          ProviderScope.containerOf(ctx, listen: false)
+              .read(navIndexProvider.notifier).state = 2;
+        }
+        nav.push(MaterialPageRoute(builder: (_) => dest));
       } else {
         // 🔒 [AUDIT N-07 / 2026-08-08 — Medium, notification E2E audit] type
         // ທີ່ບໍ່ຮູ້ຈັກ (ໂດຍສະເພາະ 'admin_broadcast' — Admin Panel ບໍ່ເຄີຍສົ່ງ

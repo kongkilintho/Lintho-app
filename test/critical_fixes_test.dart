@@ -234,7 +234,15 @@ void main() {
       expect(source, contains('JobWorkflowScreen('));
       expect(source, contains('BookingDetailScreen('));
       expect(source, contains('ChatScreen('));
-      expect(source, contains('ProviderDashboard('));
+      // 🔒 [FIX NAV-1/NAV-1b / Batch G] 'payment'/'new_booking' no longer
+      // hardcode `const ProviderDashboard()` directly — they now resolve the
+      // destination via resolvePostAuthDestination() (role/kycStatus-aware)
+      // and push whatever it returns, so the literal 'ProviderDashboard('
+      // constructor call no longer appears in this file. The type check
+      // below is what replaced it — still a real-screen reference, not a
+      // named/string route.
+      expect(source, contains('resolvePostAuthDestination()'));
+      expect(source, contains('is! ProviderDashboard'));
       expect(source, contains('MaterialPageRoute'));
     });
 
