@@ -8,14 +8,16 @@
 
         "meta": {
           "customerId": {
-            ".validate": "!data.exists() || newData.val() == data.val()"
+            ".validate": "!data.exists() || newData.val() == data.val()",
+            ".write": false
           },
           "providerId": {
-            ".validate": "!data.exists() || newData.val() == data.val()"
+            ".validate": "!data.exists() || newData.val() == data.val()",
+            ".write": false
           },
 
           ".read": "auth != null && (auth.uid == data.child('customerId').val() || auth.uid == data.child('providerId').val())",
-          ".write": "auth != null && ((!data.exists() && (auth.uid == newData.child('customerId').val() || auth.uid == newData.child('providerId').val())) || (data.exists() && (auth.uid == data.child('customerId').val() || auth.uid == data.child('providerId').val())))"
+          ".write": "auth != null && data.exists() && (auth.uid == data.child('customerId').val() || auth.uid == data.child('providerId').val()) && newData.child('customerId').val() == data.child('customerId').val() && newData.child('providerId').val() == data.child('providerId').val()"
         },
 
         "messages": {

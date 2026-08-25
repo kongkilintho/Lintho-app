@@ -1020,10 +1020,19 @@ service cloud.firestore {
     match /chats/{chatId} {
       allow read: if isAuth() && request.auth.uid in resource.data.members;
 
-      allow create: if isAuth() &&
-        request.resource.data.members is list &&
-        request.resource.data.members.size() == 2 &&
-        request.auth.uid in request.resource.data.members;
+      // 🔒 [FIX H-1 / Batch H] create used to only check that the caller
+      // put themselves somewhere in a 2-element members array they invented
+      // — never cross-referenced bookings/{bookingId}, so any authenticated
+      // user (in practice, any verified provider who could read a still-
+      // pending booking they hadn't accepted yet) could pre-claim the
+      // deterministic {bookingId}_chat room as its providerId, permanently
+      // locking out whoever actually accepts the job. Initialization is now
+      // exclusively done server-side by the initializeBookingChat callable
+      // (functions/index.js), which validates customerId/providerId against
+      // the real booking via the Admin SDK (bypasses this rule entirely) —
+      // no client, including the two real participants, may create this
+      // doc directly any more.
+      allow create: if false;
 
       allow update: if isAuth() && request.auth.uid in resource.data.members &&
         request.resource.data.members == resource.data.members &&

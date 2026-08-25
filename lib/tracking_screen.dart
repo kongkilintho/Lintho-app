@@ -360,25 +360,37 @@ class _TrackingScreenState extends State<TrackingScreen>
     }
   }
 
+  // 🔒 [FIX H-1 / Batch H] createOrGetChat() now calls a Cloud Function that
+  // can legitimately reject the request — previously an uncaught write,
+  // this could never fail. Wrapped with the same SnackBar error pattern
+  // already used by _respondToCharges() above.
   Future<void> _openChat() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final chatId = await ChatService.createOrGetChat(
-      bookingId:    widget.bookingId,
-      customerId:   user.uid,
-      customerName: user.displayName ?? '',
-      providerId:   widget.provider.uid,
-      providerName: widget.provider.displayName,
-      serviceName:  widget.serviceName,
-    );
-    if (!mounted) return;
-    Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(
-      chatId:         chatId,
-      otherName:      widget.provider.displayName,
-      bookingService: widget.serviceName,
-      receiverId:     widget.provider.uid,
-      receiverName:   widget.provider.displayName,
-    )));
+    try {
+      final chatId = await ChatService.createOrGetChat(
+        bookingId:    widget.bookingId,
+        customerId:   user.uid,
+        customerName: user.displayName ?? '',
+        providerId:   widget.provider.uid,
+        providerName: widget.provider.displayName,
+        serviceName:  widget.serviceName,
+      );
+      if (!mounted) return;
+      Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(
+        chatId:         chatId,
+        otherName:      widget.provider.displayName,
+        bookingService: widget.serviceName,
+        receiverId:     widget.provider.uid,
+        receiverName:   widget.provider.displayName,
+      )));
+    } catch (e) {
+      debugPrint('_openChat: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('${tr("error")}: $e'), backgroundColor: C.red));
+      }
+    }
   }
 
   // 🔒 [AUDIT EDGE-3 / 2026-08-02 — Medium, fresh re-audit] catch block ກ່ອນ

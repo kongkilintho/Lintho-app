@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'app_colors.dart';
 import 'app_locale.dart';
 import 'fcm_service.dart';
@@ -1008,6 +1009,23 @@ class _SkeletonMessages extends StatelessWidget {
 // ════════════════════════════════════════════════════════════
 
 class ChatService {
+  // 🔒 [FIX H-1 / Batch H] booking-chat initialization (the Firestore
+  // chats/{bookingId}_chat doc + RTDB chats/{bookingId}_chat/meta node) is
+  // no longer written by the client directly — see initializeBookingChat
+  // in functions/index.js and the paired firestore.rules/database.rules.json
+  // changes for the full rationale: the previous "first write wins" design
+  // let any verified provider who could merely *read* a still-pending
+  // booking (any top-3 dispatch candidate, before ever accepting it)
+  // register themselves as providerId, permanently locking out whoever
+  // actually went on to accept the job (RTDB immutability then blocks the
+  // real provider's own identity write) while impersonating them to the
+  // customer. The server now derives customerId/providerId/members/chatId
+  // itself from the real booking record via the Admin SDK. customerId/
+  // customerName/providerId/providerName/serviceName below are kept as
+  // parameters ONLY so job_workflow_Screen.dart's and tracking_screen.
+  // dart's existing call sites don't need to change — they are NOT sent to
+  // the server and have no bearing on authorization or on what gets
+  // written; the server ignores anything except bookingId.
   static Future<String> createOrGetChat({
     required String bookingId,
     required String customerId,
@@ -1016,39 +1034,15 @@ class ChatService {
     required String providerName,
     required String serviceName,
   }) async {
-    final chatId  = '${bookingId}_chat';
-    final chatRef = FirebaseFirestore.instance
-        .collection('chats').doc(chatId);
-    final chatDoc = await chatRef.get();
-
-    if (!chatDoc.exists) {
-      await chatRef.set({
-        'bookingId':     bookingId,
-        'customerId':    customerId,
-        'customerName':  customerName,
-        'providerId':    providerId,
-        'providerName':  providerName,
-        'serviceName':   serviceName,
-        'members':       [customerId, providerId],
-        'lastMessage':   'ເລີ່ມການສົນທະນາ',
-        'lastMessageAt': FieldValue.serverTimestamp(),
-        'createdAt':     FieldValue.serverTimestamp(),
-      });
+    final chatId = '${bookingId}_chat';
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('initializeBookingChat')
+          .call<Map<String, dynamic>>({'bookingId': bookingId})
+          .timeout(const Duration(seconds: 15));
+    } on FirebaseFunctionsException catch (e) {
+      throw Exception(e.message ?? e.code);
     }
-
-    // 🔒 [AUDIT H5] ບໍ່ເຄີຍມີ database.rules.json ຢູ່ໃນ repo ນີ້ — ຂໍ້ຄວາມແຊັດຈິງ
-    // (ອາດມີເບີໂທ, ທີ່ຢູ່, ການຕໍ່ລອງລາຄາ) ຈຶ່ງບໍ່ມີ rule ໃດກວດສອບເລີຍ. ຕອນນີ້ເພີ່ມ
-    // database.rules.json ຈຳກັດອ່ານ/ຂຽນສະເພາະ meta/customerId ແລະ meta/
-    // providerId (immutable ຫຼັງຕັ້ງຄັ້ງທຳອິດ) — ຂຽນຢູ່ນີ້ຄັ້ງດຽວຕອນສ້າງຫ້ອງແຊັດ.
-    await FirebaseDatabase.instance
-        .ref('chats/$chatId/meta')
-        .update({
-      'customerId':  customerId,
-      'providerId':  providerId,
-      'serviceName': serviceName,
-      'createdAt':   DateTime.now().millisecondsSinceEpoch,
-    });
-
     return chatId;
   }
 }

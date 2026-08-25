@@ -362,28 +362,41 @@ class _CustomerCard extends ConsumerWidget {
   final Booking booking;
   const _CustomerCard({required this.booking});
 
+  // 🔒 [FIX H-1 / Batch H] createOrGetChat() now calls a Cloud Function that
+  // can legitimately reject the request (e.g. this provider hasn't
+  // actually accepted the job yet) — previously an uncaught write, this
+  // could never fail. Wrapped to show the existing SnackBar error pattern
+  // instead of letting the exception propagate unhandled.
   Future<void> _openChat(BuildContext context, WidgetRef ref, Booking b) async {
     final provider = FirebaseAuth.instance.currentUser;
     if (provider == null) return;
     final providerName =
         ref.read(profileStreamProvider).valueOrNull?.displayName ??
             provider.displayName ?? '';
-    final chatId = await ChatService.createOrGetChat(
-      bookingId:    b.id,
-      customerId:   b.customerId,
-      customerName: b.customerName,
-      providerId:   provider.uid,
-      providerName: providerName,
-      serviceName:  b.serviceType,
-    );
-    if (!context.mounted) return;
-    Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(
-      chatId:         chatId,
-      otherName:      b.customerName,
-      bookingService: b.serviceType,
-      receiverId:     b.customerId,
-      receiverName:   b.customerName,
-    )));
+    try {
+      final chatId = await ChatService.createOrGetChat(
+        bookingId:    b.id,
+        customerId:   b.customerId,
+        customerName: b.customerName,
+        providerId:   provider.uid,
+        providerName: providerName,
+        serviceName:  b.serviceType,
+      );
+      if (!context.mounted) return;
+      Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(
+        chatId:         chatId,
+        otherName:      b.customerName,
+        bookingService: b.serviceType,
+        receiverId:     b.customerId,
+        receiverName:   b.customerName,
+      )));
+    } catch (e) {
+      debugPrint('_openChat: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('${tr("error")}: $e'), backgroundColor: C.red));
+      }
+    }
   }
 
   Future<void> _copyPhone(BuildContext context, String phone) async {

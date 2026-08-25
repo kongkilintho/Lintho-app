@@ -1206,3 +1206,142 @@ exports.getSignedMediaUrl = functions.https.onCall(async (data, context) => {
   });
   return { url };
 });
+
+// ════════════════════════════════════════════════════════════
+// BOOKING CHAT — server-validated initialization
+// ════════════════════════════════════════════════════════════
+// 🔒 [FIX H-1 / Batch H] chats/{bookingId}_chat's customerId/providerId
+// used to be whatever the FIRST caller claimed — both firestore.rules and
+// database.rules.json only checked "the caller put themselves somewhere in
+// the identity fields they're writing," never cross-referenced the real
+// bookings/{bookingId} doc. Any verified provider who could read a still-
+// pending booking (any top-3 dispatch candidate, before acceptance) could
+// open JobWorkflowScreen and tap "chat," registering themselves as
+// providerId — permanently locking the real accepted provider out (RTDB
+// .validate makes customerId/providerId immutable after first write) while
+// impersonating them to the customer. Firestore rules CAN cross-reference
+// bookings/{bookingId} via get(), but Realtime Database rules structurally
+// cannot reach into Firestore at all — a Firestore-only fix would leave
+// the RTDB meta node independently squattable via a direct RTDB write.
+// This callable is now the single, server-trusted point of initialization
+// for BOTH databases; firestore.rules' chats/{chatId} create and
+// database.rules.json's chats/$chatId/meta .write are both now `false` for
+// clients (see both rule files) — only this function, via the Admin SDK
+// (which bypasses both rule systems), may ever set the initial identity.
+//
+// Design notes:
+// - Only `bookingId` is accepted from the client. customerId/providerId/
+//   members/chatId/customerName/providerName/serviceName are all derived
+//   server-side from the booking doc — never trusted from the caller.
+// - A booking with no assigned provider yet (providerId=='') has no
+//   legitimate second participant to register — this is what blocks a
+//   not-yet-accepted candidate provider (the original exploit path).
+// - Firestore and RTDB are not cross-database-transactional. Each side is
+//   independently "check existing, create if absent, verify-not-overwrite
+//   if present" — so a repeated call (retry after a partial failure, or a
+//   genuine race between the customer and provider opening chat for the
+//   first time near-simultaneously) converges to the same correct state
+//   instead of erroring or duplicating. An existing doc/node whose identity
+//   does NOT match the booking is never silently repaired or overwritten —
+//   that would silently legitimize an already-squatted room — it's
+//   reported as 'aborted' with a diagnostic log instead, for manual audit.
+exports.initializeBookingChat = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'ຕ້ອງເຂົ້າສູ່ລະບົບກ່ອນ.');
+  }
+  const callerUid = context.auth.uid;
+
+  const bookingId = (data && data.bookingId) || '';
+  if (typeof bookingId !== 'string' || !bookingId) {
+    throw new functions.https.HttpsError('invalid-argument', 'ບໍ່ພົບ bookingId.');
+  }
+
+  const bookingSnap = await db.collection('bookings').doc(bookingId).get();
+  if (!bookingSnap.exists) {
+    throw new functions.https.HttpsError('not-found', 'ບໍ່ພົບ booking ນີ້.');
+  }
+  const booking = bookingSnap.data() || {};
+  const customerId = booking.customerId;
+  const providerId = booking.providerId;
+
+  if (typeof customerId !== 'string' || !customerId) {
+    throw new functions.https.HttpsError('failed-precondition',
+      'Booking ນີ້ບໍ່ມີຂໍ້ມູນລູກຄ້າທີ່ຖືກຕ້ອງ.');
+  }
+  // 🔒 core H-1 fix — a booking with no assigned provider has no legitimate
+  // second participant yet; rejecting here blocks a not-yet-accepted
+  // candidate provider from claiming the providerId slot.
+  if (typeof providerId !== 'string' || !providerId) {
+    throw new functions.https.HttpsError('failed-precondition',
+      'Booking ນີ້ຍັງບໍ່ມີຊ່າງຮັບ — ຍັງເປີດແຊັດບໍ່ໄດ້.');
+  }
+  if (callerUid !== customerId && callerUid !== providerId) {
+    throw new functions.https.HttpsError('permission-denied',
+      'ທ່ານບໍ່ແມ່ນລູກຄ້າ ຫຼື ຊ່າງຂອງ booking ນີ້.');
+  }
+
+  const chatId = `${bookingId}_chat`;
+  const expectedMembers = [customerId, providerId];
+  const customerName = booking.customerName || '';
+  const providerName = booking.providerName || '';
+  const serviceName  = booking.serviceType || booking.category || '';
+
+  // ── Firestore: chats/{chatId} ──
+  const chatRef = db.collection('chats').doc(chatId);
+  const chatDoc = await chatRef.get();
+  if (!chatDoc.exists) {
+    await chatRef.set({
+      bookingId,
+      customerId,
+      customerName,
+      providerId,
+      providerName,
+      serviceName,
+      members:       expectedMembers,
+      lastMessage:   'ເລີ່ມການສົນທະນາ',
+      lastMessageAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } else {
+    const existing = chatDoc.data() || {};
+    const existingMembers = Array.isArray(existing.members) ? existing.members : [];
+    const membersMatch = existingMembers.length === 2 &&
+      existingMembers[0] === expectedMembers[0] &&
+      existingMembers[1] === expectedMembers[1];
+    if (existing.bookingId !== bookingId || existing.customerId !== customerId ||
+        existing.providerId !== providerId || !membersMatch) {
+      functions.logger.error('initializeBookingChat: Firestore identity mismatch — ' +
+        'existing chat doc does not match the authoritative booking, not overwriting', {
+        bookingId, chatId, callerUid, stage: 'firestore',
+      });
+      throw new functions.https.HttpsError('aborted',
+        'ຫ້ອງແຊັດນີ້ມີຂໍ້ມູນຂັດແຍ້ງກັບ booking — ກະລຸນາຕິດຕໍ່ support.');
+    }
+  }
+
+  // ── Realtime Database: chats/{chatId}/meta ──
+  const metaRef = admin.database().ref(`chats/${chatId}/meta`);
+  const metaSnap = await metaRef.get();
+  if (!metaSnap.exists()) {
+    await metaRef.update({
+      bookingId,
+      customerId,
+      providerId,
+      serviceName,
+      createdAt: admin.database.ServerValue.TIMESTAMP,
+    });
+  } else {
+    const meta = metaSnap.val() || {};
+    if (meta.bookingId !== bookingId || meta.customerId !== customerId ||
+        meta.providerId !== providerId) {
+      functions.logger.error('initializeBookingChat: RTDB identity mismatch — ' +
+        'existing meta node does not match the authoritative booking, not overwriting', {
+        bookingId, chatId, callerUid, stage: 'rtdb',
+      });
+      throw new functions.https.HttpsError('aborted',
+        'ຫ້ອງແຊັດນີ້ມີຂໍ້ມູນຂັດແຍ້ງກັບ booking — ກະລຸນາຕິດຕໍ່ support.');
+    }
+  }
+
+  return { chatId };
+});
