@@ -48,6 +48,30 @@ service cloud.firestore {
       return isAuth() && getRole() == 'customer';
     }
 
+    // 🔒 [BATCH H — Customer suspend/ban enforcement, Critical, 2026-08-25]
+    // isCustomer() only checks role — a customer whose users/{uid}.status an
+    // admin set to 'suspended'/'banned' (useSuspendCustomer/useBanCustomer,
+    // lintho-admin) still passed every isCustomer() check until the matching
+    // Firebase Auth disable (functions/index.js onCustomerStatusChange) took
+    // effect on that session's next token refresh — up to ~1h on an
+    // already-open session, since Firestore rules only validate the JWT
+    // itself and don't re-check Auth-disabled/revoked state live. This is a
+    // live re-check (get() is re-evaluated per request, unlike a token
+    // claim) for the write paths where a suspended/banned customer could
+    // still cause new harm: creating a booking, posting a review, requesting
+    // a reward redemption. Deliberately NOT applied to any read rule —
+    // existing history (bookings, reviews, wallet) stays visible. Missing
+    // users/{uid} doc falls back to permissive (same exists()-guarded
+    // pattern as getAdminRole() above) rather than erroring — that state is
+    // unreachable for these 3 writes anyway (RoleRouter/main.dart routes a
+    // doc-less account to _IncompleteRegistrationScreen, never to a screen
+    // that can create a booking/review/redemption).
+    function isActiveCustomer() {
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return isCustomer() &&
+        !(exists(path) && get(path).data.status in ['suspended', 'banned']);
+    }
+
     function isProvider() {
       return isAuth() && getRole() == 'provider';
     }
@@ -549,8 +573,10 @@ service cloud.firestore {
       // ພຽງພໍໃຫ້ຜ່ານ, ໝາຍຄວາມວ່າ customer ຄົນໜຶ່ງສາມາດ set customerId ເປັນ uid
       // ຂອງຄົນອື່ນໄດ້ (ປອມ booking ໃສ່ບັນຊີຄົນອື່ນ). ຕອນນີ້ບັງຄັບວ່າ customerId
       // ຕ້ອງເປັນ auth.uid ຕົນເອງ "ແລະ" ຕ້ອງເປັນ role customer ນຳ.
+      // 🔒 [BATCH H — Customer suspend/ban enforcement] isCustomer() → isActiveCustomer()
+      // ບໍ່ໃຫ້ລູກຄ້າທີ່ຖືກ suspend/ban ສ້າງ booking ໃໝ່ໄດ້ (ເບິ່ງ isActiveCustomer() ຂ້າງເທິງ).
       allow create: if isAuth() &&
-        request.resource.data.customerId == request.auth.uid && isCustomer() &&
+        request.resource.data.customerId == request.auth.uid && isActiveCustomer() &&
         isValidLatLng() && isValidNewBookingShape();
 
       // ປັບປຸງໃຫ້ Customer ສາມາດອັບເດດຂໍ້ມູນການຊຳລະເງິນ ແລະ ສະຖານະໄດ້
@@ -768,7 +794,10 @@ service cloud.firestore {
       // (onReviewCreated) ຫຼັງຈາກນີ້, ບໍ່ແມ່ນ client ຕັ້ງເອງ.
       match /reviews/{reviewId} {
         allow read: if isAuth();
-        allow create: if isAuth() &&
+        // 🔒 [BATCH H — Customer suspend/ban enforcement] isActiveCustomer()
+        // ບໍ່ໃຫ້ລູກຄ້າທີ່ຖືກ suspend/ban ຂຽນ review ໃໝ່ໄດ້ (ເບິ່ງ isActiveCustomer()
+        // ຂ້າງເທິງ) — ກ່ອນໜ້ານີ້ block ນີ້ບໍ່ເຄີຍກວດ role/status ຫຍັງເລີຍ.
+        allow create: if isActiveCustomer() &&
           request.resource.data.customerId == request.auth.uid &&
           request.resource.data.rating is number &&
           request.resource.data.rating >= 1 && request.resource.data.rating <= 5 &&
@@ -942,7 +971,10 @@ service cloud.firestore {
     // atomic. Client ຫ້າມແກ້ status/result ເອງ ເພື່ອບໍ່ໃຫ້ປອມຜົນແລກແຕ້ມ.
     match /rewardRedemptions/{reqId} {
       allow read: if isAuth() && resource.data.userId == request.auth.uid;
-      allow create: if isAuth() &&
+      // 🔒 [BATCH H — Customer suspend/ban enforcement] isActiveCustomer()
+      // ບໍ່ໃຫ້ລູກຄ້າທີ່ຖືກ suspend/ban ຂໍແລກແຕ້ມລາງວັນໃໝ່ໄດ້ (ເບິ່ງ isActiveCustomer()
+      // ຂ້າງເທິງ) — ກ່ອນໜ້ານີ້ block ນີ້ບໍ່ເຄີຍກວດ role/status ຫຍັງເລີຍ.
+      allow create: if isActiveCustomer() &&
         request.resource.data.userId == request.auth.uid &&
         request.resource.data.points is int && request.resource.data.points > 0 &&
         request.resource.data.status == 'pending';

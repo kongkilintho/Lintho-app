@@ -17,12 +17,12 @@
           },
 
           ".read": "auth != null && (auth.uid == data.child('customerId').val() || auth.uid == data.child('providerId').val())",
-          ".write": "auth != null && data.exists() && (auth.uid == data.child('customerId').val() || auth.uid == data.child('providerId').val()) && newData.child('customerId').val() == data.child('customerId').val() && newData.child('providerId').val() == data.child('providerId').val()"
+          ".write": "auth != null && data.exists() && (auth.uid == data.child('customerId').val() || auth.uid == data.child('providerId').val()) && newData.child('customerId').val() == data.child('customerId').val() && newData.child('providerId').val() == data.child('providerId').val() && root.child('restricted').child(auth.uid).val() != true"
         },
 
         "messages": {
           ".read": "auth != null && (auth.uid == root.child('chats').child($chatId).child('meta').child('customerId').val() || auth.uid == root.child('chats').child($chatId).child('meta').child('providerId').val())",
-          ".write": "auth != null && (auth.uid == root.child('chats').child($chatId).child('meta').child('customerId').val() || auth.uid == root.child('chats').child($chatId).child('meta').child('providerId').val())",
+          ".write": "auth != null && (auth.uid == root.child('chats').child($chatId).child('meta').child('customerId').val() || auth.uid == root.child('chats').child($chatId).child('meta').child('providerId').val()) && !root.child('restricted').child(auth.uid).val()",
 
           "$messageId": {
             "senderId": {

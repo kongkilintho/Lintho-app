@@ -315,7 +315,8 @@ const EXPECTED_META_WRITE_RULE =
   "auth != null && data.exists() && " +
   "(auth.uid == data.child('customerId').val() || auth.uid == data.child('providerId').val()) && " +
   "newData.child('customerId').val() == data.child('customerId').val() && " +
-  "newData.child('providerId').val() == data.child('providerId').val()";
+  "newData.child('providerId').val() == data.child('providerId').val() && " +
+  "root.child('restricted').child(auth.uid).val() != true";
 
 test('behavioral-sim setup: the live rule string exactly matches what '
   + 'the simulation below models (fails loudly on drift)', () => {
@@ -327,7 +328,13 @@ test('behavioral-sim setup: the live rule string exactly matches what '
 // write, `newData` = full resulting node after the write is applied
 // (RTDB rules always evaluate against the post-merge result, not just the
 // delta) — exactly how a real .update({...}) call's rule evaluation works.
-function simulateMetaWrite({ authUid, existing, incomingUpdate }) {
+// `restrictedUids` (added for Batch H — Customer suspend/ban enforcement)
+// mirrors root.child('restricted').child(auth.uid).val() != true — any uid
+// present in this set stands in for a restricted/{uid}: true node written
+// by onCustomerStatusChange (index.js). Defaults to an empty set so every
+// pre-existing scenario (A-K, 18a-18h) below is unaffected and did not need
+// to change when this conjunct was added.
+function simulateMetaWrite({ authUid, existing, incomingUpdate, restrictedUids = new Set() }) {
   const data = existing; // may be null (node doesn't exist yet)
   const newData = { ...(existing || {}), ...incomingUpdate };
   const authNotNull = authUid !== null && authUid !== undefined;
@@ -338,8 +345,9 @@ function simulateMetaWrite({ authUid, existing, incomingUpdate }) {
     newData.customerId === data.customerId;
   const providerIdUnchanged = dataExists &&
     newData.providerId === data.providerId;
+  const callerNotRestricted = !restrictedUids.has(authUid);
   return authNotNull && dataExists && callerIsParticipant &&
-    customerIdUnchanged && providerIdUnchanged;
+    customerIdUnchanged && providerIdUnchanged && callerNotRestricted;
 }
 
 const CUSTOMER_UID = 'customer-1';
@@ -444,6 +452,175 @@ test('K. the original H-1 attack — a fresh (nonexistent) meta node self-'
     authUid: OTHER_UID, existing: null,
     incomingUpdate: { customerId: 'real-customer', providerId: OTHER_UID },
   }), false);
+});
+
+// ── BATCH H — Customer suspend/ban: restricted/{uid} mirror ─────
+//
+// These model the conjunct onCustomerStatusChange (index.js) relies on:
+// a restricted customer/provider is denied even though every other check
+// (participant, identity-unchanged) would otherwise pass.
+
+test('L. a restricted customer is denied even for an otherwise-legal '
+  + 'non-identity write (e.g. sending a message updates lastMessage here)', () => {
+  assert.equal(simulateMetaWrite({
+    authUid: CUSTOMER_UID, existing: existingMeta,
+    incomingUpdate: { lastMessage: 'still trying to chat while banned' },
+    restrictedUids: new Set([CUSTOMER_UID]),
+  }), false);
+});
+
+test('M. a restricted provider is denied the same way (enforcement is not '
+  + "customer-specific in the rule itself — it's whichever uid is in "
+  + 'restricted/{uid})', () => {
+  assert.equal(simulateMetaWrite({
+    authUid: PROVIDER_UID, existing: existingMeta,
+    incomingUpdate: { lastMessage: 'still trying to chat' },
+    restrictedUids: new Set([PROVIDER_UID]),
+  }), false);
+});
+
+test('N. the OTHER (non-restricted) participant is unaffected by their '
+  + "counterparty being restricted — restricted/{uid} is keyed per-uid, "
+  + 'not per-chat', () => {
+  assert.equal(simulateMetaWrite({
+    authUid: PROVIDER_UID, existing: existingMeta,
+    incomingUpdate: { lastMessage: 'customer is banned but I can still write' },
+    restrictedUids: new Set([CUSTOMER_UID]),
+  }), true);
+});
+
+test('O. an active (non-restricted) customer is completely unaffected — '
+  + 'restricted/{uid} absent (empty set) behaves exactly like before this '
+  + 'batch', () => {
+  assert.equal(simulateMetaWrite({
+    authUid: CUSTOMER_UID, existing: existingMeta,
+    incomingUpdate: { lastMessage: 'business as usual' },
+  }), true);
+});
+
+// ── CORRECTIVE FIX — chats/$chatId/messages .write ──────────────
+//
+// Independent review found that scenarios A-O above (meta .write) do NOT
+// prove a restricted user is blocked from actually sending a message.
+// ChatService._sendMessage() (lib/chat_screen.dart) makes TWO separate
+// RTDB calls, not one atomic multi-path write: _msgsRef.push().set({...})
+// (the real message, governed by messages .write, modeled here) and a
+// separate _chatMetaRef.update({lastMessage, lastMessageAt}) (governed by
+// meta .write, modeled above). Gating only meta .write left message
+// content fully sendable by a restricted user — this section proves the
+// corrective fix (adding the same restricted/{uid} check directly to
+// messages .write) actually closes that path, independent of meta.
+
+const EXPECTED_MESSAGES_WRITE_RULE =
+  "auth != null && (auth.uid == root.child('chats').child($chatId).child('meta').child('customerId').val() || " +
+  "auth.uid == root.child('chats').child($chatId).child('meta').child('providerId').val()) && " +
+  "!root.child('restricted').child(auth.uid).val()";
+
+test('behavioral-sim setup (messages): the live rule string exactly '
+  + 'matches what the simulation below models (fails loudly on drift)', () => {
+  const messages = dbRules.rules.chats.$chatId.messages;
+  assert.equal(messages['.write'], EXPECTED_MESSAGES_WRITE_RULE);
+});
+
+// Mirrors messages .write's own semantics: authorization is derived from
+// meta's customerId/providerId (not from a `data`/`newData` diff on the
+// messages node itself — the real rule reads root.child('chats')...meta,
+// which is why this takes metaCustomerId/metaProviderId directly rather
+// than an `existing` messages-node argument).
+function simulateMessagesWrite({ authUid, metaCustomerId, metaProviderId, restrictedUids = new Set() }) {
+  const authNotNull = authUid !== null && authUid !== undefined;
+  const callerIsParticipant = authUid === metaCustomerId || authUid === metaProviderId;
+  const callerNotRestricted = !restrictedUids.has(authUid);
+  return authNotNull && callerIsParticipant && callerNotRestricted;
+}
+
+// Field-level guard on the message itself (chats/$chatId/messages/
+// $messageId/senderId .validate) — independent of, and evaluated in
+// addition to, messages .write. A write only actually succeeds if BOTH
+// pass, exactly like real RTDB rule evaluation (a passing .write does not
+// exempt a node's own .validate).
+function simulateSenderIdValidate({ newSenderId, authUid }) {
+  return newSenderId === authUid;
+}
+
+test('P. an active customer CAN send a message (write-rule requirement 1)', () => {
+  assert.equal(simulateMessagesWrite({
+    authUid: CUSTOMER_UID, metaCustomerId: CUSTOMER_UID, metaProviderId: PROVIDER_UID,
+  }), true);
+});
+
+test('Q. an active provider CAN send a message (write-rule requirement 2)', () => {
+  assert.equal(simulateMessagesWrite({
+    authUid: PROVIDER_UID, metaCustomerId: CUSTOMER_UID, metaProviderId: PROVIDER_UID,
+  }), true);
+});
+
+test('R. a restricted customer CANNOT send a message — this is the exact '
+  + 'gap the corrective fix closes: the block now applies to the actual '
+  + 'message write directly, not only to meta (write-rule requirement 3, '
+  + 'and requirement 9 — there is no other path to create a message doc, '
+  + 'so this IS the "cannot bypass by writing directly to messages" proof)', () => {
+  assert.equal(simulateMessagesWrite({
+    authUid: CUSTOMER_UID, metaCustomerId: CUSTOMER_UID, metaProviderId: PROVIDER_UID,
+    restrictedUids: new Set([CUSTOMER_UID]),
+  }), false);
+});
+
+test('S. a restricted provider CANNOT send a message either — the rule '
+  + 'checks whichever uid is in restricted/{uid}, with no customer-vs-'
+  + 'provider distinction, so provider behavior is unchanged *in kind* '
+  + 'from the customer case (write-rule requirement 4: this codebase does '
+  + 'not currently have a provider-suspend concept that writes '
+  + "restricted/{uid} — providers are suspended via providers/{uid}."
+  + "kycStatus instead, see isVerifiedProvider() in firestore.rules — but "
+  + 'IF a provider uid were ever present in restricted/{uid}, this rule '
+  + 'would block them exactly like a customer, with no special-casing '
+  + 'either way)', () => {
+  assert.equal(simulateMessagesWrite({
+    authUid: PROVIDER_UID, metaCustomerId: CUSTOMER_UID, metaProviderId: PROVIDER_UID,
+    restrictedUids: new Set([PROVIDER_UID]),
+  }), false);
+});
+
+test('T. an unrelated (non-participant) user remains denied (write-rule '
+  + 'requirement 5 — unaffected by this corrective fix, still blocked by '
+  + 'the pre-existing participant check)', () => {
+  assert.equal(simulateMessagesWrite({
+    authUid: OTHER_UID, metaCustomerId: CUSTOMER_UID, metaProviderId: PROVIDER_UID,
+  }), false);
+});
+
+test('U. senderId spoofing remains denied — an authorized, non-restricted '
+  + "participant still cannot write a message claiming to be sent by the "
+  + 'OTHER participant (write-rule requirement 6, unrelated to and '
+  + 'unweakened by this corrective fix — messages .write authorizes WHO '
+  + 'may write, the field .validate independently enforces WHAT identity '
+  + 'the message claims)', () => {
+  const writeAuthorized = simulateMessagesWrite({
+    authUid: CUSTOMER_UID, metaCustomerId: CUSTOMER_UID, metaProviderId: PROVIDER_UID,
+  });
+  assert.equal(writeAuthorized, true, 'sanity check: the customer IS an authorized writer here');
+  const senderIdValid = simulateSenderIdValidate({
+    newSenderId: PROVIDER_UID, // customer claiming to be the provider
+    authUid: CUSTOMER_UID,
+  });
+  assert.equal(senderIdValid, false,
+    'a write CAN be authorized and still be rejected by the field .validate');
+});
+
+test('V. the senderId .validate expression itself is unchanged by this '
+  + 'corrective fix', () => {
+  const validate = dbRules.rules.chats.$chatId.messages.$messageId.senderId['.validate'];
+  assert.equal(validate, "newData.val() == auth.uid");
+});
+
+test('W. meta .write (H-1 identity protection + suspend/ban restricted '
+  + 'check) is untouched by this corrective round — still exactly what '
+  + 'the earlier drift-guard (EXPECTED_META_WRITE_RULE, above) asserts', () => {
+  const meta = dbRules.rules.chats.$chatId.meta;
+  assert.equal(meta['.write'], EXPECTED_META_WRITE_RULE);
+  assert.equal(meta.customerId['.write'], false);
+  assert.equal(meta.providerId['.write'], false);
 });
 
 // ── CLIENT WIRING ────────────────────────────────────────────

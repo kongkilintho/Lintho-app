@@ -1094,6 +1094,73 @@ exports.deleteOwnAccount = functions.https.onCall(async (data, context) => {
   return { uid };
 });
 
+// 🔒 [BATCH H — Customer suspend/ban enforcement, Critical, 2026-08-25]
+// users/{uid}.status (admin-set via useSuspendCustomer/useBanCustomer,
+// lintho-admin/src/lib/hooks/index.ts) was previously write-only — nothing
+// ever enforced it: no Firestore rule check, no RTDB check, and critically
+// the Firebase Auth account itself was never disabled, so a suspended/banned
+// customer's existing session (and any future login, since Auth never
+// rejected it) kept working indefinitely. This trigger is the single
+// authoritative sync point. It deliberately reuses the tier-gating
+// firestore.rules already enforces on the *write* to users/{uid}.status
+// (super_admin/operations_admin only, ~line 481) instead of duplicating that
+// check here — a new callable function would have had to re-implement the
+// same tier check server-side, exactly the kind of divergent authorization
+// this codebase's own audit history (AUDIT ADM-5 comment, firestore.rules
+// ~line 28-39) has been bitten by before.
+//
+// role fallback matches getRole() (firestore.rules) and
+// resolvePostAuthDestination()/RoleRouter (main.dart) — a users/{uid} doc
+// with no role field at all is treated as 'customer' everywhere else in this
+// codebase, so this trigger does the same instead of silently exempting
+// those accounts from enforcement.
+//
+// suspended and banned are enforced identically (Auth disable + refresh-token
+// revocation + RTDB restricted/{uid} mirror) — this codebase does not
+// currently distinguish a softer "suspended" state from a harder "banned"
+// one; that split, and a reactivation UI in lintho-admin, are deliberately
+// out of scope here (see also: useDeleteCustomer is untouched by this fix).
+//
+// RTDB rules cannot reference Firestore data — chats/{chatId}/meta's .write
+// rule (database.rules.json) has no way to look up users/{uid}.status
+// directly. restricted/{uid} is a minimal denormalized mirror written here
+// so database.rules.json can check it locally, giving immediate chat cutoff
+// instead of waiting on admin.auth().updateUser({disabled:true})/
+// revokeRefreshTokens() to take effect on an already-open session (up to the
+// ID token's remaining lifetime, ~1h worst case).
+exports.onCustomerStatusChange = functions.firestore
+  .document('users/{uid}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data() || {};
+    const after = change.after.data() || {};
+    const uid = context.params.uid;
+
+    const role = after.role || 'customer';
+    if (role !== 'customer') return null;
+
+    const RESTRICTED_STATUSES = ['suspended', 'banned'];
+    const wasRestricted = RESTRICTED_STATUSES.includes(before.status);
+    const isRestricted = RESTRICTED_STATUSES.includes(after.status);
+    if (wasRestricted === isRestricted) return null;
+
+    const restrictedRef = admin.database().ref(`restricted/${uid}`);
+
+    if (isRestricted) {
+      await admin.auth().updateUser(uid, { disabled: true });
+      await admin.auth().revokeRefreshTokens(uid);
+      await restrictedRef.set(true);
+      functions.logger.info('onCustomerStatusChange: customer restricted', {
+        uid, status: after.status,
+      });
+    } else {
+      await admin.auth().updateUser(uid, { disabled: false });
+      await restrictedRef.remove();
+      functions.logger.info('onCustomerStatusChange: customer reactivated', { uid });
+    }
+
+    return null;
+  });
+
 // ════════════════════════════════════════════════════════════
 // CLOUDINARY — signed upload
 // ════════════════════════════════════════════════════════════
