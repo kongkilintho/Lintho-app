@@ -43,6 +43,30 @@ class FCMService {
 
   bool _initialized = false;
 
+  // 🔒 [FCM-1, Batch J, 2026-08-25] init() itself must still only run its
+  // one-time setup once per process (permission request, foreground
+  // options, the onMessage/onMessageOpenedApp/onTokenRefresh listeners
+  // below) — _initialized still guards that. What it must NOT do any more
+  // is gate token *registration*: previously saveToken() only ran once,
+  // right here in init(), for whoever happened to be signed in the FIRST
+  // time init() ran. If user A logs out and user B logs in without an app
+  // restart, _RoleRouterState.initState() (main.dart) DOES call init()
+  // again (RoleRouter is unmounted on logout — swapped for WelcomeScreen —
+  // and freshly remounted on the next login, so initState() genuinely
+  // fires again), but the old code's _initialized guard made that second
+  // call a pure no-op, so B's uid never got a token written to
+  // users/{B}.fcmTokens. The fix: subscribe to
+  // FirebaseAuth.instance.authStateChanges() ONCE, here, as part of the
+  // one-time setup — that subscription itself lives for the rest of the
+  // process and re-registers the token every time the CURRENT uid changes,
+  // independent of how many times (or how few) init() itself is called.
+  // authStateChanges() replays the current auth state immediately to a new
+  // listener (the same behavior main.dart's own top-level StreamBuilder
+  // already relies on for correct cold-start routing), so this listener's
+  // first emission alone already covers "app start, user already signed
+  // in" — no separate explicit call is needed for that case.
+  String? _lastRegisteredUid;
+
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
@@ -60,15 +84,44 @@ class FCMService {
         .setForegroundNotificationPresentationOptions(
       alert: false, badge: true, sound: true,
     );
-    final token = await _messaging.getToken();
-    if (token != null) await saveToken(token);
     _messaging.onTokenRefresh.listen(saveToken);
 
     FirebaseMessaging.onMessage.listen(_onForeground);
     FirebaseMessaging.onMessageOpenedApp.listen(_onTap);
 
+    // 🔒 [FCM-1] exactly one subscription, created only once (guarded by
+    // _initialized above, same as every other listener in this method —
+    // none of them store their StreamSubscription either, since this
+    // service is a process-lifetime singleton that is never disposed) —
+    // fires immediately with the current auth state, then again on every
+    // future sign-in/sign-out, for the rest of the process.
+    FirebaseAuth.instance.authStateChanges().listen(_onAuthUserChanged);
+
     final initial = await _messaging.getInitialMessage();
     if (initial != null) _onTap(initial);
+  }
+
+  // 🔒 [FCM-1] Registers the current FCM token for whichever uid is now
+  // signed in, but only when that uid actually differs from the last one
+  // this service registered a token for — a no-op user (same user remains
+  // signed in; authStateChanges() can re-emit the same user on token
+  // refresh/reauthentication) does not cause a redundant Firestore write.
+  // On sign-out (user == null) this only clears the dedupe key — it
+  // deliberately does NOT call removeToken() itself; that's already done
+  // explicitly, before signOut(), at every logout call site (main.dart/
+  // profile_tab.dart/pending_approval_screen.dart — see removeToken()'s own
+  // comment), and duplicating it here would race the currentUser read in
+  // removeToken() against this listener's own (slightly later) null event.
+  Future<void> _onAuthUserChanged(User? user) async {
+    if (user == null) {
+      _lastRegisteredUid = null;
+      return;
+    }
+    if (user.uid == _lastRegisteredUid) return;
+    final token = await _messaging.getToken();
+    if (token == null) return;
+    await saveToken(token);
+    _lastRegisteredUid = user.uid;
   }
 
   // 🔒 [AUDIT N-02 / 2026-08-08 — High, notification E2E audit] _watchFCMQueue()
