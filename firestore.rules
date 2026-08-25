@@ -72,6 +72,26 @@ service cloud.firestore {
         !(exists(path) && get(path).data.status in ['suspended', 'banned']);
     }
 
+    // 🔒 [BATCH I — I-3, 2026-08-25] Deliberately NOT isActiveCustomer() —
+    // that function requires isCustomer() (getRole()=='customer'), which is
+    // false for a provider, so reusing it here would wrongly block every
+    // legitimate provider chat participant too. This checks the SAME
+    // users/{uid}.status field but for whichever uid is passed in, with no
+    // role requirement — matching database.rules.json's RTDB restricted
+    // check (root.child('restricted').child(auth.uid).val() != true), which
+    // is also uniform across customer/provider (see initialize-booking-
+    // chat.test.js tests R/S: "the rule checks whichever uid is in
+    // restricted/{uid}, with no customer-vs-provider distinction"). In
+    // practice only customers currently ever have this status value set
+    // (onCustomerStatusChange, functions/index.js) — provider suspension is
+    // a separate, out-of-scope mechanism (providers/{uid}.kycStatus) — so
+    // this only ever evaluates true for a restricted customer today, but the
+    // check itself does not assume that.
+    function isRestrictedUser(uid) {
+      let path = /databases/$(database)/documents/users/$(uid);
+      return exists(path) && get(path).data.status in ['suspended', 'banned'];
+    }
+
     function isProvider() {
       return isAuth() && getRole() == 'provider';
     }
@@ -1066,7 +1086,23 @@ service cloud.firestore {
       // doc directly any more.
       allow create: if false;
 
+      // 🔒 [BATCH I — I-3, 2026-08-25] chat_screen.dart's own send flow can
+      // never reach this write for a restricted user in practice (the RTDB
+      // message write it does first already throws for them) — but this
+      // rule, not app behavior, is the actual trust boundary: a modified
+      // client / direct SDK call with a still-valid session could write
+      // lastMessage/lastMessageAt here directly, and nothing previously
+      // checked restricted status on this path (unlike the RTDB-side
+      // meta/messages .write, which already do — database.rules.json).
+      // isRestrictedUser() closes that gap using live Firestore state
+      // directly (not the RTDB restricted/{uid} mirror this rule cannot
+      // read), which also means this check keeps working even in the
+      // window where the mirror write itself might not have landed yet.
+      // Added as an additional && conjunct — membership, identity
+      // (members immutability), and the field allowlist below are
+      // unchanged.
       allow update: if isAuth() && request.auth.uid in resource.data.members &&
+        !isRestrictedUser(request.auth.uid) &&
         request.resource.data.members == resource.data.members &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['lastMessage', 'lastMessageAt']);

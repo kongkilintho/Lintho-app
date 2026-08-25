@@ -1,4 +1,4 @@
-const functions = require('firebase-functions');
+const functions = require('firebase-functions/v1');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
 const { defineSecret } = require('firebase-functions/params');
@@ -1128,38 +1128,191 @@ exports.deleteOwnAccount = functions.https.onCall(async (data, context) => {
 // instead of waiting on admin.auth().updateUser({disabled:true})/
 // revokeRefreshTokens() to take effect on an already-open session (up to the
 // ID token's remaining lifetime, ~1h worst case).
-exports.onCustomerStatusChange = functions.firestore
+// 🔒 [BATCH I — I-2, trigger reliability, 2026-08-25] Statuses that count as
+// "restricted" for a customer — hoisted to module scope (was a local const
+// inside the trigger) so applyCustomerRestriction() below, the trigger, and
+// the one-time backfill script (functions/scripts/backfill-customer-
+// restrictions.js, which imports this exact constant) all classify a status
+// value identically. One definition, no drift.
+const RESTRICTED_CUSTOMER_STATUSES = ['suspended', 'banned'];
+
+// 🔒 [BATCH I — I-2, trigger reliability, 2026-08-25] Shared by the trigger
+// below AND the backfill script — the audit that authorized this batch
+// flagged onCustomerStatusChange's old inline implementation as unsafe to
+// retry: it trusted the Cloud Functions event's before/after *snapshot* to
+// decide what to do, so a delayed retry of a stale event (say, a 'suspend'
+// event retried minutes later, after an admin had already reactivated the
+// same customer in the meantime) would replay the OLD decision against
+// current reality and incorrectly re-restrict an already-reactivated
+// account. This function is the fix: it always re-reads the LIVE
+// users/{uid} doc before deciding anything, so a stale/duplicate/retried
+// invocation — or a re-run of the backfill script — can only ever converge
+// to whatever the customer's status actually is right now, never to what it
+// used to be. That live re-read is also what makes every call idempotent:
+// repeated execution (retry, backfill re-run, or both racing) reads the same
+// current state and re-applies the same (already-idempotent) operations.
+//
+// Uses Promise.allSettled rather than sequential awaits/Promise.all so one
+// operation failing (e.g. revokeRefreshTokens transiently erroring) doesn't
+// prevent the others from running — this is the "partial failure" case the
+// pre-Batch-I code could silently produce (Auth disabled but RTDB never
+// restricted, or vice versa) with no visibility. Every failure is collected
+// and returned/logged instead.
+async function applyCustomerRestriction(uid, { source } = {}) {
+  const userRef = db.collection('users').doc(uid);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) {
+    // Not this function's job to react to a deleted users/{uid} doc (that's
+    // the separately-tracked, explicitly out-of-scope admin-deletion gap) —
+    // nothing to restrict/reactivate for a uid with no doc at all.
+    return { uid, skipped: true, reason: 'user-doc-missing', errors: [] };
+  }
+  const data = userSnap.data() || {};
+  const role = data.role || 'customer'; // same fallback as getRole() (firestore.rules)
+  if (role !== 'customer') {
+    return { uid, skipped: true, reason: 'not-a-customer', errors: [] };
+  }
+
+  // 🔒 [BATCH I — I-2.E] status is classified purely by array membership —
+  // missing (undefined/null), unknown, or malformed (non-string) values all
+  // simply fail RESTRICTED_CUSTOMER_STATUSES.includes(...) and fall through
+  // to "not restricted." This is the existing, intended fallback (documented
+  // pattern shared with getRole()/isActiveCustomer() in firestore.rules —
+  // an ambiguous/absent value never grants MORE access than a known-good
+  // one), preserved as-is rather than changed to fail-closed.
+  const status = data.status;
+  const shouldRestrict = RESTRICTED_CUSTOMER_STATUSES.includes(status);
+
+  const restrictedRef = admin.database().ref(`restricted/${uid}`);
+  const errors = [];
+
+  if (shouldRestrict) {
+    const ops = ['auth-disable', 'revoke-refresh-tokens', 'rtdb-restrict'];
+    const results = await Promise.allSettled([
+      admin.auth().updateUser(uid, { disabled: true }),
+      admin.auth().revokeRefreshTokens(uid),
+      restrictedRef.set(true),
+    ]);
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        errors.push({
+          op: ops[i],
+          code: r.reason && r.reason.code,
+          message: r.reason && r.reason.message,
+        });
+      }
+    });
+  } else {
+    const ops = ['auth-enable', 'rtdb-unrestrict'];
+    const results = await Promise.allSettled([
+      admin.auth().updateUser(uid, { disabled: false }),
+      restrictedRef.remove(),
+    ]);
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        errors.push({
+          op: ops[i],
+          code: r.reason && r.reason.code,
+          message: r.reason && r.reason.message,
+        });
+      }
+    });
+  }
+
+  // 🔒 [BATCH I — I-2.C] Structured, uid-scoped logging only — no tokens,
+  // no credentials, no PII beyond the uid/status this doc already carries.
+  const logPayload = {
+    uid,
+    status: status === undefined ? null : status,
+    targetRestricted: shouldRestrict,
+    source: source || 'trigger',
+  };
+  if (errors.length > 0) {
+    functions.logger.error('applyCustomerRestriction: partial failure', { ...logPayload, errors });
+  } else {
+    functions.logger.info('applyCustomerRestriction: applied', logPayload);
+  }
+
+  return { uid, skipped: false, targetRestricted: shouldRestrict, errors };
+}
+
+// 🔒 [BATCH I — I-2, retry behavior] failurePolicy:true is this repo's
+// existing, established 1st-gen retry mechanism (already used at :1190 for
+// getCloudinarySignature's .runWith({secrets:...}) — same builder chain
+// shape, verified against current Firebase docs during the audit that
+// authorized this batch: 1st-gen background triggers are NOT retried on a
+// thrown error by default, only when this flag is set). Safe to enable now,
+// specifically because applyCustomerRestriction() above always re-reads live
+// state — a replayed/retried event can no longer act on stale data (see its
+// own comment), which was the blocking concern the audit raised against
+// enabling retries on the old implementation.
+exports.onCustomerStatusChange = functions
+  .runWith({ failurePolicy: true })
+  .firestore
   .document('users/{uid}')
   .onUpdate(async (change, context) => {
     const before = change.before.data() || {};
     const after = change.after.data() || {};
     const uid = context.params.uid;
 
+    // Cheap firing-condition check using the event's own before/after
+    // snapshot — purely an optimization to skip the live re-read + Admin
+    // SDK calls below for the many users/{uid} writes that have nothing to
+    // do with status (displayName, email, rewardPoints, fcmTokens, ...).
+    // This is NOT where the actual restrict/reactivate decision is made —
+    // that always happens inside applyCustomerRestriction() against live
+    // data — so a stale event can still only ever trigger a live re-read,
+    // never a stale write.
     const role = after.role || 'customer';
     if (role !== 'customer') return null;
 
-    const RESTRICTED_STATUSES = ['suspended', 'banned'];
-    const wasRestricted = RESTRICTED_STATUSES.includes(before.status);
-    const isRestricted = RESTRICTED_STATUSES.includes(after.status);
+    const wasRestricted = RESTRICTED_CUSTOMER_STATUSES.includes(before.status);
+    const isRestricted = RESTRICTED_CUSTOMER_STATUSES.includes(after.status);
     if (wasRestricted === isRestricted) return null;
 
-    const restrictedRef = admin.database().ref(`restricted/${uid}`);
-
-    if (isRestricted) {
-      await admin.auth().updateUser(uid, { disabled: true });
-      await admin.auth().revokeRefreshTokens(uid);
-      await restrictedRef.set(true);
-      functions.logger.info('onCustomerStatusChange: customer restricted', {
-        uid, status: after.status,
-      });
-    } else {
-      await admin.auth().updateUser(uid, { disabled: false });
-      await restrictedRef.remove();
-      functions.logger.info('onCustomerStatusChange: customer reactivated', { uid });
+    const result = await applyCustomerRestriction(uid, { source: 'trigger' });
+    if (result.errors.length > 0) {
+      // 🔒 [BATCH I — I-2.C/I-2.D] Re-throwing (instead of swallowing, as the
+      // pre-Batch-I code effectively did by not checking for failure at all)
+      // makes the partial failure visible in Cloud Functions' own error
+      // reporting/logs and — now that failurePolicy is enabled above —
+      // eligible for automatic retry. applyCustomerRestriction() already
+      // attempted every operation via Promise.allSettled before returning,
+      // so throwing here loses no partial progress; it only marks the
+      // invocation as failed for observability/retry purposes.
+      throw new Error(
+        `onCustomerStatusChange: ${result.errors.length} operation(s) failed for uid=${uid}: ` +
+        result.errors.map((e) => `${e.op}=${e.code || e.message}`).join(', '));
     }
 
     return null;
   });
+
+// 🔒 [BATCH I — I-1] Exported (underscore-prefixed, same convention as this
+// file's other internal-only helpers like _assertSuperAdmin/_getChannelId)
+// so this logic is reusable outside the trigger in principle. Plain function
+// exports like these carry none of the firebase-functions trigger metadata
+// the Firebase CLI's deploy step looks for, so they are never mistaken for a
+// deployable Cloud Function.
+//
+// NOTE — functions/scripts/backfill-customer-restrictions.js does NOT
+// currently require() these exports, even though that was the original
+// intent: discovered while building that script that this whole file
+// (index.js) cannot actually be require()'d right now — the installed/
+// locked firebase-functions@7.2.5 moved the v1 builder API (.firestore.
+// document(), .pubsub.schedule(), .runWith(), all used throughout this
+// file) off the bare `require('firebase-functions')` import used at the top
+// of this file to the `firebase-functions/v1` subpath. This is a pre-
+// existing issue (reproduces identically against the unmodified commit
+// 38e8ce17 version of this file), affects every exported function here, and
+// is outside Batch I's locked scope to fix (a one-line import change with
+// whole-file blast radius) — flagged prominently in the Batch I report
+// instead. The backfill script carries its own mirrored copy of this logic
+// until that's resolved and this require() path becomes viable; see that
+// script's file header and its drift-guard test
+// (backfill-customer-restrictions.test.js) for details.
+exports._applyCustomerRestriction = applyCustomerRestriction;
+exports._RESTRICTED_CUSTOMER_STATUSES = RESTRICTED_CUSTOMER_STATUSES;
 
 // ════════════════════════════════════════════════════════════
 // CLOUDINARY — signed upload
