@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_locale.dart';
+import 'booking_provider.dart' show currentUidProvider;
 
 class ReferralInfo {
   final String code;
@@ -24,7 +25,22 @@ class ReferralInfo {
 // ຈິງໆ), ແລ້ວອ່ານ referralCode ຄັ້ງດຽວຕໍ່ event ນັ້ນ (ບໍ່ແມ່ນ live-listen
 // users/{uid} ອີກຕໍ່ໄປ) — ໄດ້ຜົນດີກວ່າເກົ່ານຳ: ຍອດຮວມຈະອັບເດດແທ້ຕອນມີ
 // voucher ໃໝ່ (ບໍ່ແມ່ນອາໄສ side-effect ບັງເອີນຂອງ user-doc write ຄືເກົ່າ).
+// 🔒 [ADDR-1, Batch K, 2026-08-25] see savedAddressesProvider
+// (saved_address.dart) for the full rationale — ref.watch(currentUidProvider)
+// forces a rebuild (fresh uid, old vouchers listener torn down) on a
+// same-process account switch.
+//
+// Residual, accepted characteristic (not a cross-user leak): if
+// _ensureReferralCode(uid) below is already mid-flight (awaiting its
+// Firestore transaction) when the uid changes, Dart's Future has no
+// cancellation primitive — that write completes regardless of whether this
+// provider has since rebuilt. It is harmless because `uid` is captured by
+// value in that specific builder invocation's closure and never mutates:
+// the write can only ever land on that SAME (now-previous) user's own
+// users/{uid}/referralCodes documents — it can never be misattributed to
+// whichever user is signed in by the time it completes.
 final referralInfoProvider = StreamProvider<ReferralInfo?>((ref) {
+  ref.watch(currentUidProvider);
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return Stream.value(null);
   final db = FirebaseFirestore.instance;

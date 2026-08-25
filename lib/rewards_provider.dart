@@ -8,6 +8,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'booking_provider.dart' show currentUidProvider;
 
 class RewardSettings {
   final double earnRatePercent;
@@ -61,7 +62,11 @@ class RewardTransaction {
 }
 
 /// ແຕ້ມຄົງເຫຼືອແບບ real-time — ໃຊ້ໃນໜ້າ Profile stat ແລະ Rewards screen.
+// 🔒 [ADDR-1, Batch K, 2026-08-25] see savedAddressesProvider (saved_address.dart)
+// for the full rationale — ref.watch(currentUidProvider) forces a rebuild
+// (fresh uid read, old listener torn down) on a same-process account switch.
 final rewardPointsProvider = StreamProvider<int>((ref) {
+  ref.watch(currentUidProvider);
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return Stream.value(0);
   return FirebaseFirestore.instance.collection('users').doc(uid).snapshots()
@@ -81,7 +86,10 @@ final rewardSettingsProvider = StreamProvider<RewardSettings>((ref) {
 // ຕ້ອງການ composite index (userId Asc, createdAt Desc), ເບິ່ງ
 // firestore.indexes.json.
 /// ປະຫວັດແຕ້ມ (earn/redeem/manual) ຮຽງລຳດັບໃໝ່ສຸດກ່ອນ.
+// 🔒 [ADDR-1, Batch K, 2026-08-25] same rebuild-on-account-switch fix as
+// rewardPointsProvider above.
 final rewardHistoryProvider = StreamProvider<List<RewardTransaction>>((ref) {
+  ref.watch(currentUidProvider);
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return Stream.value(const []);
   return FirebaseFirestore.instance

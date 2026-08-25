@@ -5,6 +5,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'booking_provider.dart' show currentUidProvider;
 
 class SavedAddress {
   final String id;
@@ -38,7 +39,17 @@ class SavedAddress {
       );
 }
 
+// 🔒 [ADDR-1, Batch K, 2026-08-25] ref.watch(currentUidProvider) forces this
+// provider to rebuild (tearing down the old Firestore listener and
+// re-reading FirebaseAuth.instance.currentUser?.uid fresh) whenever the
+// authenticated uid changes — same established pattern already used by
+// every uid-scoped StreamProvider in booking_provider.dart (e.g.
+// activeBookingsProvider) and by onlineStatusProvider (online_provider.dart)
+// — without this, a same-process account switch (logout, different user
+// login, no app restart) left this provider's stream bound to the previous
+// user's uid until something unrelated happened to invalidate it.
 final savedAddressesProvider = StreamProvider<List<SavedAddress>>((ref) {
+  ref.watch(currentUidProvider);
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return Stream.value([]);
   return FirebaseFirestore.instance

@@ -8,6 +8,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'booking_provider.dart' show currentUidProvider;
 
 // 🔒 [AUDIT EDGE-2 / 2026-08-02 — Medium, fresh re-audit] ດຽວກັນກັບ
 // kNetworkOpTimeout ໃນ booking_repository.dart — ໃຊ້ຄ່າດຽວກັນເພື່ອຄວາມສອດຄ່ອງ.
@@ -45,7 +46,13 @@ class MyCoupon {
 
 /// ລາຍການຄູປອງຂອງ user ນີ້ (ownerId == uid) — ໃຊ້ໃນ [CouponListScreen]
 /// ແລະ badge ຢູ່ໜ້າ Profile.
+// 🔒 [ADDR-1, Batch K, 2026-08-25] see savedAddressesProvider
+// (saved_address.dart) for the full rationale — ref.watch(currentUidProvider)
+// forces a rebuild on a same-process account switch. myCouponCountProvider
+// below derives from this provider (ref.watch(myCouponsProvider)), so it is
+// transitively fixed without needing its own change.
 final myCouponsProvider = StreamProvider<List<MyCoupon>>((ref) {
+  ref.watch(currentUidProvider);
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return Stream.value(const []);
   return FirebaseFirestore.instance
