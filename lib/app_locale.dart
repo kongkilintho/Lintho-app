@@ -773,6 +773,9 @@ final _strings = <AppLang, Map<String, String>>{
     'track_btn':             'ຕິດຕາມ',
     'verified_badge':        'ຢືນຢັນແລ້ວ ✓',
     'live_badge':            'Live',
+    // ✅ [Premium redesign / Batch 4] short badge word for tracking top bar
+    'done_badge':            'ແລ້ວ',
+    'tracking_connection_issue': 'ການເຊື່ອມຕໍ່ມີບັນຫາ — ສະແດງສະຖານະລ່າສຸດ',
     'distance_label':        'ໄລຍະ',
     'near_you':              'ໃກ້ທ່ານ',
     'auto_confirm_in':       'ຢືນຢັນໂດຍອັດຕະໂນມັດໃນ',
@@ -1753,6 +1756,9 @@ final _strings = <AppLang, Map<String, String>>{
     'track_btn':             'Track',
     'verified_badge':        'Verified ✓',
     'live_badge':            'Live',
+    // ✅ [Premium redesign / Batch 4] short badge word for tracking top bar
+    'done_badge':            'Done',
+    'tracking_connection_issue': 'Connection issue — showing last known status',
     'distance_label':        'Distance',
     'near_you':              'Near you',
     'auto_confirm_in':       'Auto-confirming in',
@@ -2701,6 +2707,9 @@ final _strings = <AppLang, Map<String, String>>{
     'track_btn':             'ติดตาม',
     'verified_badge':        'ยืนยันแล้ว ✓',
     'live_badge':            'Live',
+    // ✅ [Premium redesign / Batch 4] short badge word for tracking top bar
+    'done_badge':            'เสร็จ',
+    'tracking_connection_issue': 'การเชื่อมต่อมีปัญหา — แสดงสถานะล่าสุด',
     'distance_label':        'ระยะทาง',
     'near_you':              'ใกล้คุณ',
     'auto_confirm_in':       'ยืนยันอัตโนมัติใน',
@@ -3649,6 +3658,9 @@ final _strings = <AppLang, Map<String, String>>{
     'track_btn':             '追踪',
     'verified_badge':        '已认证 ✓',
     'live_badge':            '实时',
+    // ✅ [Premium redesign / Batch 4] short badge word for tracking top bar
+    'done_badge':            '完成',
+    'tracking_connection_issue': '连接异常 — 显示最近状态',
     'distance_label':        '距离',
     'near_you':              '您附近',
     'auto_confirm_in':       '将在以下时间自动确认',

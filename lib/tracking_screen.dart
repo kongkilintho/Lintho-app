@@ -150,6 +150,11 @@ class _TrackingScreenState extends State<TrackingScreen>
   String        _paymentMethod             = 'cash';
   bool          _customerConfirmedPayment  = false;
   bool          _confirmingPayment         = false;
+  // ✅ [Premium redesign / Batch 4] presentation-only flag — does not affect
+  // stream wiring, queries, or data flow. Set inside the existing onError
+  // callbacks below; cleared on the next successful snapshot from either
+  // listener.
+  bool          _hasTrackingStreamError    = false;
   // 🔒 [AUDIT CUST-4 / 2026-07-30] ໃຊ້ຄິດໄລ່ grace window ດຽວກັນກັບ
   // cancelBooking() (booking_repository.dart) — ໃຫ້ dialog ຄຳເຕືອນຄ່າທຳນຽມ
   // ກົງກັບຄ່າທຳນຽມທີ່ຈິງຈະຖືກຄິດ.
@@ -276,6 +281,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         _paymentMethod             = d['paymentMethod'] as String? ?? 'cash';
         _customerConfirmedPayment  = d['customerConfirmedPayment'] as bool? ?? false;
         _acceptedAt = (d['acceptedAt'] as Timestamp?)?.toDate();
+        _hasTrackingStreamError    = false;
       });
 
       if (newStatus != _status) {
@@ -291,7 +297,10 @@ class _TrackingScreenState extends State<TrackingScreen>
           });
         }
       }
-    }, onError: (e) => debugPrint('watchBooking: $e'));
+    }, onError: (e) {
+      debugPrint('watchBooking: $e');
+      if (mounted) setState(() => _hasTrackingStreamError = true);
+    });
   }
 
   void _watchProviderLocation() {
@@ -302,6 +311,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         .snapshots()
         .listen((doc) {
       if (!doc.exists || !mounted) return;
+      if (_hasTrackingStreamError) setState(() => _hasTrackingStreamError = false);
       final d   = doc.data()!;
       final lat = (d['lat'] as num?)?.toDouble();
       final lng = (d['lng'] as num?)?.toDouble();
@@ -315,7 +325,10 @@ class _TrackingScreenState extends State<TrackingScreen>
           _mapCtrl.move(LatLng(lat, lng), _mapCtrl.camera.zoom);
         }
       }
-    }, onError: (e) => debugPrint('watchProviderLoc: $e'));
+    }, onError: (e) {
+      debugPrint('watchProviderLoc: $e');
+      if (mounted) setState(() => _hasTrackingStreamError = true);
+    });
   }
 
   void _startElapsedTimer() {
@@ -444,8 +457,8 @@ class _TrackingScreenState extends State<TrackingScreen>
           Text(tr('cancel_confirm_short')),
           if (showFeeWarning) ...[
             const SizedBox(height: AppSpacing.sm),
-            Text(tr('cancel_fee_warning'), style: const TextStyle(
-              color: C.red, fontSize: 12, fontWeight: FontWeight.w600,
+            Text(tr('cancel_fee_warning'), style: AppTypography.caption.copyWith(
+              color: C.red, fontWeight: FontWeight.w600,
             )),
           ],
           const SizedBox(height: AppSpacing.md),
@@ -599,7 +612,8 @@ class _TrackingScreenState extends State<TrackingScreen>
   Widget _buildAdditionalChargesBanner() {
     final amount = _additionalCharges ?? 0;
     return Container(
-      padding: const EdgeInsets.all(14),
+      // ✅ [Premium redesign / Batch 4] 14 → AppSpacing.lg(16)
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color:        Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -617,12 +631,14 @@ class _TrackingScreenState extends State<TrackingScreen>
         children: [
           Row(
             children: [
-              const Text('⚠️', style: TextStyle(fontSize: 18)),
+              // ✅ [Premium redesign / Batch 4 / Finding #6] emoji → Material icon
+              const Icon(Icons.warning_amber_rounded, color: C.orange, size: 18),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   tr('additional_charges_requested'),
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: C.text),
+                  style: AppTypography.label.copyWith(
+                      fontWeight: FontWeight.w800, fontSize: 13, color: C.text),
                 ),
               ),
             ],
@@ -694,7 +710,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                   widget.provider.displayName.isNotEmpty
                       ? widget.provider.displayName
                       : tr('provider'),
-                  style: const TextStyle(
+                  style: AppTypography.caption.copyWith(
                     color: Colors.white, fontSize: 9,
                     fontWeight: FontWeight.w700,
                   ),
@@ -743,7 +759,7 @@ class _TrackingScreenState extends State<TrackingScreen>
               ),
               child: Text(
                 tr('you_marker'),
-                style: const TextStyle(
+                style: AppTypography.caption.copyWith(
                   color: Colors.white, fontSize: 9,
                   fontWeight: FontWeight.w700,
                 ),
@@ -811,8 +827,9 @@ class _TrackingScreenState extends State<TrackingScreen>
         child: FadeTransition(
           opacity: _statusAnim,
           child: Container(
+            // ✅ [Premium redesign / Batch 4] 14/10 → AppSpacing.md(12)
             padding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 10),
+                horizontal: AppSpacing.md, vertical: AppSpacing.md),
             decoration: BoxDecoration(
               color:        Colors.white,
               borderRadius: BorderRadius.circular(AppRadius.card),
@@ -828,7 +845,7 @@ class _TrackingScreenState extends State<TrackingScreen>
               Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_status.label, style: const TextStyle(
+                  Text(_status.label, style: AppTypography.label.copyWith(
                     fontSize: 13, fontWeight: FontWeight.w800,
                     color: C.textPrimary,
                   )),
@@ -836,9 +853,22 @@ class _TrackingScreenState extends State<TrackingScreen>
                     _status == BookingStatus.working
                         ? '${tr('elapsed_time_label')}: $_elapsedLabel'
                         : widget.serviceName,
-                    style: const TextStyle(
-                        fontSize: 11, color: C.muted),
+                    style: AppTypography.caption.copyWith(fontSize: 11, color: C.muted),
                   ),
+                  // ✅ [Premium redesign / Batch 4 / Finding #2] presentation-
+                  // only — does not affect stream wiring/data/booking state.
+                  if (_hasTrackingStreamError)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.wifi_off_rounded, size: 10, color: C.orange),
+                        const SizedBox(width: 3),
+                        Flexible(child: Text(tr('tracking_connection_issue'),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: AppTypography.caption.copyWith(
+                                fontSize: 9, color: C.orange))),
+                      ]),
+                    ),
                 ],
               )),
               // live dot
@@ -852,8 +882,8 @@ class _TrackingScreenState extends State<TrackingScreen>
               ),
               const SizedBox(width: AppSpacing.xs),
               Text(
-                _status == BookingStatus.done ? 'Done' : 'Live',
-                style: TextStyle(
+                _status == BookingStatus.done ? tr('done_badge') : tr('live_badge'),
+                style: AppTypography.caption.copyWith(
                   fontSize: 10, fontWeight: FontWeight.w700,
                   color: _status == BookingStatus.done
                       ? C.green : C.primary,
@@ -943,18 +973,19 @@ class _TrackingScreenState extends State<TrackingScreen>
                       _status == BookingStatus.working)) ...[
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(14),
+                  // ✅ [Premium redesign / Batch 4] 14 → AppSpacing.lg(16)
+                  padding: const EdgeInsets.all(AppSpacing.lg),
                   decoration: BoxDecoration(
                     color: C.gold.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(AppRadius.card),
                     border: Border.all(color: C.gold.withValues(alpha: 0.3)),
                   ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(tr('tracking_bcel_confirm_title'), style: const TextStyle(
-                        fontWeight: FontWeight.w800, color: C.textPrimary, fontSize: 13)),
+                    Text(tr('tracking_bcel_confirm_title'), style: AppTypography.label.copyWith(
+                        fontWeight: FontWeight.w800, color: C.textPrimary)),
                     const SizedBox(height: AppSpacing.xs),
                     Text(tr('tracking_bcel_confirm_hint'),
-                        style: const TextStyle(color: C.muted, fontSize: 12)),
+                        style: AppTypography.caption.copyWith(color: C.muted)),
                     const SizedBox(height: 10),
                     SizedBox(width: double.infinity, child: ElevatedButton(
                       onPressed: _confirmingPayment ? null : _confirmPaymentSent,
@@ -967,8 +998,8 @@ class _TrackingScreenState extends State<TrackingScreen>
                           ? const SizedBox(width: 16, height: 16,
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.white))
-                          : Text(tr('tracking_bcel_confirm_button'), style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                          : Text(tr('tracking_bcel_confirm_button'), style: AppTypography.label.copyWith(
+                              color: Colors.white, fontWeight: FontWeight.w700)),
                     )),
                   ]),
                 ),
@@ -991,8 +1022,9 @@ class _TrackingScreenState extends State<TrackingScreen>
                       backgroundColor: C.primary,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(AppRadius.card)),
+                      // ✅ [Premium redesign / Batch 4] 14 → AppSpacing.lg(16)
                       padding: const EdgeInsets.symmetric(
-                          vertical: 14),
+                          vertical: AppSpacing.lg),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1001,7 +1033,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                         const SizedBox(width: AppSpacing.xs),
                         Text(
                           tr('rate_provider'),
-                          style: const TextStyle(
+                          style: AppTypography.body.copyWith(
                             color: Colors.white, fontSize: 15,
                             fontWeight: FontWeight.w800,
                           ),
@@ -1020,9 +1052,11 @@ class _TrackingScreenState extends State<TrackingScreen>
                       side: BorderSide(color: C.red.withValues(alpha: 0.4)),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(AppRadius.card)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      // ✅ [Premium redesign / Batch 4] 14 → AppSpacing.lg(16),
+                      // matches the app-wide ElevatedButtonTheme convention
+                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
                     ),
-                    child: Text(tr('cancel_booking_btn'), style: const TextStyle(
+                    child: Text(tr('cancel_booking_btn'), style: AppTypography.body.copyWith(
                       color: C.red, fontSize: 14, fontWeight: FontWeight.w700,
                     )),
                   ),
@@ -1062,7 +1096,8 @@ class _StatusSteps extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      // ✅ [Premium redesign / Batch 4] 14 → AppSpacing.lg(16)
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color:        C.bg,
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -1107,7 +1142,7 @@ class _ProviderInfoRow extends StatelessWidget {
       ),
       child: Center(child: Text(
         provider.avatarLetter,
-        style: const TextStyle(
+        style: AppTypography.title.copyWith(
           fontSize: 24, fontWeight: FontWeight.w900,
           color: C.gold,
         ),
@@ -1118,7 +1153,7 @@ class _ProviderInfoRow extends StatelessWidget {
     Expanded(child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(provider.displayName, style: const TextStyle(
+        Text(provider.displayName, style: AppTypography.body.copyWith(
           fontSize: 15, fontWeight: FontWeight.w800,
           color: C.textPrimary,
         )),
@@ -1126,8 +1161,8 @@ class _ProviderInfoRow extends StatelessWidget {
         Row(children: [
           const Icon(Icons.star_rounded, color: C.gold, size: 14),
           const SizedBox(width: 3),
-          Text(provider.ratingLabel, style: const TextStyle(
-            fontSize: 12, fontWeight: FontWeight.w700,
+          Text(provider.ratingLabel, style: AppTypography.caption.copyWith(
+            fontWeight: FontWeight.w700,
             color: C.gold,
           )),
           // 🔒 [FOLLOWUP-J3] ໃຊ້ Material icon (serviceIcon) ແທນ emoji ດິບ —
@@ -1137,7 +1172,7 @@ class _ProviderInfoRow extends StatelessWidget {
           Icon(serviceIcon, size: 12, color: C.muted),
           const SizedBox(width: 3),
           Text(serviceName,
-              style: const TextStyle(
+              style: AppTypography.caption.copyWith(
                   fontSize: 11, color: C.muted)),
         ]),
       ],
@@ -1177,8 +1212,7 @@ class _AddressRow extends StatelessWidget {
       const SizedBox(width: AppSpacing.sm),
       Expanded(child: Text(
         address,
-        style: const TextStyle(
-            fontSize: 12, color: C.textSecondary),
+        style: AppTypography.caption.copyWith(color: C.textSecondary),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       )),
