@@ -35,6 +35,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'app_colors.dart';
 import 'theme/app_theme.dart' show AppRadius, AppSpacing, AppTypography;
+import 'widgets/app_text.dart';
+import 'widgets/status_stepper.dart';
 import 'app_locale.dart';
 import 'app_navigation_state.dart';
 import 'booking_provider.dart';
@@ -704,6 +706,18 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
     tr('address'), tr('step_label_payment'),
   ];
 
+  // ✅ [Premium redesign / Batch 3 / P1-1] step-progress indicator — reuses
+  // the existing shared StatusStepper widget, sourced from the same _step +
+  // _stepLabels already driving the AppBar title. Presentation only: reads
+  // _step, introduces no new state, does not touch step-transition logic.
+  static List<StatusStep> get _progressSteps => [
+    StatusStep(icon: Icons.category_rounded, label: tr('step_label_service')),
+    StatusStep(icon: Icons.tune_rounded, label: tr('price')),
+    StatusStep(icon: Icons.calendar_today_rounded, label: tr('step_label_schedule')),
+    StatusStep(icon: Icons.location_on_rounded, label: tr('address')),
+    StatusStep(icon: Icons.payment_rounded, label: tr('step_label_payment')),
+  ];
+
   // ✅ [Phone-verified booking] ເບີໂທຢືນຢັນແລ້ວຂອງບັນຊີ — ອ່ານແຕ່ຄ່ານີ້, ບໍ່ຮັບ
   // ການພິມມືອີກຕໍ່ໄປ (ເບິ່ງ phone_verification.dart). ໜ້ານີ້ຖືກຫຸ້ມດ້ວຍ
   // PhoneRequiredGate ຢູ່ build() ຢູ່ແລ້ວ ດັ່ງນັ້ນຄ່ານີ້ຄວນບໍ່ວ່າງສະເໝີເມື່ອຮອດ
@@ -796,6 +810,53 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       // ກໍລະນີຜູ້ໃຊ້ໄວກົດຈົນຮອດ submit ກ່ອນລາຄາຫຼ້າສຸດຈາກ admin ຖືກໂຫລດ
       case 4: return _pricingLoaded;
       default: return false;
+    }
+  }
+
+  // ✅ [Premium redesign / Batch 3 / P1-2] presentation-only hint explaining
+  // why the primary CTA is disabled — reads the same conditions `_canNext`
+  // already evaluates (does not modify `_canNext`, does not add new
+  // validation, does not change eligibility). Returns null when the CTA is
+  // valid (hint disappears) or on a step whose gate doesn't have a single
+  // clear blocking reason worth surfacing.
+  String? get _nextBlockedReason {
+    if (_canNext) return null;
+    switch (_step) {
+      case 1:
+        final o = _order!;
+        if (o.category == ServiceCategory.acCleaning) {
+          return tr('booking_hint_select_ac_package');
+        }
+        if (o.cleanType == HomeCleaningType.general &&
+            o.priceMode == PriceMode.hourly) {
+          return tr('booking_hint_select_hours');
+        }
+        if (o.cleanType == HomeCleaningType.general &&
+            o.priceMode == PriceMode.room) {
+          return tr('booking_hint_select_room_type');
+        }
+        if (o.cleanType == HomeCleaningType.deep) {
+          return tr('booking_hint_enter_sqm');
+        }
+        if (o.cleanType == HomeCleaningType.specialist) {
+          return tr('booking_hint_select_specialist_service');
+        }
+        return tr('booking_hint_select_package');
+      case 3:
+        if (_order!.address.trim().length < 5) {
+          return tr('booking_hint_enter_address');
+        }
+        if (!_order!.isGpsAddress &&
+            !RegExp(r'\d').hasMatch(_order!.address)) {
+          return tr('booking_hint_address_needs_number');
+        }
+        return null; // ✅ verifiedPhone-empty branch is defense-in-depth only
+                     // (PhoneRequiredGate already blocks build() before this)
+      case 4:
+        if (!_pricingLoaded) return tr('booking_hint_loading_price');
+        return null;
+      default:
+        return null;
     }
   }
 
@@ -1046,11 +1107,25 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         title: Text(_stepLabels[_step],
             style: AppTypography.appBarTitle.copyWith(color: C.primary)),
         centerTitle: true,
+        // ✅ [Premium redesign / Batch 3 / P1-1] step-progress indicator
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(58),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl, 0, AppSpacing.xl, AppSpacing.sm),
+            child: StatusStepper(
+              steps: _progressSteps,
+              currentIndex: _step,
+              activeColor: C.primary,
+            ),
+          ),
+        ),
       ),
       body: Column(children: [
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            // ✅ [Premium redesign / Batch 3 / P2-5] 20 → AppSpacing.xl(24)
+            padding: const EdgeInsets.all(AppSpacing.xl),
             child: switch (_step) {
               0 => _buildStep0(),
               1 => _buildStep1(),
@@ -1068,6 +1143,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             isLoading: _loading,
             estimatedTotal: _order != null && _step >= 1 ? _displayTotal : null,
             showCleaningDisclaimer: _order?.category == ServiceCategory.homeCleaning,
+            blockedReason: _nextBlockedReason,
             onNext: () {
               if (_step == 4) {
                 _submit();
@@ -1495,7 +1571,8 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
                     color: C.border, borderRadius: BorderRadius.circular(AppRadius.chip)),
               )),
               Text(tr('pest_spray_title'),
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: C.textPrimary)),
+                  style: AppTypography.heading.copyWith(
+                      fontSize: 16, fontWeight: FontWeight.w800, color: C.textPrimary)),
               const SizedBox(height: AppSpacing.xs),
               Text(
                 '${tr("pest_sqm_dialog_hint")} '
@@ -1965,7 +2042,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
           const SizedBox(width: AppSpacing.sm),
           Expanded(child: Text(
             tr('cancellation_policy_notice'),
-            style: const TextStyle(fontSize: 10, color: C.mutedLight),
+            style: AppTypography.caption.copyWith(fontSize: 10, color: C.mutedLight),
           )),
         ]),
       ),
@@ -2209,12 +2286,12 @@ class _BillRow extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
-      Text(label, style: TextStyle(
+      Text(label, style: (bold ? AppTypography.heading : AppTypography.label).copyWith(
           fontSize: bold ? 16 : 13,
           fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
           color: bold ? C.textPrimary : C.textSecondary)),
       // ✅ [Brand color audit 2026-07-27 v2] green ຫຼຸດລາຄາ = Success (#22C55E)
-      Text(value, style: TextStyle(
+      Text(value, style: (bold ? AppTypography.title : AppTypography.label).copyWith(
           fontSize: bold ? 20 : 13,
           fontWeight: FontWeight.w800,
           color: orange ? C.orange : (green ? C.success : C.textPrimary))),
@@ -2532,7 +2609,7 @@ class _JobPhotoPicker extends StatelessWidget {
           child: Column(children: [
             const Icon(Icons.add_a_photo_outlined, color: C.primary, size: 22),
             const SizedBox(height: 6),
-            Text(tr('job_photo_optional_hint'), style: const TextStyle(
+            Text(tr('job_photo_optional_hint'), style: AppTypography.caption.copyWith(
                 fontSize: 12.5, fontWeight: FontWeight.w700, color: C.primary)),
           ]),
         ),
@@ -2600,7 +2677,7 @@ class _PaymentCard extends StatelessWidget {
           Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: TextStyle(
+              Text(title, style: AppTypography.body.copyWith(
                   fontSize: 14, fontWeight: FontWeight.w800,
                   color: selected ? C.primary : C.textPrimary)),
               Text(sub, style: AppTypography.caption),
@@ -2626,7 +2703,8 @@ class _BcelQrBox extends ConsumerWidget {
     final cfg = ref.watch(paymentConfigProvider).valueOrNull ?? PaymentConfig.fallback;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      // ✅ [Premium redesign / Batch 3 / P2-5] 20 → AppSpacing.xl(24)
+      padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
         color: C.categoryAcBg,
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -2634,7 +2712,7 @@ class _BcelQrBox extends ConsumerWidget {
             color: C.categoryAcAccent.withValues(alpha: 0.3)),
       ),
       child: Column(children: [
-        Text(tr('bcel_qr_title'), style: const TextStyle(
+        Text(tr('bcel_qr_title'), style: AppTypography.body.copyWith(
             fontSize: 14, fontWeight: FontWeight.w800,
             color: C.categoryAcAccent)),
         const SizedBox(height: AppSpacing.md),
@@ -2689,8 +2767,8 @@ class _BcelQrBox extends ConsumerWidget {
               // 🔒 [AUDIT CUST-1 / 2026-08-02] discountedTotal ດຽວກັນກັບ
               // bcelQrData ຂ້າງເທິງ ແລະ Bill Card — ບໍ່ໃຊ້ grandTotal ອີກຕໍ່ໄປ.
               : '${AppPricing.fmt(order.discountedTotal.round())} ${tr("kip_currency")}',
-          style: const TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w700,
+          style: AppTypography.label.copyWith(
+              fontWeight: FontWeight.w700,
               color: C.categoryAcAccent),
         ),
         const SizedBox(height: AppSpacing.xs),
@@ -2745,8 +2823,8 @@ class _BcelAccountRow extends StatelessWidget {
             },
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Flexible(child: Text(value, textAlign: TextAlign.right,
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w800,
+                  style: AppTypography.label.copyWith(
+                      fontWeight: FontWeight.w800,
                       color: C.categoryAcAccent))),
               if (copyable) ...[
                 const SizedBox(width: AppSpacing.xs),
@@ -2808,10 +2886,10 @@ class _QuickBookCard extends StatelessWidget {
                 Icon(Icons.arrow_forward_rounded, size: 18, color: accent),
               ]),
               const SizedBox(height: AppSpacing.sm),
-              Text(title, style: TextStyle(
+              Text(title, style: AppTypography.body.copyWith(
                   fontWeight: FontWeight.w800, fontSize: 14, color: accent)),
               const SizedBox(height: 2),
-              Text(sub, style: TextStyle(
+              Text(sub, style: AppTypography.caption.copyWith(
                   fontSize: 11, fontWeight: FontWeight.w600,
                   color: accent.withValues(alpha: 0.75))),
             ]),
@@ -2825,12 +2903,17 @@ class _QuickBookCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: C.red,
                 borderRadius: BorderRadius.circular(AppRadius.sheet),
+                // ✅ [Premium redesign / Batch 3 / P2-4] 0.35 → 0.15 — this
+                // badge is already solid red; the shadow only needs to lift
+                // it off the card, not add a second layer of red saturation.
+                // Brought in line with _BigCatCard's own legitimate 0.15
+                // colored selected-state shadow elsewhere on this screen.
                 boxShadow: [BoxShadow(
-                  color: C.red.withValues(alpha: 0.35),
+                  color: C.red.withValues(alpha: 0.15),
                   blurRadius: 6, offset: const Offset(0, 2),
                 )],
               ),
-              child: Text(badge!, style: const TextStyle(
+              child: Text(badge!, style: AppTypography.caption.copyWith(
                   fontSize: 9.5, fontWeight: FontWeight.w800,
                   color: Colors.white)),
             ),
@@ -2891,9 +2974,8 @@ class _BigCatCard extends StatelessWidget {
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, style: const TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.w800, color: C.textPrimary)),
-                  Text(sub, style: const TextStyle(
+                  AppText.heading(title, fontWeight: FontWeight.w800, color: C.textPrimary),
+                  Text(sub, style: AppTypography.caption.copyWith(
                       fontSize: 11, color: C.textSecondary)),
                 ])),
               ]),
@@ -2903,13 +2985,13 @@ class _BigCatCard extends StatelessWidget {
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Icon(Icons.check_circle_rounded, size: 16, color: C.green.withValues(alpha: 0.85)),
                   const SizedBox(width: AppSpacing.sm),
-                  Expanded(child: Text(b, style: const TextStyle(
+                  Expanded(child: Text(b, style: AppTypography.caption.copyWith(
                       fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.4,
                       color: C.textSecondary))),
                 ]),
               )),
               const SizedBox(height: AppSpacing.xs),
-              Text(note, style: const TextStyle(
+              Text(note, style: AppTypography.heading.copyWith(
                   fontSize: 16, fontWeight: FontWeight.w600, color: C.green)),
             ],
           ),
@@ -3008,11 +3090,11 @@ class _AcTypeCard extends StatelessWidget {
                   children: [
                     Flexible(child: Text(tr(d['price'] as String),
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        style: AppTypography.body.copyWith(
                             fontSize: 14, fontWeight: FontWeight.w800,
                             color: selected ? C.primary : C.categoryAcAccent))),
                     const SizedBox(width: AppSpacing.xs),
-                    Text(tr(d['priceNote'] as String), style: const TextStyle(
+                    Text(tr(d['priceNote'] as String), style: AppTypography.caption.copyWith(
                         fontSize: 10, fontWeight: FontWeight.w400, color: C.muted)),
                   ],
                 ),
@@ -3084,12 +3166,12 @@ class _BtuSelector extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(tr(item.$3), textAlign: TextAlign.center,
                     maxLines: 2, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
+                    style: AppTypography.caption.copyWith(
                     fontSize: 11, fontWeight: FontWeight.w700,
                     color: sel ? C.primary : C.textPrimary)),
                 const SizedBox(height: AppSpacing.xs),
                 Text(item.$4, textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 10, color: C.muted)),
+                    style: AppTypography.caption.copyWith(fontSize: 10, color: C.muted)),
               ]),
             ),
           ),
@@ -3134,7 +3216,7 @@ class _SmallTypeCard extends StatelessWidget {
             child: Icon(icon, size: 20, color: C.primary),
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(title, textAlign: TextAlign.center, style: TextStyle(
+          Text(title, textAlign: TextAlign.center, style: AppTypography.caption.copyWith(
               fontSize: 11, fontWeight: FontWeight.w700,
               color: selected ? C.primary : C.textPrimary)),
         ]),
@@ -3209,13 +3291,13 @@ class _RoomTile extends StatelessWidget {
               color: selected ? C.primary : C.muted, size: 20),
           const SizedBox(width: AppSpacing.md),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: TextStyle(
+            Text(title, style: AppTypography.body.copyWith(
                 fontSize: 14, fontWeight: FontWeight.w700,
                 color: selected ? C.primary : C.textPrimary)),
             Text(sub, style: AppTypography.caption),
           ])),
           Text('${AppPricing.fmt(minP)}–${AppPricing.fmt(maxP)} ${tr("kip_currency")}',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+              style: AppTypography.caption.copyWith(fontWeight: FontWeight.w700,
                   color: selected ? C.primary : C.muted)),
         ]),
       ),
@@ -3299,8 +3381,8 @@ class _SqmInput extends StatelessWidget {
                   border: Border.all(
                       color: selected ? C.primary : C.primary.withValues(alpha: 0.2)),
                 ),
-                child: Text('${p.toStringAsFixed(0)} ${tr("unit_sqm")}', style: TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w700,
+                child: Text('${p.toStringAsFixed(0)} ${tr("unit_sqm")}', style: AppTypography.caption.copyWith(
+                    fontWeight: FontWeight.w700,
                     color: selected ? Colors.white : C.primary)),
               ),
             ),
@@ -3345,8 +3427,8 @@ class _AddonCheckRow extends StatelessWidget {
           Icon(data['icon'] as IconData, color: C.textPrimary, size: 18),
           const SizedBox(width: 10),
           Expanded(child: Text(tr(data['name'] as String), style: AppTypography.label.copyWith(fontWeight: FontWeight.w700))),
-          Text('+${AppPricing.fmt(data['price'] as int)} ${tr("kip_currency")}', style: TextStyle(
-              fontSize: 12, fontWeight: FontWeight.w700,
+          Text('+${AppPricing.fmt(data['price'] as int)} ${tr("kip_currency")}', style: AppTypography.caption.copyWith(
+              fontWeight: FontWeight.w700,
               color: checked ? C.primary : C.muted)),
         ]),
       ),
@@ -3389,7 +3471,8 @@ class _SpecialistRow extends StatelessWidget {
           if (data['sub'] != null) ...[
             const SizedBox(height: 2),
             Text(tr(data['sub'] as String),
-                style: const TextStyle(fontSize: 10.5, color: C.muted, fontStyle: FontStyle.italic)),
+                style: AppTypography.caption.copyWith(
+                    fontSize: 10.5, color: C.muted, fontStyle: FontStyle.italic)),
           ],
         ])),
         _QtyRow(qty: qty, minQty: 0, maxQty: 20,
@@ -3437,7 +3520,7 @@ class _PestRow extends StatelessWidget {
               onTap: selected ? onClear : null),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Text(selected ? sqm.toStringAsFixed(0) : '0', style: const TextStyle(
+            child: Text(selected ? sqm.toStringAsFixed(0) : '0', style: AppTypography.heading.copyWith(
                 fontSize: 16, fontWeight: FontWeight.w900, color: C.textPrimary)),
           ),
           _CBtn(icon: Icons.add_rounded,
@@ -3479,7 +3562,7 @@ class _QtyRow extends StatelessWidget {
           onTap: qty > minQty ? () => onChanged(qty - 1) : null),
       Padding(
         padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 16),
-        child: Text('$qty', style: TextStyle(
+        child: Text('$qty', style: (compact ? AppTypography.heading : AppTypography.title).copyWith(
             fontSize: compact ? 16 : 22,
             fontWeight: FontWeight.w900, color: C.textPrimary)),
       ),
@@ -3561,11 +3644,11 @@ class _TimeToggle extends StatelessWidget {
         child: Column(children: [
           Icon(icon, size: 26, color: selected ? Colors.white : C.primary),
           const SizedBox(height: 6),
-          Text(title, style: TextStyle(
+          Text(title, style: AppTypography.body.copyWith(
               fontWeight: FontWeight.w800,
               color: selected ? Colors.white : C.textPrimary)),
           Text(sub, textAlign: TextAlign.center,
-              style: TextStyle(
+              style: AppTypography.caption.copyWith(
                   fontSize: 11,
                   color: selected ? Colors.white70 : C.muted)),
         ]),
@@ -3613,8 +3696,8 @@ class _TimeSlots extends StatelessWidget {
                 border: Border.all(
                     color: sel ? C.primary : C.border, width: sel ? 2 : 1),
               ),
-              child: Text(s.$1, style: TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w700,
+              child: Text(s.$1, style: AppTypography.label.copyWith(
+                  fontWeight: FontWeight.w700,
                   color: sel ? Colors.white : C.textPrimary)),
             ),
           ),
@@ -3674,7 +3757,7 @@ class _TravelFeeBox extends StatelessWidget {
           Expanded(child: Text(
             '${tr("travel_fee_auto_free_note")} '
                 '(${tr("distance_label")} ${dist.toStringAsFixed(1)} ${tr("km_unit")} ${tr("travel_fee_in_service_area_note")})',
-            style: const TextStyle(
+            style: AppTypography.caption.copyWith(
                 fontSize: 12.5, fontWeight: FontWeight.w700, color: C.green, height: 1.4),
           )),
         ]),
@@ -3691,8 +3774,7 @@ class _TravelFeeBox extends StatelessWidget {
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(icon, size: 20, color: hasFee && hasGps ? C.orange : C.primary),
         const SizedBox(width: 10),
-        Expanded(child: Text(text, style: TextStyle(
-          fontSize: 12,
+        Expanded(child: Text(text, style: AppTypography.caption.copyWith(
           color: hasFee && hasGps ? C.orange : C.textSecondary,
           fontWeight: hasFee && hasGps ? FontWeight.w700 : FontWeight.w500,
           height: 1.5,
@@ -3719,28 +3801,28 @@ class _RelocateExtrasInfo extends StatelessWidget {
         const Text('📋', style: TextStyle(fontSize: 16)),
         const SizedBox(width: 6),
         Text(tr('relocate_extras_header'),
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800,
+            style: AppTypography.label.copyWith(fontWeight: FontWeight.w800,
                 color: C.categoryAddonValueText)),
       ]),
       const SizedBox(height: 10),
       const Divider(height: 1),
       const SizedBox(height: 10),
       Text(tr('relocate_package_price_header'),
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+          style: AppTypography.caption.copyWith(fontWeight: FontWeight.w700,
               color: C.categoryAddonValueText)),
       const SizedBox(height: 6),
       _ExtrasRow(tr('relocate_wall_small_label'), '450,000–600,000 ${tr("kip_currency")}'),
       _ExtrasRow(tr('relocate_wall_large_label'), '650,000–850,000 ${tr("kip_currency")}'),
       _ExtrasRow(tr('relocate_cabinet_label'), '950,000–1,300,000+ ${tr("kip_currency")}'),
       const SizedBox(height: 10), const Divider(height: 1), const SizedBox(height: 10),
-      Text(tr('relocate_labor_only_header'), style: const TextStyle(fontSize: 12,
+      Text(tr('relocate_labor_only_header'), style: AppTypography.caption.copyWith(
           fontWeight: FontWeight.w700, color: C.categoryAddonValueText)),
       const SizedBox(height: 6),
       _ExtrasRow(tr('install_small_label'), '300,000–400,000 ${tr("kip_currency")}'),
       _ExtrasRow(tr('install_large_label'), '450,000–550,000 ${tr("kip_currency")}'),
       _ExtrasRow(tr('remove_any_size_label'), '150,000–250,000 ${tr("kip_currency")}'),
       const SizedBox(height: 10), const Divider(height: 1), const SizedBox(height: 10),
-      Text(tr('spare_parts_header'), style: const TextStyle(fontSize: 12,
+      Text(tr('spare_parts_header'), style: AppTypography.caption.copyWith(
           fontWeight: FontWeight.w700, color: C.categoryAddonValueText)),
       const SizedBox(height: 6),
       _ExtrasRow(tr('copper_pipe_label'), '150,000–250,000 ${tr("kip_currency")}/${tr("unit_meter")}'),
@@ -3760,7 +3842,7 @@ class _RelocateExtrasInfo extends StatelessWidget {
           const SizedBox(width: 6),
           Expanded(child: Text(
             tr('relocate_pipe_included_note'),
-            style: const TextStyle(fontSize: 11, color: C.categoryAddonValueText),
+            style: AppTypography.caption.copyWith(fontSize: 11, color: C.categoryAddonValueText),
           )),
         ]),
       ),
@@ -3778,9 +3860,9 @@ class _ExtrasRow extends StatelessWidget {
     child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(
+        Text(label, style: AppTypography.caption.copyWith(
             fontSize: 11, color: C.categoryAddonLabelText)),
-        Text(value, style: const TextStyle(
+        Text(value, style: AppTypography.caption.copyWith(
             fontSize: 11, fontWeight: FontWeight.w700,
             color: C.categoryAddonValueText)),
       ],
@@ -3806,7 +3888,7 @@ class _RefillInfoCard extends StatelessWidget {
       Row(children: [
         const Text('🧪', style: TextStyle(fontSize: 20)),
         const SizedBox(width: AppSpacing.sm),
-        Text(tr('refill_price_header'), style: const TextStyle(
+        Text(tr('refill_price_header'), style: AppTypography.body.copyWith(
             fontSize: 14, fontWeight: FontWeight.w800,
             color: C.noteWarningText)),
       ]),
@@ -3847,11 +3929,11 @@ class _RefillLine extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Expanded(child: Text(label, style: const TextStyle(
-          fontSize: 12, color: C.noteWarningTextDark))),
+      Expanded(child: Text(label, style: AppTypography.caption.copyWith(
+          color: C.noteWarningTextDark))),
       const SizedBox(width: AppSpacing.sm),
-      Text(value, style: const TextStyle(
-          fontSize: 12, fontWeight: FontWeight.w700,
+      Text(value, style: AppTypography.caption.copyWith(
+          fontWeight: FontWeight.w700,
           color: C.noteWarningText)),
     ],
   );
@@ -3886,11 +3968,11 @@ class _PriceLine extends StatelessWidget {
     children: [
       // ✅ [Brand color audit 2026-07-27 v2] green ຫຼຸດລາຄາ = Success
       // (#22C55E), ແຍກຈາກ Primary
-      Expanded(child: Text(label, style: TextStyle(
+      Expanded(child: Text(label, style: (bold ? AppTypography.body : AppTypography.caption).copyWith(
           fontSize: bold ? 14 : 12,
           fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
           color: green ? C.success : (bold ? C.textPrimary : C.muted)))),
-      Text(value, style: TextStyle(
+      Text(value, style: (bold ? AppTypography.heading : AppTypography.caption).copyWith(
           fontSize: bold ? 17 : 12,
           fontWeight: FontWeight.w800,
           color: green ? C.success : C.textPrimary)),
@@ -3927,12 +4009,14 @@ class _BottomBar extends StatelessWidget {
   final bool         isLast, canNext, isLoading;
   final int?         estimatedTotal;
   final bool         showCleaningDisclaimer;
+  final String?      blockedReason;
   final VoidCallback onNext;
   const _BottomBar({
     required this.step,    required this.isLast,
     required this.canNext, required this.isLoading,
     required this.onNext,  this.estimatedTotal,
     this.showCleaningDisclaimer = false,
+    this.blockedReason,
   });
 
   void _showPriceDisclaimer(BuildContext context) {
@@ -3943,11 +4027,13 @@ class _BottomBar extends StatelessWidget {
         title: Row(children: [
           const Icon(Icons.info_outline, color: C.primary, size: 20),
           const SizedBox(width: AppSpacing.sm),
-          Text(tr('price_disclaimer_title'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          Text(tr('price_disclaimer_title'),
+              style: AppTypography.heading.copyWith(fontSize: 16, fontWeight: FontWeight.w800)),
         ]),
         content: Text(
           tr('price_disclaimer_body'),
-          style: const TextStyle(fontSize: 13.5, color: C.textSecondary, height: 1.5),
+          style: AppTypography.caption.copyWith(
+              fontSize: 13.5, color: C.textSecondary, height: 1.5),
         ),
         actions: [
           TextButton(
@@ -3961,7 +4047,9 @@ class _BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+    // ✅ [Premium redesign / Batch 3 / P2-5] 20/16/24 → AppSpacing.xl/lg/xl
+    padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl, AppSpacing.lg, AppSpacing.xl, AppSpacing.xl),
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: AppRadius.sheetTop,
@@ -3976,10 +4064,8 @@ class _BottomBar extends StatelessWidget {
         if (showCleaningDisclaimer) ...[
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
-            child: Text(
-              tr('cleaning_price_disclaimer'),
-              style: const TextStyle(fontSize: 10.5, color: C.muted),
-            ),
+            child: Text(tr('cleaning_price_disclaimer'),
+                style: AppTypography.caption.copyWith(fontSize: 10.5)),
           ),
         ],
         Padding(
@@ -4010,11 +4096,19 @@ class _BottomBar extends StatelessWidget {
             ),
             const Spacer(),
             Text('${AppPricing.fmt(estimatedTotal!)} ${tr("kip_currency")}',
-                style: const TextStyle(
+                style: AppTypography.heading.copyWith(
                     fontSize: 18, fontWeight: FontWeight.w900, color: C.textPrimary)),
           ]),
         ),
       ],
+      // ✅ [Premium redesign / Batch 3 / P1-2] presentation-only hint —
+      // disappears the moment canNext becomes true, does not affect onNext
+      if (blockedReason != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: AppText.caption(blockedReason!,
+              textAlign: TextAlign.center, color: C.orange),
+        ),
       SizedBox(
         width: double.infinity, height: 52,
         child: ElevatedButton(
@@ -4035,11 +4129,10 @@ class _BottomBar extends StatelessWidget {
           ),
           child: isLoading
               ? const _ButtonSkeleton()
-              : Text(
+              : AppText.body(
               isLast ? tr('confirm_book') : tr('next_arrow_btn'),
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w800)),
+              color: Colors.white, fontWeight: FontWeight.w800),
         ),
       ),
     ]),
