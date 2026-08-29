@@ -120,6 +120,12 @@ class AppColors {
   static const homeCardAcTint    = Color(0xFFE3F2FD);
   static const homeCardOtherTint = Color(0xFFFFF3E0);
 
+  // ✅ [Premium redesign 2026-08-29 / Batch 2] ຍົກອອກຈາກ main.dart's raw
+  // Color(0xFF00C9A7) literal (Home header gradient's ຈຸດປາຍ) — ຄ່າ hex ຄົງເກົ່າ
+  // ຕາມການອະນຸມັດ (ບໍ່ປ່ຽນເປັນ AppColors.teal, ຄ່າແຕກຕ່າງກັນຈິງ ບໍ່ແມ່ນ duplicate),
+  // ພຽງແຕ່ໃຫ້ມີບ່ອນອ້າງອີງດຽວ ບໍ່ແມ່ນ hex ອິດສະຫຼະທີ່ບໍ່ມີໃຜຮູ້ຈັກ
+  static const homeHeaderGradientEnd = Color(0xFF00C9A7);
+
   // ── Splash screen ─────────────────────────────────────────────
   static const splashGradientStart = Color(0xFF0A2E6E);
   static const splashSubtext       = Color(0xFFD6E4FF);

@@ -61,6 +61,7 @@ import 'widgets/error_state_view.dart';
 import 'widgets/empty_state_view.dart';
 import 'widgets/app_button.dart';
 import 'widgets/app_section.dart';
+import 'widgets/app_text.dart';
 import 'theme/app_theme.dart';
 import 'app_navigation_state.dart';
 import 'phone_verification.dart';
@@ -1276,22 +1277,30 @@ class _LocationSelectorState extends State<_LocationSelector> {
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.sheet),
         onTap: _showPicker,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(AppRadius.sheet),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+        // ✅ [Premium redesign / Batch 2] ConstrainedBox(minHeight:44) — ໜ້າຈໍ
+        // ນີ້ເຄີຍມີພື້ນທີ່ກົດແຄບກວ່າ 44dp (padding 6v ອ້ອມ content ~16px ສູງ),
+        // ຕ່ຳກວ່າມາດຕະຖານ 44dp ຂອງແອັບເອງ (ບັງຄັບຢູ່ແລ້ວຢູ່ notification bell
+        // ຂ້າງເທິງ). ໃຊ້ minHeight ແທນ SizedBox ຄົງທີ່ ເພື່ອຮັກສາຮູບຊົງ pill
+        // ຄວາມກວ້າງຕາມເນື້ອຫາ (ບໍ່ແມ່ນ icon-only square ຄື notification bell).
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Container(
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(AppRadius.sheet),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.location_on_rounded, color: Colors.white, size: 14),
+              const SizedBox(width: AppSpacing.xs),
+              AppText.label(city, color: Colors.white, fontWeight: FontWeight.w700),
+              const SizedBox(width: 2),
+              Icon(Icons.keyboard_arrow_down_rounded,
+                  color: Colors.white.withValues(alpha: 0.85), size: 16),
+            ]),
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.location_on_rounded, color: Colors.white, size: 14),
-            const SizedBox(width: AppSpacing.xs),
-            Text(city, style: const TextStyle(
-                color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
-            const SizedBox(width: 2),
-            Icon(Icons.keyboard_arrow_down_rounded,
-                color: Colors.white.withValues(alpha: 0.85), size: 16),
-          ]),
         ),
       ),
     );
@@ -1515,7 +1524,10 @@ class _PromoBannerCard extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(18, 18, 16, 18),
+              // ✅ [Premium redesign / Batch 2] 18 → AppSpacing.lg(16) — nearest
+              // token, tightens ~2dp, no layout risk
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.lg),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: FractionallySizedBox(
@@ -1525,9 +1537,12 @@ class _PromoBannerCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // ✅ [Premium redesign / Batch 2] custom height/letterSpacing
+                      // ບໍ່ສາມາດຂຽນຜ່ານ AppText ໄດ້ — derive ຈາກ AppTypography.title
+                      // ດ້ວຍ copyWith ແທນ literal ອິດສະຫຼະ
                       Text(banner.title,
                           maxLines: 2, overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: AppTypography.title.copyWith(
                           color: Colors.white,
                           fontSize: 18,
                           height: 1.15,
@@ -1536,9 +1551,8 @@ class _PromoBannerCard extends StatelessWidget {
                       const SizedBox(height: AppSpacing.xs),
                       Text(banner.subtitle,
                           maxLines: 2, overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: AppTypography.caption.copyWith(
                           color: Colors.white.withValues(alpha: 0.8),
-                          fontSize: 12,
                           height: 1.3)),
                       const SizedBox(height: 10),
                       Material(
@@ -1551,9 +1565,9 @@ class _PromoBannerCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: AppSpacing.md, vertical: 7),
                             child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              Text(banner.ctaLabel, style: TextStyle(
-                                  color: banner.overlayColor, fontSize: 11.5,
-                                  fontWeight: FontWeight.w800)),
+                              Text(banner.ctaLabel, style: AppTypography.caption
+                                  .copyWith(color: banner.overlayColor,
+                                      fontWeight: FontWeight.w800)),
                               const SizedBox(width: 3),
                               Icon(Icons.arrow_forward_rounded,
                                   color: banner.overlayColor, size: 12),
@@ -1931,13 +1945,15 @@ class HomeScreen extends StatelessWidget {
             children: [
               Container(
                 width: double.infinity,
-                padding: EdgeInsets.fromLTRB(
-                    20, MediaQuery.of(context).padding.top + 16, 20, 24),
+                // ✅ [Premium redesign / Batch 2] 20 → AppSpacing.xl(24) — was a
+                // de-facto page margin not on the 8-point scale
+                padding: EdgeInsets.fromLTRB(AppSpacing.xl,
+                    MediaQuery.of(context).padding.top + 16, AppSpacing.xl, AppSpacing.xl),
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [C.primary, Color(0xFF00C9A7)],
+                    colors: [C.primary, AppColors.homeHeaderGradientEnd],
                   ),
                   borderRadius: BorderRadius.only(
                       bottomLeft: Radius.circular(AppRadius.sheet),
@@ -1951,11 +1967,10 @@ class HomeScreen extends StatelessWidget {
                     // ຕອນນີ້ NotificationScreen ສ້າງແລ້ວ (3 tabs: Chat/News/
                     // Customer Service, ທຸກ tab ໃຊ້ຂໍ້ມູນຈິງ) ຈຶ່ງເພີ່ມກັບຄືນ.
                     Row(children: [
-                      Expanded(child: Text(
+                      Expanded(child: AppText.heading(
                           '${tr('greeting_hello')}, ${user?.displayName ?? tr('default_user_name')}',
                           maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800))),
+                          color: Colors.white, fontWeight: FontWeight.w800)),
                       // 🔒 [AUDIT UI-2 / 2026-08-06] Padding.all(8) ອ້ອມ icon
                       // 20dp ໃຫ້ພື້ນທີ່ກົດພຽງ 36×36dp, ຕ່ຳກວ່າມາດຕະຖານ 44dp
                       // ຂອງແອັບເອງ (ບັງຄັບຢູ່ແລ້ວຢູ່ home_tab.dart's
@@ -1989,9 +2004,8 @@ class HomeScreen extends StatelessWidget {
                     // contrast — ຕ່ຳກວ່າ WCAG AA (4.5:1). ໃຊ້ opacity ດຽວກັນ
                     // ກັບ Quick-Book banner subtitle ຂ້າງລຸ່ມ (fix UI-3) ທີ່
                     // ແກ້ບັນຫາດຽວກັນນີ້ໄປແລ້ວແຕ່ບໍ່ໄດ້ຍົກຂຶ້ນມາຫາ header ນີ້
-                    Text(tr('greeting_subtitle'), style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.92),
-                        fontSize: 12.5, fontWeight: FontWeight.w500)),
+                    AppText.caption(tr('greeting_subtitle'),
+                        color: Colors.white.withValues(alpha: 0.92)),
                     const SizedBox(height: 10),
                     const _LocationSelector(),
                     const SizedBox(height: AppSpacing.md),
@@ -2000,7 +2014,9 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                // ✅ [Premium redesign / Batch 2] 20 → AppSpacing.xl(24)
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.xl, AppSpacing.xl, AppSpacing.xl, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2019,9 +2035,12 @@ class HomeScreen extends StatelessWidget {
                               end: Alignment.centerRight,
                             ),
                             borderRadius: BorderRadius.circular(AppRadius.card),
+                            // ✅ [Premium redesign / Batch 2] ຫຼຸດຈາກ 35%-alpha
+                            // colored shadow (blur 16) ລົງມາໃຫ້ຢູ່ໃນຂອບເຂດ
+                            // subtle depth ດຽວກັນກັບ card ອື່ນໆໃນໜ້ານີ້ (4-10%)
                             boxShadow: [BoxShadow(
-                              color: C.quickBookGradientStart.withValues(alpha: 0.35),
-                              blurRadius: 16, offset: const Offset(0, 6),
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 14, offset: const Offset(0, 6),
                             )],
                           ),
                           child: Row(children: [
@@ -2031,9 +2050,11 @@ class HomeScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                // ✅ [Premium redesign / Batch 2] custom height/
+                                // letterSpacing — derive ຈາກ AppTypography.title
                                 Text(tr('quick_book_banner_title'),
                                     maxLines: 1, overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
+                                    style: AppTypography.title.copyWith(
                                     fontWeight: FontWeight.w800,
                                     color: Colors.white, fontSize: 18,
                                     height: 1.1, letterSpacing: -0.2)),
@@ -2042,11 +2063,9 @@ class HomeScreen extends StatelessWidget {
                                 // alpha) ພຽງພໍເທິງພື້ນ navy ເກົ່າ ແຕ່ບໍ່ພຽງພໍ
                                 // ເທິງ gradient ສີສົ້ມທີ່ສະຫວ່າງກວ່າ — ຍົກ
                                 // opacity ຂຶ້ນເພື່ອຮັກສາ contrast.
-                                Text(tr('quick_book_banner_sub'),
+                                AppText.caption(tr('quick_book_banner_sub'),
                                     maxLines: 1, overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                        color: Colors.white.withValues(alpha: 0.92))),
+                                    color: Colors.white.withValues(alpha: 0.92)),
                               ],
                             )),
                             const SizedBox(width: AppSpacing.xs),
@@ -2069,7 +2088,9 @@ class HomeScreen extends StatelessWidget {
           // ✅ bottom: 120 — extendBody:true (MainShell) ດຽວນີ້ໃຫ້ body ແຜ່ລົງ
           // ໃຕ້ floating glass nav bar, ຕ້ອງເພີ່ມ padding ລຸ່ມໃຫ້ພຽງພໍ ບໍ່ດັ່ງນັ້ນ
           // ບັດ Popular ອັນສຸດທ້າຍຈະຖືກເບິ່ງບັງ
-          padding: const EdgeInsets.fromLTRB(20, 32, 20, 120),
+          // ✅ [Premium redesign / Batch 2] 20 → AppSpacing.xl(24); 32/120 ຄົງໄວ້
+          // (32=AppSpacing.xxl ຢູ່ແລ້ວ, 120=nav-bar clearance ບໍ່ແມ່ນ page margin)
+          padding: const EdgeInsets.fromLTRB(AppSpacing.xl, 32, AppSpacing.xl, 120),
           child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2100,23 +2121,17 @@ class HomeScreen extends StatelessWidget {
                                     initialStep: 1,
                                   ))),
                           child: Container(
+                            // ✅ [Premium redesign / Batch 2] 22 → AppSpacing.xl(24)
                             padding: const EdgeInsets.symmetric(
-                                vertical: 22, horizontal: AppSpacing.md),
+                                vertical: AppSpacing.xl, horizontal: AppSpacing.md),
+                            // ✅ [Premium redesign / Batch 2] ຖອດ diagonal gradient +
+                            // tinted border ອອກ (3 ຊັ້ນ decoration ສຳລັບ grid 2 ອັນ) —
+                            // ໃຊ້ semantic category bg tint (cat['color']) ກົງໆ ຄືກັນ
+                            // ກັບ _PopularCard's icon box, ຄົງ shadow ອັນດຽວທີ່ມີຢູ່ແລ້ວ
+                            // (4% ຢູ່ໃນຂອບເຂດ subtle ຢູ່ແລ້ວ, ບໍ່ຕ້ອງປ່ຽນ)
                             decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  cat['category'] == ServiceCategory.acCleaning
-                                      ? C.homeCardAcTint
-                                      : C.homeCardOtherTint,
-                                  Colors.white,
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
+                              color: cat['color'] as Color,
                               borderRadius: BorderRadius.circular(AppRadius.sheet),
-                              border: Border.all(
-                                  color: (cat['accent'] as Color)
-                                      .withValues(alpha: 0.08)),
                               boxShadow: [BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.04),
                                 blurRadius: 15, offset: const Offset(0, 8),
@@ -2131,19 +2146,12 @@ class HomeScreen extends StatelessWidget {
                                   Icon(cat['icon'] as IconData, size: 44,
                                       color: cat['accent'] as Color),
                                   const SizedBox(height: AppSpacing.md),
-                                  // 🔒 [PHASE1] C.sky → C.text — card title ນີ້
-                                  // ເປັນ blue ຄົນດຽວ ໃນຂະນະທີ່ card title ອື່ນ
-                                  // ທົ່ວໜ້ານີ້ (_PopularCard, _ActiveBookingCard)
-                                  // ໃຊ້ C.text ຢູ່ແລ້ວ — ອ່ານຄືເປັນ leftover
-                                  // ບໍ່ຕັ້ງໃຈ, ບໍ່ແມ່ນ accent ທີ່ຈົງໃຈ
-                                  Text(cat['label'] as String, textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                      fontSize: 13, fontWeight: FontWeight.w800,
-                                      color: C.text)),
+                                  AppText.label(cat['label'] as String,
+                                      textAlign: TextAlign.center,
+                                      fontWeight: FontWeight.w800),
                                   const SizedBox(height: 2),
-                                  Text(cat['sub'] as String, textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                      fontSize: 11, color: C.muted)),
+                                  AppText.caption(cat['sub'] as String,
+                                      textAlign: TextAlign.center),
                                   const SizedBox(height: AppSpacing.xs),
                                   _PriceLine(
                                       category: cat['category'] as ServiceCategory,
@@ -2160,7 +2168,8 @@ class HomeScreen extends StatelessWidget {
                   }),
                 ),
 
-                const SizedBox(height: 44),
+                // ✅ [Premium redesign / Batch 2] 44 → AppSpacing.xxxl(48), nearest token
+                const SizedBox(height: AppSpacing.xxxl),
                 // 🔒 [PHASE1] AppSection ແທນ Row+Text header ຂຽນມືອ — "ເບິ່ງທັງໝົດ"
                 // ດຽວນີ້ຜ່ານ AppSection's actionLabel (44dp tap target ບັງຄັບ
                 // ໃນຕົວ, ອັນເກົ່າ borderRadius:4 ອ້ອມ Text ຢ່າງດຽວແຄບກວ່ານັ້ນຫຼາຍ)
@@ -2225,16 +2234,12 @@ class _PopularCard extends StatelessWidget {
             Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(s['name'] as String, style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w900,
-                    color: C.text)),
+                AppText.body(s['name'] as String, fontWeight: FontWeight.w900),
                 const SizedBox(height: AppSpacing.xs),
                 Row(children: [
                   const Icon(Icons.access_time, color: C.muted, size: 13),
                   const SizedBox(width: 3),
-                  Text(s['time'] as String,
-                      style: const TextStyle(fontSize: 12,
-                          fontWeight: FontWeight.w500, color: C.muted)),
+                  AppText.caption(s['time'] as String),
                 ]),
                 const SizedBox(height: 6),
                 _PriceLine(category: s['category'] as ServiceCategory),
@@ -2280,16 +2285,33 @@ class _PriceLineState extends State<_PriceLine> {
     return FutureBuilder<ServicePricing?>(
       future: _future,
       builder: (context, snap) {
+        // ✅ [Premium redesign / Batch 2] ເຄີຍ silent-blank ທັງ loading ແລະ
+        // error (SizedBox.shrink ໜຶ່ງດຽວ) — ຕອນນີ້ແຍກ 2 state ອອກຈາກກັນ,
+        // ນ້ຳໜັກສາຍຕາເບົາ, ບໍ່ມີ retry infrastructure/state ໃໝ່
+        if (snap.connectionState == ConnectionState.waiting) {
+          return Container(
+            width: widget.compact ? 60 : 90,
+            height: widget.compact ? 12 : 14,
+            decoration: BoxDecoration(
+              color: AppColors.border,
+              borderRadius: BorderRadius.circular(AppRadius.chip),
+            ),
+          );
+        }
+        if (snap.hasError) {
+          return const AppText.caption('—', color: AppColors.muted);
+        }
         final price = snap.data?.startingPrice;
         if (price == null) return const SizedBox.shrink();
         final text =
             '${tr('starting_from')} ₭${NumberFormat('#,###').format(price)}';
+        // ✅ [Premium redesign / Batch 2] C.blue → AppColors.ink — blue ບໍ່ມີ
+        // semantic role ໃນໜ້ານີ້, ink ຄືສີ text ມາດຕະຖານທີ່ໃຊ້ຢູ່ແລ້ວທົ່ວ Home
+        final style = (widget.compact ? AppTypography.caption : AppTypography.body)
+            .copyWith(fontWeight: FontWeight.w900, color: AppColors.ink);
         return Text(text,
             textAlign: widget.compact ? TextAlign.center : TextAlign.start,
-            style: TextStyle(
-                fontSize: widget.compact ? 11 : 14,
-                fontWeight: FontWeight.w900,
-                color: C.blue));
+            style: style);
       },
     );
   }
