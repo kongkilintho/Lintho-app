@@ -46,11 +46,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.card)),
-        title: Text(tr('cancel_booking_title'), style: const TextStyle(
-            fontWeight: FontWeight.w800, color: C.text)),
+        title: Text(tr('cancel_booking_title'), style: AppTypography.title
+            .copyWith(fontSize: 18, fontWeight: FontWeight.w800, color: C.text)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Text(tr('cancel_booking_confirm_msg'),
-              style: const TextStyle(color: C.muted)),
+              style: AppTypography.body.copyWith(color: C.muted)),
           const SizedBox(height: AppSpacing.md),
           TextField(
             controller: reasonCtrl,
@@ -66,11 +66,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(tr('no'), style: const TextStyle(color: C.muted)),
+            child: Text(tr('no'), style: AppTypography.label.copyWith(color: C.muted)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(tr('confirm'), style: const TextStyle(
+            child: Text(tr('confirm'), style: AppTypography.label.copyWith(
                 color: C.red, fontWeight: FontWeight.w800)),
           ),
         ],
@@ -165,9 +165,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
               _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                 Row(children: [
-                  Expanded(child: Text(bookingCode(doc.id), style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w800,
-                      color: C.muted, letterSpacing: 0.3))),
+                  Expanded(child: Text(bookingCode(doc.id), style: AppTypography.label
+                      .copyWith(fontWeight: FontWeight.w800, color: C.muted,
+                          letterSpacing: 0.3))),
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.md, vertical: 6),
@@ -175,14 +175,13 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                       color: style.bg,
                       borderRadius: BorderRadius.circular(AppRadius.sheet),
                     ),
-                    child: Text(bookingStatusLabel(status), style: TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.bold,
-                        color: style.fg)),
+                    child: Text(bookingStatusLabel(status), style: AppTypography.caption
+                        .copyWith(fontWeight: FontWeight.bold, color: style.fg)),
                   ),
                 ]),
                 const SizedBox(height: AppSpacing.xs),
-                Text('${tr('booking_id_label')}: ${doc.id}', style: const TextStyle(
-                    fontSize: 11, color: C.muted)),
+                Text('${tr('booking_id_label')}: ${doc.id}', style: AppTypography.caption
+                    .copyWith(fontSize: 11, color: C.muted)),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
                   child: Divider(height: 1, color: C.border),
@@ -203,13 +202,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                   Expanded(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(bookingServiceName(b), style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w900,
-                          color: C.text)),
+                      Text(bookingServiceName(b), style: AppTypography.body.copyWith(
+                          fontWeight: FontWeight.w900, color: C.text)),
                       const SizedBox(height: 3),
-                      Text(bookingQuantityLabel(b), style: const TextStyle(
-                          fontSize: 12, color: C.muted,
-                          fontWeight: FontWeight.w500)),
+                      Text(bookingQuantityLabel(b), style: AppTypography.caption),
                     ],
                   )),
                 ]),
@@ -217,8 +213,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                 Row(children: [
                   const Icon(Icons.schedule_rounded, size: 15, color: C.muted),
                   const SizedBox(width: 6),
-                  Text(bookingScheduleLabel(b), style: const TextStyle(
-                      fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
+                  Text(bookingScheduleLabel(b), style: AppTypography.label
+                      .copyWith(color: C.muted)),
                 ]),
                 if ((b['address'] as String? ?? '').isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.sm),
@@ -257,7 +253,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                               ((b['providerName'] as String? ?? '?').isNotEmpty
                                   ? (b['providerName'] as String).substring(0, 1)
                                   : '?').toUpperCase(),
-                              style: const TextStyle(
+                              style: AppTypography.title.copyWith(
                                   fontSize: 20, fontWeight: FontWeight.w900,
                                   color: C.gold))),
                         ),
@@ -266,12 +262,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(b['providerName'] as String? ?? tr('provider'),
-                                style: const TextStyle(
+                                style: AppTypography.label.copyWith(
                                     fontSize: 14, fontWeight: FontWeight.w800,
                                     color: C.text)),
                             const SizedBox(height: 2),
-                            Text(tr('provider'), style: const TextStyle(
-                                fontSize: 12, color: C.muted)),
+                            Text(tr('provider'), style: AppTypography.caption),
                           ],
                         )),
                         const Icon(Icons.chevron_right_rounded,
@@ -306,9 +301,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
               _card(child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(tr('price'), style: const TextStyle(
-                      fontSize: 13, color: C.muted, fontWeight: FontWeight.w600)),
-                  Text(bookingTotalLabel(b), style: const TextStyle(
+                  Text(tr('price'), style: AppTypography.label.copyWith(color: C.muted)),
+                  Text(bookingTotalLabel(b), style: AppTypography.title.copyWith(
                       fontSize: 18, fontWeight: FontWeight.w900, color: C.text)),
                 ],
               )),
@@ -335,7 +329,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                       const SizedBox(width: AppSpacing.xl),
                       Expanded(child: Text(
                           '${tr("cancel_fee_label")}: ₭ ${NumberFormat('#,###').format(b['cancelFeeAmount'])}',
-                          style: const TextStyle(fontSize: 13, color: C.red,
+                          style: AppTypography.label.copyWith(color: C.red,
                               fontWeight: FontWeight.w700))),
                     ]),
                   ],
@@ -376,8 +370,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                             child: CircularProgressIndicator(
                                 strokeWidth: 2, color: C.red))
                         : const Icon(Icons.close_rounded, color: C.red, size: 18),
-                    label: Text(tr('cancel_booking_title'), style: const TextStyle(
-                        color: C.red, fontWeight: FontWeight.w700)),
+                    label: Text(tr('cancel_booking_title'), style: AppTypography.label
+                        .copyWith(color: C.red, fontWeight: FontWeight.w700)),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: C.red),
                       padding: const EdgeInsets.symmetric(vertical: 14),
