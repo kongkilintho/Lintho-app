@@ -23,7 +23,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'app_colors.dart';
-import 'theme/app_theme.dart' show AppRadius, AppSpacing;
+import 'theme/app_theme.dart' show AppRadius, AppSpacing, AppTypography;
 import 'app_locale.dart';
 import 'Booking.dart' show serviceIconForCategory;
 import 'booking_repository.dart';
@@ -874,12 +874,12 @@ class _MatchScreenState extends State<MatchScreen>
         const SizedBox(height: AppSpacing.xxxl),
         _RadarPulse(icon: _serviceIcon),
         const SizedBox(height: 40),
-        Text(tr('searching_title'), style: const TextStyle(
+        Text(tr('searching_title'), style: AppTypography.display.copyWith(
           color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900,
         )),
         const SizedBox(height: AppSpacing.md),
         // ✅ ສະແດງຊື່ບໍລິການແທ້ຈິງທີ່ລູກຄ້າເລືອກ (fallback ລະຫວ່າງລໍຖ້າໂຫຼດ)
-        Text(_displayServiceName, textAlign: TextAlign.center, style: TextStyle(
+        Text(_displayServiceName, textAlign: TextAlign.center, style: AppTypography.heading.copyWith(
           color: Colors.white.withValues(alpha: 0.7),
           fontSize: 16, fontWeight: FontWeight.w600,
         )),
@@ -887,9 +887,9 @@ class _MatchScreenState extends State<MatchScreen>
         const _SearchingDots(),
         const SizedBox(height: AppSpacing.lg),
         // ✅ Countdown ໃຫ້ລູກຄ້າຮູ້ວ່າລະບົບກຳລັງພະຍາຍາມຄົ້ນຫາຢູ່ — ບໍ່ຮູ້ສຶກວ່າແອັບຄ້າງ
-        Text('${tr('searching_continue_prefix')} $_searchSecsLeft ${tr('sec')}', style: TextStyle(
+        Text('${tr('searching_continue_prefix')} $_searchSecsLeft ${tr('sec')}', style: AppTypography.label.copyWith(
           color: Colors.white.withValues(alpha: 0.5),
-          fontSize: 13, fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w600,
         )),
         const SizedBox(height: 28),
         Row(children: [
@@ -938,18 +938,16 @@ class _MatchScreenState extends State<MatchScreen>
               const SizedBox(width: AppSpacing.sm),
               Text(
                 '${tr('sent_request_prefix')} ${_top3.length} ${tr('provider')}',
-                style: const TextStyle(
-                  color: C.yellow, fontSize: 15,
-                  fontWeight: FontWeight.w800,
+                style: AppTypography.body.copyWith(
+                  color: C.yellow, fontWeight: FontWeight.w800,
                 ),
               ),
             ]),
             const SizedBox(height: AppSpacing.xs),
             Text(
               tr('first_come_first_served'),
-              style: TextStyle(
+              style: AppTypography.caption.copyWith(
                 color: Colors.white.withValues(alpha: 0.5),
-                fontSize: 12,
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -971,8 +969,8 @@ class _MatchScreenState extends State<MatchScreen>
         child: _PulseCircle(icon: _serviceIcon, size: 100),
       ),
       const SizedBox(height: AppSpacing.xl),
-      Text(tr('waiting_provider_title'), style: const TextStyle(
-        color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800,
+      Text(tr('waiting_provider_title'), style: AppTypography.title.copyWith(
+        color: Colors.white, fontWeight: FontWeight.w800,
       )),
       const SizedBox(height: AppSpacing.sm),
       const _SearchingDots(),
@@ -987,10 +985,14 @@ class _MatchScreenState extends State<MatchScreen>
             side: const BorderSide(color: C.dangerRed, width: 1.4),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppRadius.card)),
-            padding: const EdgeInsets.symmetric(vertical: 14),
+            // ✅ [Premium redesign / Batch 5] 14 → AppSpacing.lg(16)
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
           ),
-          child: Text(tr('cancel'), style: const TextStyle(
-            fontSize: 14, fontWeight: FontWeight.w700,
+          // ✅ [Premium redesign / Batch 5] color preserved explicitly
+          // (C.dangerRed matches the OutlinedButton's foregroundColor above)
+          // — original relied on ambient inheritance from the button style
+          child: Text(tr('cancel'), style: AppTypography.body.copyWith(
+            fontSize: 14, fontWeight: FontWeight.w700, color: C.dangerRed,
           )),
         ),
       ),
@@ -1014,14 +1016,15 @@ class _MatchScreenState extends State<MatchScreen>
         ScaleTransition(
           scale: _matchAnim,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            // ✅ [Premium redesign / Batch 5] 20/10 → AppSpacing.lg(16)/sm(8)
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
             decoration: BoxDecoration(
               color: C.green, borderRadius: BorderRadius.circular(AppRadius.sheet),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.check_circle, color: Colors.white, size: 18),
               const SizedBox(width: AppSpacing.sm),
-              Text(tr('matched'), style: const TextStyle(
+              Text(tr('matched'), style: AppTypography.body.copyWith(
                 color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800,
               )),
             ]),
@@ -1056,7 +1059,7 @@ class _MatchScreenState extends State<MatchScreen>
                   borderRadius: BorderRadius.circular(AppRadius.card)),
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
             ),
-            child: Text(tr('confirm_now'), style: const TextStyle(
+            child: Text(tr('confirm_now'), style: AppTypography.body.copyWith(
               color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800,
             )),
           ),
@@ -1072,10 +1075,11 @@ class _MatchScreenState extends State<MatchScreen>
               side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppRadius.card)),
-              padding: const EdgeInsets.symmetric(vertical: 14),
+              // ✅ [Premium redesign / Batch 5] 14 → AppSpacing.lg(16)
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
             ),
-            child: Text(tr('cancel'), style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.7), fontSize: 15,
+            child: Text(tr('cancel'), style: AppTypography.body.copyWith(
+              color: Colors.white.withValues(alpha: 0.7),
             )),
           ),
         ),
@@ -1113,16 +1117,16 @@ class _MatchScreenState extends State<MatchScreen>
         Icon(Icons.sentiment_dissatisfied_outlined,
             size: 80, color: Colors.white.withValues(alpha: 0.7)),
         const SizedBox(height: AppSpacing.xl),
-        Text(tr('no_provider'), style: const TextStyle(
+        Text(tr('no_provider'), style: AppTypography.title.copyWith(
           color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800,
         )),
         const SizedBox(height: AppSpacing.md),
         Text(
           tr('no_provider_desc'),
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: AppTypography.body.copyWith(
             color: Colors.white.withValues(alpha: 0.6),
-            fontSize: 15, height: 1.6,
+            height: 1.6,
           ),
         ),
         const SizedBox(height: AppSpacing.xxxl),
@@ -1143,8 +1147,8 @@ class _MatchScreenState extends State<MatchScreen>
           // (ບໍ່ຄວນເອີ້ນ cancelBooking() ຊ້ຳອີກ — ມັນ throw ຖ້າ status ຖືກຍົກເລີກ
           // ໄປແລ້ວ, ຈະສະແດງ error toast ໃຫ້ຜູ້ໃຊ້ເຫັນຢ່າງບໍ່ຈຳເປັນ).
           onPressed: () => Navigator.pop(context),
-          child: Text(tr('go_back'), style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.5), fontSize: 15,
+          child: Text(tr('go_back'), style: AppTypography.body.copyWith(
+            color: Colors.white.withValues(alpha: 0.5),
           )),
         ),
       ],
@@ -1239,13 +1243,13 @@ class _ConfirmedViewState extends State<_ConfirmedView>
         )),
         const SizedBox(height: AppSpacing.xxl),
 
-        Text(tr('confirmed'), style: const TextStyle(
+        Text(tr('confirmed'), style: AppTypography.display.copyWith(
           color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900,
         )),
         const SizedBox(height: AppSpacing.md),
         Text(
           '${p.displayName} ${tr('provider_coming_suffix')}',
-          style: TextStyle(
+          style: AppTypography.heading.copyWith(
             color: Colors.white.withValues(alpha: 0.8), fontSize: 16,
           ),
         ),
@@ -1295,7 +1299,8 @@ class _ConfirmedViewState extends State<_ConfirmedView>
           const SizedBox(height: AppSpacing.md),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(14),
+            // ✅ [Premium redesign / Batch 5] 14 → AppSpacing.lg(16)
+            padding: const EdgeInsets.all(AppSpacing.lg),
             decoration: BoxDecoration(
               color:        Colors.white.withValues(alpha: 0.07),
               borderRadius: BorderRadius.circular(AppRadius.card),
@@ -1304,8 +1309,8 @@ class _ConfirmedViewState extends State<_ConfirmedView>
               const Icon(Icons.location_on_outlined,
                   color: C.yellow, size: 18),
               const SizedBox(width: AppSpacing.sm),
-              Expanded(child: Text(widget.address, style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.8), fontSize: 13,
+              Expanded(child: Text(widget.address, style: AppTypography.label.copyWith(
+                color: Colors.white.withValues(alpha: 0.8),
               ))),
             ]),
           ),
@@ -1317,7 +1322,7 @@ class _ConfirmedViewState extends State<_ConfirmedView>
             onPressed: _callProvider,
             icon: const Icon(Icons.phone_outlined,
                 color: Colors.white, size: 18),
-            label: Text(tr('call_provider_btn'), style: const TextStyle(
+            label: Text(tr('call_provider_btn'), style: AppTypography.body.copyWith(
               color: Colors.white, fontWeight: FontWeight.w700,
             )),
             style: OutlinedButton.styleFrom(
@@ -1325,7 +1330,8 @@ class _ConfirmedViewState extends State<_ConfirmedView>
                   color: Colors.white.withValues(alpha: 0.4)),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppRadius.card)),
-              padding: const EdgeInsets.symmetric(vertical: 14),
+              // ✅ [Premium redesign / Batch 5] 14 → AppSpacing.lg(16)
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
             ),
           )),
           const SizedBox(width: AppSpacing.md),
@@ -1374,7 +1380,8 @@ class _TopBar extends StatelessWidget {
     ),
     const Spacer(),
     Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
+      // ✅ [Premium redesign / Batch 5] 6 → AppSpacing.sm(8)
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
       decoration: BoxDecoration(
         color:        C.yellow.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(AppRadius.sheet),
@@ -1382,8 +1389,8 @@ class _TopBar extends StatelessWidget {
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         const Icon(Icons.access_time, color: C.yellow, size: 14),
         const SizedBox(width: AppSpacing.xs),
-        Text(_timeLabel, style: const TextStyle(
-          color: C.yellow, fontSize: 12, fontWeight: FontWeight.w700,
+        Text(_timeLabel, style: AppTypography.caption.copyWith(
+          color: C.yellow, fontWeight: FontWeight.w700,
         )),
       ]),
     ),
@@ -1543,7 +1550,7 @@ class _Top3ProviderRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final dist = provider.distanceTo(custLat, custLng);
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color:        Colors.white.withValues(alpha: 0.06),
@@ -1561,7 +1568,7 @@ class _Top3ProviderRow extends StatelessWidget {
           ),
           child: Center(child: Text(
             '#$rank',
-            style: TextStyle(
+            style: AppTypography.caption.copyWith(
               fontSize: 11, fontWeight: FontWeight.w800,
               color: rank == 1 ? C.navy : Colors.white,
             ),
@@ -1577,7 +1584,7 @@ class _Top3ProviderRow extends StatelessWidget {
           ),
           child: Center(child: Text(
             provider.avatarLetter,
-            style: const TextStyle(
+            style: AppTypography.heading.copyWith(
               fontSize: 18, fontWeight: FontWeight.w800,
               color: C.yellow,
             ),
@@ -1587,21 +1594,21 @@ class _Top3ProviderRow extends StatelessWidget {
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(provider.displayName, style: const TextStyle(
-              color: Colors.white, fontSize: 13,
+            Text(provider.displayName, style: AppTypography.label.copyWith(
+              color: Colors.white,
               fontWeight: FontWeight.w700,
             )),
             Row(children: [
               const Icon(Icons.star_rounded,
                   color: C.yellow, size: 12),
               const SizedBox(width: 3),
-              Text(provider.ratingLabel, style: const TextStyle(
+              Text(provider.ratingLabel, style: AppTypography.caption.copyWith(
                 color: C.yellow, fontSize: 11,
                 fontWeight: FontWeight.w600,
               )),
               if (dist != null) ...[
                 Text('  ·  ${dist.toStringAsFixed(1)} ${tr('km_unit')}',
-                    style: TextStyle(
+                    style: AppTypography.caption.copyWith(
                       color: Colors.white.withValues(alpha: 0.5),
                       fontSize: 11,
                     )),
@@ -1667,7 +1674,8 @@ class _ProviderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
-    padding: const EdgeInsets.all(20),
+    // ✅ [Premium redesign / Batch 5] 20 → AppSpacing.xl(24)
+    padding: const EdgeInsets.all(AppSpacing.xl),
     decoration: BoxDecoration(
       color:        Colors.white.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(AppRadius.sheet),
@@ -1684,7 +1692,7 @@ class _ProviderCard extends StatelessWidget {
           ),
           child: Center(child: Text(
             provider.avatarLetter,
-            style: const TextStyle(
+            style: AppTypography.title.copyWith(
               fontSize: 32, color: C.navy, fontWeight: FontWeight.w900,
             ),
           )),
@@ -1693,19 +1701,19 @@ class _ProviderCard extends StatelessWidget {
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(provider.displayName, style: const TextStyle(
+            Text(provider.displayName, style: AppTypography.heading.copyWith(
               color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800,
             )),
             const SizedBox(height: AppSpacing.xs),
             Row(children: [
               const Icon(Icons.star_rounded, color: C.yellow, size: 16),
               const SizedBox(width: AppSpacing.xs),
-              Text(provider.ratingLabel, style: const TextStyle(
+              Text(provider.ratingLabel, style: AppTypography.body.copyWith(
                 color: C.yellow, fontSize: 14, fontWeight: FontWeight.w700,
               )),
               Text('  ·  ${provider.totalJobs}+ ${tr('jobs_unit')}',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6), fontSize: 13,
+                  style: AppTypography.label.copyWith(
+                    color: Colors.white.withValues(alpha: 0.6),
                   )),
             ]),
             const SizedBox(height: 6),
@@ -1722,7 +1730,7 @@ class _ProviderCard extends StatelessWidget {
                   const Icon(Icons.verified_outlined,
                       color: C.green, size: 13),
                   const SizedBox(width: AppSpacing.xs),
-                  Text(tr('verified_badge'), style: const TextStyle(
+                  Text(tr('verified_badge'), style: AppTypography.caption.copyWith(
                     color: C.green, fontSize: 11, fontWeight: FontWeight.w700,
                   )),
                 ]),
@@ -1753,8 +1761,8 @@ class _ProviderCard extends StatelessWidget {
             const Icon(Icons.location_on_outlined,
                 color: C.yellow, size: 18),
             const SizedBox(width: AppSpacing.sm),
-            Expanded(child: Text(address, style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.8), fontSize: 13,
+            Expanded(child: Text(address, style: AppTypography.label.copyWith(
+              color: Colors.white.withValues(alpha: 0.8),
             ))),
           ]),
         ),
@@ -1772,10 +1780,10 @@ class _StatCol extends StatelessWidget {
   Widget build(BuildContext context) => Expanded(child: Column(children: [
     Icon(icon, color: Colors.white, size: 22),
     const SizedBox(height: AppSpacing.xs),
-    Text(value, style: const TextStyle(
-      color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700,
+    Text(value, style: AppTypography.caption.copyWith(
+      color: Colors.white, fontWeight: FontWeight.w700,
     ), textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
-    Text(label, style: TextStyle(
+    Text(label, style: AppTypography.caption.copyWith(
       color: Colors.white.withValues(alpha: 0.5), fontSize: 10,
     )),
   ]));
@@ -1789,8 +1797,8 @@ class _CountdownRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(children: [
-    Text(tr('auto_confirm_in'), style: TextStyle(
-      color: Colors.white.withValues(alpha: 0.6), fontSize: 13,
+    Text(tr('auto_confirm_in'), style: AppTypography.label.copyWith(
+      color: Colors.white.withValues(alpha: 0.6),
     )),
     const SizedBox(height: AppSpacing.sm),
     Stack(alignment: Alignment.center, children: [
@@ -1804,15 +1812,15 @@ class _CountdownRing extends StatelessWidget {
           strokeWidth: 6,
         ),
       ),
-      Text('$countdown', style: TextStyle(
+      Text('$countdown', style: AppTypography.title.copyWith(
         color:      countdown > 10 ? Colors.white : C.red,
         fontSize:   32,
         fontWeight: FontWeight.w900,
       )),
     ]),
     const SizedBox(height: 6),
-    Text(tr('seconds_label'), style: TextStyle(
-      color: Colors.white.withValues(alpha: 0.5), fontSize: 12,
+    Text(tr('seconds_label'), style: AppTypography.caption.copyWith(
+      color: Colors.white.withValues(alpha: 0.5),
     )),
   ]);
 }
@@ -1874,7 +1882,8 @@ class _GlassStat extends StatelessWidget {
     child: BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: AppSpacing.md),
+        // ✅ [Premium redesign / Batch 5] 10 → AppSpacing.sm(8)
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.md),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft, end: Alignment.bottomRight,
@@ -1898,7 +1907,7 @@ class _GlassStat extends StatelessWidget {
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: AppTypography.caption.copyWith(
                   color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700)),
         ]),
       ),
@@ -1931,11 +1940,12 @@ class _SoftCancelButton extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppRadius.sheet),
                 border: Border.all(color: C.dangerRed.withValues(alpha: 0.35)),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 14),
+              // ✅ [Premium redesign / Batch 5] 14 → AppSpacing.lg(16)
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
               child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Icon(Icons.close_rounded, color: C.dangerRed.withValues(alpha: 0.95), size: 16),
                 const SizedBox(width: 6),
-                Text(label, style: TextStyle(
+                Text(label, style: AppTypography.body.copyWith(
                   color: C.dangerRed.withValues(alpha: 0.95),
                   fontSize: 14, fontWeight: FontWeight.w700,
                 )),
