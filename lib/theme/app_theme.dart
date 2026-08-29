@@ -27,9 +27,10 @@ class AppColors {
   static const navy  = Color(0xFF001B4B);
   static const green = Color(0xFF14B87A); // ✅ [Brand color audit 2026-07-27] ອັດເດດເປັນສີຂຽວແບຣນທາງການ (ແທນ #22C55E)
   static const gold  = Color(0xFFFBBF24); // ✅ ລວມ C.yellow/C.gold (hex ດຽວກັນ, 2 ຊື່) ເປັນຊື່ດຽວ
-  // ✅ [Brand color audit 2026-07-27 v2] ink #0F172A → #1F2937 ຕາມ Brand
-  // System ໃໝ່ (Primary Text) — contrast ເທິງພື້ນຂາວ ~12.6:1, ຍັງຜ່ານ WCAG AAA
-  static const ink   = Color(0xFF1F2937); // primary text
+  // ✅ [Premium redesign 2026-08-29 / Batch 1] ink #1F2937 → #1C2430 ຕາມ
+  // Premium Brand System (Dark text) — contrast ເທິງພື້ນຂາວ ~14:1, ຍັງຜ່ານ
+  // WCAG AAA (ດຳກວ່າເກົ່າເລັກນ້ອຍ, contrast ເພີ່ມຂຶ້ນ ບໍ່ຫຼຸດ)
+  static const ink   = Color(0xFF1C2430); // primary text
   static const bg    = Color(0xFFF8FAFF); // ✅ ລວມ C.bg/C.cream (hex ດຽວກັນ, 2 ຊື່)
 
   // ✅ [Brand color audit 2026-07-27 v2] Background/Surface — token ໃໝ່ຕາມ
@@ -37,22 +38,28 @@ class AppColors {
   // ບົດບາດສະຫຼັບກັບ `bg`/`white` ເກົ່າ: ດຽວນີ້ໜ້າຈໍເປັນຂາວແທ້, surface ເປັນ
   // ສີແຕ້ມອ່ອນໆ — ເບິ່ງ AppTheme.light ສຳລັບບ່ອນທີ່ໃຊ້ແທນ `bg`/`white` ເກົ່າ.
   static const background = Color(0xFFFFFFFF);
-  static const surface    = Color(0xFFF8FAF8);
+  // ✅ [Premium redesign 2026-08-29 / Batch 1] surface #F8FAF8 → #F7FAF8
+  // ຕາມ Premium Brand System (Soft background) — delta ນ້ອຍ, ບໍ່ມີຜົນສາຍຕາ
+  static const surface    = Color(0xFFF7FAF8);
 
   // ── ຂະຫຍາຍ (ຍັງໃຊ້ຢູ່ທົ່ວແອັບ, ຄົງໄວ້ບໍ່ປ່ຽນ hex) ──────────────
   static const blue      = Color(0xFF1E40AF);
   static const sky       = Color(0xFF3B82F6);
   static const teal      = Color(0xFF14B8A6);
-  static const mint      = Color(0xFFECFDF5);
+  // ✅ [Premium redesign 2026-08-29 / Batch 1] mint #ECFDF5 → #EAF8F2 ຕາມ
+  // Premium Brand System (Light Emerald Surface) — ໃຊ້ຢູ່ແລ້ວເປັນ background
+  // tint ຄູ່ກັບ border/text ສີຂຽວ (booking_form_screen.dart, main.dart,
+  // notification_screen.dart), semantic ກົງກັນພໍດີ, ພຽງແຕ່ nudge hex
+  static const mint      = Color(0xFFEAF8F2);
   static const red       = Color(0xFFEF4444);
   static const dangerRed = Color(0xFFFF6B6B);
   // ✅ [Brand color audit 2026-07-27 v2] orange #F97316 → #F59E0B ຕາມ Brand
   // System ໃໝ່ (Warning)
   static const orange    = Color(0xFFF59E0B);
   static const white     = Colors.white;
-  // ✅ [Brand color audit 2026-07-27 v2] border #E2E8F0 → #E5E7EB ຕາມ Brand
-  // System ໃໝ່
-  static const border    = Color(0xFFE5E7EB);
+  // ✅ [Premium redesign 2026-08-29 / Batch 1] border #E5E7EB → #E8ECEA ຕາມ
+  // Premium Brand System (Border/Divider) — delta ນ້ອຍ, ບໍ່ມີຜົນສາຍຕາ
+  static const border    = Color(0xFFE8ECEA);
 
   // ✅ [Brand color audit 2026-07-27 v2] success ແຍກຈາກ green (Primary) ຕາມ
   // Brand System ໃໝ່ — Primary (#14B87A) = ປຸ່ມ/ແທັບ/ການກະທຳຫຼັກ, Success

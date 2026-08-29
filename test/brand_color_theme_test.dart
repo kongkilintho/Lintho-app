@@ -33,13 +33,13 @@ void main() {
     });
   });
 
-  group('Brand System 9-token hex — 2026-07-27 v2 audit', () {
+  group('Brand System 9-token hex — 2026-08-29 premium redesign Batch 1', () {
     test('Primary #14B87A',        () => expect(AppColors.green, const Color(0xFF14B87A)));
     test('Background #FFFFFF',     () => expect(AppColors.background, const Color(0xFFFFFFFF)));
-    test('Surface #F8FAF8',        () => expect(AppColors.surface, const Color(0xFFF8FAF8)));
-    test('Primary Text #1F2937',   () => expect(AppColors.ink, const Color(0xFF1F2937)));
+    test('Surface #F7FAF8',        () => expect(AppColors.surface, const Color(0xFFF7FAF8)));
+    test('Primary Text #1C2430',   () => expect(AppColors.ink, const Color(0xFF1C2430)));
     test('Secondary Text #6B7280', () => expect(AppColors.muted, const Color(0xFF6B7280)));
-    test('Border #E5E7EB',         () => expect(AppColors.border, const Color(0xFFE5E7EB)));
+    test('Border #E8ECEA',         () => expect(AppColors.border, const Color(0xFFE8ECEA)));
     test('Success #22C55E',        () => expect(AppColors.success, const Color(0xFF22C55E)));
     test('Warning #F59E0B',        () => expect(AppColors.orange, const Color(0xFFF59E0B)));
     test('Error #EF4444',          () => expect(AppColors.red, const Color(0xFFEF4444)));
